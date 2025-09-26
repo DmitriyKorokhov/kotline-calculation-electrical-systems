@@ -1,4 +1,4 @@
-package ui.screens
+package ui.screens.shieldeditor
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.Button

@@ -1,24 +1,27 @@
+package org.example.project
+
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import ui.screens.HomeScreen
-import ui.screens.ProjectView
-import ui.screens.ShieldEditorView
+import data.ProjectRepository
+import ui.screens.home.HomeScreen
+import ui.screens.projecteditor.ProjectView
+import ui.screens.shieldeditor.ShieldEditorView
 import ui.theme.AppDarkColors
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.unit.dp
 
 /**
- * Определяет текущий отображаемый экран.
+ * Sealed class для управления навигацией.
  */
-enum class Screen {
-    HOME,
-    PROJECT,
-    SHIELD_EDITOR
+sealed class Screen {
+    object Home : Screen()
+    object ProjectEditor : Screen()
+    data class ShieldEditor(val shieldId: Int) : Screen()
 }
 
 fun main() = application {
@@ -27,29 +30,39 @@ fun main() = application {
         title = "Редактор электрических систем",
         state = rememberWindowState(width = 1200.dp, height = 800.dp)
     ) {
-        // --- NAVIGATION CONTROLLER ---
-        var currentScreen by remember { mutableStateOf(Screen.HOME) }
-        var activeShieldId by remember { mutableStateOf<Int?>(null) }
+        var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
 
         MaterialTheme(colors = AppDarkColors) {
             Surface(modifier = Modifier.fillMaxSize()) {
-                // В зависимости от текущего состояния, показываем нужный экран
-                when (currentScreen) {
-                    Screen.HOME -> HomeScreen(
-                        onCreateProject = { currentScreen = Screen.PROJECT }
-                    )
-                    Screen.PROJECT -> ProjectView(
-                        onOpenShield = { shieldId ->
-                            activeShieldId = shieldId
-                            currentScreen = Screen.SHIELD_EDITOR
-                        }
-                    )
-                    Screen.SHIELD_EDITOR -> ShieldEditorView(
-                        shieldId = activeShieldId,
-                        onBack = { currentScreen = Screen.PROJECT }
-                    )
+                when (val screen = currentScreen) {
+                    is Screen.Home -> {
+                        HomeScreen(
+                            onCreateProject = {
+                                ProjectRepository.createNewProject()
+                                currentScreen = Screen.ProjectEditor
+                            }
+                        )
+                    }
+                    is Screen.ProjectEditor -> {
+                        // ИСПРАВЛЕНИЕ: Передаем обязательный параметр 'state' из репозитория.
+                        ProjectView(
+                            state = ProjectRepository.canvasState,
+                            onOpenShield = { shieldId ->
+                                currentScreen = Screen.ShieldEditor(shieldId)
+                            }
+                        )
+                    }
+                    is Screen.ShieldEditor -> {
+                        ShieldEditorView(
+                            shieldId = screen.shieldId,
+                            onBack = {
+                                currentScreen = Screen.ProjectEditor
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 }
+
