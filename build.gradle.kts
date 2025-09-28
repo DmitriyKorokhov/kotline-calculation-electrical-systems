@@ -28,8 +28,11 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion")
     implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
 
-    // Драйвер для SQLite
-    implementation("org.xerial:sqlite-jdbc:3.45.1.0")
+    // Зависимости для работы с БД (Exposed + SQLite)
+    implementation("org.xerial:sqlite-jdbc:3.41.2.2")
+
+    // НОВОЕ: Зависимость для логирования. Убирает предупреждение SLF4J.
+    implementation("org.slf4j:slf4j-simple:2.0.7")
 }
 
 compose.desktop {

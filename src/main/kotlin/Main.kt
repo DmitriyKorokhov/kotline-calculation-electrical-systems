@@ -1,5 +1,3 @@
-package org.example.project
-
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
@@ -10,14 +8,12 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import data.ProjectRepository
+import data.database.DatabaseFactory // <-- НОВЫЙ ИМПОРТ
 import ui.screens.home.HomeScreen
 import ui.screens.projecteditor.ProjectView
 import ui.screens.shieldeditor.ShieldEditorView
 import ui.theme.AppDarkColors
 
-/**
- * Sealed class для управления навигацией.
- */
 sealed class Screen {
     object Home : Screen()
     object ProjectEditor : Screen()
@@ -25,6 +21,9 @@ sealed class Screen {
 }
 
 fun main() = application {
+    // --- ИЗМЕНЕНИЕ: Инициализация базы данных при старте ---
+    DatabaseFactory.init()
+
     Window(
         onCloseRequest = ::exitApplication,
         title = "Редактор электрических систем",
@@ -44,7 +43,6 @@ fun main() = application {
                         )
                     }
                     is Screen.ProjectEditor -> {
-                        // ИСПРАВЛЕНИЕ: Передаем обязательный параметр 'state' из репозитория.
                         ProjectView(
                             state = ProjectRepository.canvasState,
                             onOpenShield = { shieldId ->
