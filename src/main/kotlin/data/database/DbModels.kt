@@ -1,71 +1,80 @@
 package data.database
 
 /**
- * Этот файл описывает data-классы, которые представляют объекты из базы данных.
+ * Data class representing a record in the BreakerModels table.
  */
-
-// --- Модели для Автоматических выключателей ---
-
 data class DbBreakerModel(
-    val id: Int,
+    val id: Int = 0,
     val manufacturer: String,
     val series: String,
-    val model: String
+    val model: String,
+    val breakingCapacity: String
 )
 
+/**
+ * Data class representing a record in the BreakerVariants table.
+ */
 data class DbBreakerVariant(
-    val id: Int,
+    val id: Int = 0,
     val modelId: Int,
-    val nominalCurrent: Float,
+    val ratedCurrent: Float,
     val poles: Int,
-    val ultimateBreakingCapacity: Float,
-    val serviceBreakingCapacity: Float,
-    val additions: String?
+    val additions: String,
+    val serviceBreakingCapacity: String
 )
 
-// --- Модели для УЗО ---
-
+/**
+ * Data class representing a record in the RcdModels table.
+ */
 data class DbRcdModel(
-    val id: Int,
+    val id: Int = 0,
     val manufacturer: String,
     val series: String,
     val model: String
 )
 
+/**
+ * Data class representing a record in the RcdVariants table.
+ */
 data class DbRcdVariant(
-    val id: Int,
+    val id: Int = 0,
     val modelId: Int,
-    val nominalCurrent: Float,
-    val leakageCurrent: Int,
+    val ratedCurrent: Float,
+    val ratedResidualCurrent: String,
     val poles: Int
 )
 
-// --- Модели для АВДТ ---
-
+/**
+ * Data class representing a record in the RcboModels table.
+ */
 data class DbRcboModel(
-    val id: Int,
+    val id: Int = 0,
     val manufacturer: String,
     val series: String,
-    val model: String
+    val model: String,
+    val breakingCapacity: String
 )
 
+/**
+ * Data class representing a record in the RcboVariants table.
+ */
 data class DbRcboVariant(
-    val id: Int,
+    val id: Int = 0,
     val modelId: Int,
-    val nominalCurrent: Float,
+    val ratedCurrent: Float,
+    val ratedResidualCurrent: String,
     val poles: Int,
-    val leakageCurrent: Int,
-    val ultimateBreakingCapacity: Float,
-    val serviceBreakingCapacity: Float,
-    val additions: String?
+    val additions: String,
+    val serviceBreakingCapacity: String
 )
 
-
-// --- Модель для Кабеля ---
-
+/**
+ * Data class representing a record in the Cables table.
+ */
 data class DbCable(
-    val id: Int,
+    val id: Int = 0,
     val type: String,
     val crossSection: Float,
-    val maxCurrent: Float
+    val continuousCurrent: Float
 )
+
