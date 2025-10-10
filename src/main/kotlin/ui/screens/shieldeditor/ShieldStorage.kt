@@ -6,17 +6,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateListOf
 
 /**
- * ShieldData — свойства, влияющие на UI, хранятся как mutableStateOf,
- * чтобы Compose реагировал на их изменения (включая поля панели).
+ * ShieldData — содержит список потребителей и поля метаданных.
+ * Поля используют mutableStateOf, чтобы Compose автоматически перерисовывал UI при изменении.
  */
 class ShieldData(
     val consumers: MutableList<ConsumerModel> = mutableStateListOf()
 ) {
     var shieldName by mutableStateOf("")
-    var maxShortCircuitCurrent by mutableStateOf("")
+    var maxShortCircuitCurrent by mutableStateOf("") // кА — строка
     var protectionStandard by mutableStateOf("")
     var protectionManufacturer by mutableStateOf("")
     var metaExpanded by mutableStateOf(true)
+
+    // Суммарные токи по фазам (в А, строковые представления для показа в UI)
+    var phaseL1 by mutableStateOf("0.00")
+    var phaseL2 by mutableStateOf("0.00")
+    var phaseL3 by mutableStateOf("0.00")
 }
 
 object ShieldStorage {
@@ -25,7 +30,7 @@ object ShieldStorage {
     fun loadOrCreate(shieldId: Int?): ShieldData {
         if (shieldId == null) {
             val list = mutableStateListOf<ConsumerModel>()
-            repeat(5) { list.add(ConsumerModel()) }
+            repeat(5) { list.add(ConsumerModel()) } // стартовые 5 потребителей
             return ShieldData(consumers = list)
         }
         return store.getOrPut(shieldId) {

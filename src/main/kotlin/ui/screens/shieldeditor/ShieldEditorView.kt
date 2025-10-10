@@ -79,11 +79,31 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
             Button(onClick = {
                 saveNow()
                 onBack()
-            }) { Text("Назад (сохранить)") }
+            }) {
+                Text("Назад (сохранить)")
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            Button(onClick = {
+                // 1) рассчитываем токи для всех потребителей (заполняется consumer.currentA)
+                val success = CalculationEngine.calculateAll(data)
+
+                // 2) распределяем фазы и считаем суммарные токи по фазам
+                PhaseDistributor.distributePhases(data)
+
+                // 3) сохраняем
+                saveNow()
+
+                // можете показать Snackbar / уведомление, но здесь просто логируем
+                println("Расчёт выполнен: $success потребителей рассчитано, суммарные токи: L1=${data.phaseL1}, L2=${data.phaseL2}, L3=${data.phaseL3}")
+            }) {
+                Text("Произвести расчёт")
+            }
 
             Spacer(Modifier.weight(1f))
 
-            Text("Редактирование щита", color = textColor)
+            Text("Данные щита", color = textColor) // заменил заголовок
             Spacer(Modifier.width(12.dp))
             Text("Щит ID: ${shieldId ?: "-"}", fontSize = 14.sp, color = textColor)
         }
@@ -122,7 +142,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             ) { Text("<") }
 
                             Spacer(Modifier.width(8.dp))
-                            Text("Исходные данные щита", color = textColor, fontSize = 14.sp)
+                            Text("Данные щита", color = textColor, fontSize = 14.sp)
                             Spacer(Modifier.weight(1f))
                         }
 
@@ -204,6 +224,48 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
                         Spacer(Modifier.height(12.dp))
                         Text("Сверните панель, если она мешает таблице.", color = Color.LightGray, fontSize = 12.sp)
+
+                        // Показать суммарные токи фаз (read-only)
+                        OutlinedTextField(
+                            value = data.phaseL1,
+                            onValueChange = {}, // read-only
+                            label = { Text("Нагрузка на фазу L1, А") },
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.outlinedTextFieldColors(
+                                textColor = textColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                focusedBorderColor = borderColor
+                            )
+                        )
+                        Spacer(Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = data.phaseL2,
+                            onValueChange = {},
+                            label = { Text("Нагрузка на фазу L2, А") },
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.outlinedTextFieldColors(
+                                textColor = textColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                focusedBorderColor = borderColor
+                            )
+                        )
+                        Spacer(Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = data.phaseL3,
+                            onValueChange = {},
+                            label = { Text("Нагрузка на фазу L3, А") },
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = TextFieldDefaults.outlinedTextFieldColors(
+                                textColor = textColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                focusedBorderColor = borderColor
+                            )
+                        )
                     }
                 }
             }
