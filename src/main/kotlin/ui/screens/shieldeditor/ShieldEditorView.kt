@@ -3,14 +3,8 @@ package ui.screens.shieldeditor
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.HorizontalScrollbar
-import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +16,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.*
+import ui.screens.shieldeditor.protection.*
 import view.CompactOutlinedTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 
 // Параметры — компактные размеры (подгоняйте при необходимости)
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
@@ -72,6 +70,30 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
         targetValue = if (metaExpanded) LEFT_PANEL_WIDTH else 0.dp,
         animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing)
     )
+
+    // Когда пользователь кликает по ячейке -> показываем первый popup (там у вас protectionDialogForIndex)
+    var protectionDialogForIndex by remember { mutableStateOf<Int?>(null) }
+    var showBreakerSecondWindow by remember { mutableStateOf(false) }
+    var showBreakerThirdWindow by remember { mutableStateOf(false) }
+    var breakerDialogConsumerIndex by remember { mutableStateOf<Int?>(null) }
+    var breakerDialogInitialSeries by remember { mutableStateOf<String?>(null) }
+    var breakerDialogSelectedPoles by remember { mutableStateOf<String?>(null) }
+    var breakerDialogSelectedAdditions by remember { mutableStateOf<List<String>>(emptyList()) }
+    var breakerDialogInitialManufacturer by remember { mutableStateOf<String?>(null) }
+
+
+    // состояние выбора второго окна для каждого потребителя (ключ — индекс колонки)
+    data class BreakerDialogState(
+        val manufacturer: String? = null,
+        val series: String? = null,
+        val selectedAdditions: List<String> = emptyList(),
+        val selectedPoles: String? = null,
+        val selectedCurve: String? = null
+    )
+
+// map: индекс потребителя -> состояние выбора (если null — параметров ещё не задавали)
+    val breakerDialogState = remember { mutableStateMapOf<Int, BreakerDialogState>() }
+
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // Top bar (Back only left)
@@ -507,20 +529,35 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                             )
                                             Spacer(Modifier.height(FIELD_VSPACE))
 
-                                            CompactOutlinedTextField(
-                                                label = "Устройство защиты и коммутации",
-                                                value = consumer.protectionDevice,
-                                                onValueChange = {
-                                                    consumer.protectionDevice = it
-                                                    saveNow()
-                                                },
-                                                contentPadding = FIELD_CONTENT_PADDING,
-                                                fontSizeSp = FIELD_FONT,
-                                                textColor = textColor,
-                                                focusedBorderColor = borderColor,
-                                                unfocusedBorderColor = Color.LightGray,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
+                                            Box(modifier = Modifier.fillMaxWidth()) {
+                                                OutlinedTextField(
+                                                    value = consumer.protectionDevice,
+                                                    onValueChange = {
+                                                        consumer.protectionDevice = it
+                                                        saveNow()
+                                                    },
+                                                    label = { Text("Устройство защиты и коммутации") },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        // делаем начальную высоту такой же как у других полей — minHeight 48.dp (подберите при необходимости)
+                                                        .heightIn(min = 48.dp),
+                                                    singleLine = false,   // разрешаем переносы строк
+                                                    minLines = 1,         // изначально высота = одна строка (равняется остальным полям)
+                                                    maxLines = 10,        // при вводе Enter поле будет увеличиваться до 10 строк
+                                                    trailingIcon = {
+                                                        // Нажатие на эту иконку откроет окно выбора устройств защиты для колонки colIndex
+                                                        IconButton(onClick = { protectionDialogForIndex = colIndex }) {
+                                                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать тип защиты")
+                                                        }
+                                                    },
+                                                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray
+                                                    )
+                                                )
+
+                                            }
                                             Spacer(Modifier.height(FIELD_VSPACE))
 
                                             CompactOutlinedTextField(
@@ -572,6 +609,123 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             .height(SCROLLBAR_HEIGHT)
                             .padding(vertical = 6.dp)
                     )
+
+                    // Если protectionDialogForIndex != null, показываем окно выбора
+                    if (protectionDialogForIndex != null) {
+                        val idx = protectionDialogForIndex!!
+                        val consumer = data.consumers.getOrNull(idx)
+
+                        val initial = protectionTypeFromString(consumer?.protectionDevice)
+
+                        ProtectionChooserPopup(
+                            initial = initial,
+                            onDismissRequest = { protectionDialogForIndex = null },
+                            onConfirm = { selected ->
+                                // Закрываем первое окно (ProtectionChooser)
+                                protectionDialogForIndex = null
+
+                                if (selected == ProtectionType.CIRCUIT_BREAKER) {
+                                    // Для выбранного потребителя сохраняем индекс
+                                    breakerDialogConsumerIndex = idx
+
+                                    // Сохраняем производителя из левой панели (если он есть) в state — чтобы 2-е окно знало производителя
+                                    val manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
+                                    val prev = breakerDialogState[idx]
+
+                                    // если ранее у нас не было state для этого потребителя — создаём базовый
+                                    if (prev == null) {
+                                        breakerDialogState[idx] = BreakerDialogState(manufacturer = manufacturer)
+                                    } else {
+                                        // обновим manufacturer, если он изменился
+                                        breakerDialogState[idx] = prev.copy(manufacturer = manufacturer ?: prev.manufacturer)
+                                    }
+
+                                    // Всегда открываем второе окно (теперь оно будет предзаполнено из breakerDialogState[idx] если параметры были сохранены ранее)
+                                    showBreakerSecondWindow = true
+                                } else {
+                                    // для других типов защиты — обычная логика (как у вас была)
+                                    consumer?.let {
+                                        it.protectionDevice = selected.displayName()
+                                        saveNow()
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    var breakerDialogSelectedCurve by remember { mutableStateOf<String?>(null) }
+
+                    if (showBreakerSecondWindow) {
+                        val idx = breakerDialogConsumerIndex
+                        val consumer = idx?.let { data.consumers.getOrNull(it) }
+                        val st = idx?.let { breakerDialogState[it] }
+
+                        BreakerSecondWindow(
+                            initialManufacturer = st?.manufacturer ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
+                            initialSeries = st?.series,
+                            initialSelectedAdditions = st?.selectedAdditions ?: emptyList(),
+                            initialSelectedPoles = st?.selectedPoles,
+                            initialSelectedCurve = st?.selectedCurve,
+                            consumerVoltageStr = consumer?.voltage,
+                            onBack = {
+                                // вернуться к первому окну: показываем protection chooser для того же consumer
+                                showBreakerSecondWindow = false
+                                protectionDialogForIndex = idx
+                            },
+                            onDismiss = {
+                                showBreakerSecondWindow = false
+                                breakerDialogConsumerIndex = null
+                            },
+                            onConfirm = { result ->
+                                // сохраняем выбранные параметры в state для данного consumer
+                                idx?.let {
+                                    breakerDialogState[it] = BreakerDialogState(
+                                        manufacturer = st?.manufacturer ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
+                                        series = result.series,
+                                        selectedAdditions = result.selectedAdditions,
+                                        selectedPoles = result.selectedPoles,
+                                        selectedCurve = result.selectedCurve
+                                    )
+                                }
+
+                                // переходим в 3-е окно
+                                showBreakerSecondWindow = false
+                                showBreakerThirdWindow = true
+                            }
+                        )
+                    }
+
+                    if (showBreakerThirdWindow) {
+                        val idx = breakerDialogConsumerIndex
+                        val consumer = idx?.let { data.consumers.getOrNull(it) }
+                        val st = idx?.let { breakerDialogState[it] }
+
+                        BreakerThirdWindow(
+                            maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
+                            standard = data.protectionStandard,
+                            consumerCurrentAStr = consumer?.currentA ?: "",
+                            consumerVoltageStr = consumer?.voltage,
+                            selectedSeries = st?.series,
+                            selectedPoles = st?.selectedPoles,
+                            selectedAdditions = st?.selectedAdditions ?: emptyList(),
+                            selectedCurve = st?.selectedCurve,
+                            onBack = {
+                                // вернуться в 2-е окно (параметры st останутся)
+                                showBreakerThirdWindow = false
+                                showBreakerSecondWindow = true
+                            },
+                            onDismiss = {
+                                showBreakerThirdWindow = false
+                            },
+                            onChoose = { formattedMultilineString ->
+                                consumer?.let {
+                                    it.protectionDevice = formattedMultilineString
+                                    saveNow()
+                                }
+                                showBreakerThirdWindow = false
+                            }
+                        )
+                    }
                 }
             }
         }

@@ -18,7 +18,7 @@ data class DbBreakerVariant(
     val id: Int = 0,
     val modelId: Int,
     val ratedCurrent: Float,
-    val poles: Int,
+    val polesText: String,
     val additions: String,
     val serviceBreakingCapacity: String
 )

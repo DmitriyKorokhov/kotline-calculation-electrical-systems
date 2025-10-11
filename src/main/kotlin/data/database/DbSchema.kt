@@ -21,7 +21,7 @@ object BreakerVariants : Table() {
     val id = integer("id").autoIncrement()
     val modelId = integer("model_id").references(BreakerModels.id)
     val ratedCurrent = float("rated_current")
-    val poles = integer("poles")
+    val polesText = varchar("poles_text", 256) // хранит "1P, 1P+N, 2P" или одиночное "3P"
     val additions = varchar("additions", 256)
     val serviceBreakingCapacity = varchar("service_breaking_capacity", 64)
     override val primaryKey = PrimaryKey(id)

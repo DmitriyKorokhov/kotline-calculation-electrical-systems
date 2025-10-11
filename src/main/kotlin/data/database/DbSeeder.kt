@@ -16,9 +16,9 @@ object DbSeeder {
     private fun seedBreakers() {
         // Data from "АВ.xlsx - БазаАВ.csv"
         val breakerData = """
-            1,Nader,NDB1,NDB1-63,6,6,"B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","1P, 1P+N, 2P, 3P, 3P+N, 4P","OF1, SD1, MX+OF1, GQ1A, FF1, FS1"
-            2,Nader,NDB1,NDB1T-63,6,6,"B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","1P, 1P+N, 2P, 3P, 3P+N, 4P","OF1, SD1, MX+OF1, GQ1A, FF1, FS1"
-            3,Nader,NDB1,NDB1GQ-63,6,6,"B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","2P, 4P","OF1, SD1, MX+OF1, FF1, FS1"
+            1,Nader,NDB1,NDB1-63,6,6,"B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","1P, 1P+N, 2P, 3P, 3P+N, 4P","OF, SD, MX+OF, GQA, FF, FS"
+            2,Nader,NDB1,NDB1T-63,6,6,"B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","1P, 1P+N, 2P, 3P, 3P+N, 4P","OF, SD, MX+OF, GQA, FF, FS"
+            3,Nader,NDB1,NDB1GQ-63,6,6,"B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","2P, 4P","OF, SD, MX+OF, FF, FS"
         """.trimIndent().lines()
 
         breakerData.forEach { line ->
@@ -43,18 +43,22 @@ object DbSeeder {
             val serviceCapacity = "${parts[4]} кА"
             val curves = parseStringToList(parts[6])
             val currents = parseStringToFloatList(parts[7])
-            val poles = parsePolesToList(parts[8])
+            val polesRaw = parts[8]
+            val polesTextList = parseStringToList(polesRaw)
             val additions = parseStringToList(parts[9])
 
             val variants = mutableListOf<DbBreakerVariant>()
+            // Здесь мы создаём варианты: для каждого номинала (current) и каждой кривой
+            // сохраняем polesText (оригинальную строку для варианта).
             currents.forEach { current ->
-                poles.forEach { pole ->
-                    curves.forEach { curve ->
+                curves.forEach { curve ->
+                    // Для каждого poleText в polesTextList создаём вариант
+                    polesTextList.forEach { poleText ->
                         variants.add(
                             DbBreakerVariant(
                                 modelId = modelId,
                                 ratedCurrent = current,
-                                poles = pole,
+                                polesText = poleText,
                                 additions = "Кривая $curve; ${additions.joinToString()}",
                                 serviceBreakingCapacity = serviceCapacity
                             )
@@ -62,10 +66,11 @@ object DbSeeder {
                     }
                 }
             }
+
             BreakerVariants.batchInsert(variants) { v ->
                 this[BreakerVariants.modelId] = v.modelId
                 this[BreakerVariants.ratedCurrent] = v.ratedCurrent
-                this[BreakerVariants.poles] = v.poles
+                this[BreakerVariants.polesText] = v.polesText
                 this[BreakerVariants.additions] = v.additions
                 this[BreakerVariants.serviceBreakingCapacity] = v.serviceBreakingCapacity
             }
@@ -125,9 +130,9 @@ object DbSeeder {
     private fun seedRcbos() {
         // Data from "АВДТ.xlsx - БазаАВ.csv"
         val rcboData = """
-            1,Nader,NDB1,NDB1LE-63,6,6," 30, 50, 100","B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","1P+N, 2P, 3P, 3P+N, 4P","OF1, SD1, MX+OF1, GQ1A, FF1, FS1"
-            2,Nader,NDB1,NDB1LE-100,10,10,100,"C, D","50, 63, 80, 100","1P+N, 2P, 3P, 3P+N, 4P","OF1, SD1"
-            3,Nader,NDB2,NDB2LE-63,10,10," 30, 50, 100, 300","B, C, D","1, 2, 4, 6, 10, 16, 20, 25, 32, 40, 50, 63","2P, 4P","OF2, SD2, MX+OF2, Tm2, Tm2GQ, FF2, FS2"
+            1,Nader,NDB1,NDB1LE-63,6,6," 30, 50, 100","B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","1P+N, 2P, 3P, 3P+N, 4P","OF, SD, MX+OF, GQA, FF, FS"
+            2,Nader,NDB1,NDB1LE-100,10,10,100,"C, D","50, 63, 80, 100","1P+N, 2P, 3P, 3P+N, 4P","OF, SD"
+            3,Nader,NDB2,NDB2LE-63,10,10," 30, 50, 100, 300","B, C, D","1, 2, 4, 6, 10, 16, 20, 25, 32, 40, 50, 63","2P, 4P","OF, SD, MX+OF, Tm, TmGQ, FF, FS"
         """.trimIndent().lines()
 
         rcboData.forEach { line ->
