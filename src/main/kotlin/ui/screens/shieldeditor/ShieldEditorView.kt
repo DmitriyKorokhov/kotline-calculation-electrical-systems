@@ -21,6 +21,11 @@ import ui.screens.shieldeditor.protection.*
 import view.CompactOutlinedTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.MoreVert // Иконка для меню
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 
 // Параметры — компактные размеры (подгоняйте при необходимости)
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
@@ -76,11 +81,9 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     var showBreakerSecondWindow by remember { mutableStateOf(false) }
     var showBreakerThirdWindow by remember { mutableStateOf(false) }
     var breakerDialogConsumerIndex by remember { mutableStateOf<Int?>(null) }
-    var breakerDialogInitialSeries by remember { mutableStateOf<String?>(null) }
-    var breakerDialogSelectedPoles by remember { mutableStateOf<String?>(null) }
-    var breakerDialogSelectedAdditions by remember { mutableStateOf<List<String>>(emptyList()) }
-    var breakerDialogInitialManufacturer by remember { mutableStateOf<String?>(null) }
 
+    val csvExporter = remember { CsvExporter() } // Создаем экземпляр экспортера
+    var showMoreMenu by remember { mutableStateOf(false) } // Состояние для видимости меню
 
     // состояние выбора второго окна для каждого потребителя (ключ — индекс колонки)
     data class BreakerDialogState(
@@ -123,9 +126,33 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 Text("Произвести расчёт")
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.weight(1f)) // Занимает все доступное пространство
 
-            Text("Данные щита", color = textColor) // заменил заголовок
+            // Кнопка экспорта и другие действия
+            Box {
+                IconButton(onClick = { showMoreMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Дополнительные действия")
+                }
+                DropdownMenu(
+                    expanded = showMoreMenu,
+                    onDismissRequest = { showMoreMenu = false }
+                ) {
+                    DropdownMenuItem(onClick = {
+                        showMoreMenu = false
+                        val path = csvExporter.chooseSavePath(
+                            defaultName = "${data.shieldName.ifBlank { "shield" }}.csv"
+                        )
+                        if (path != null) {
+                            val file = java.io.File(path)
+                            csvExporter.export(data, file)
+                        }
+                    }) {
+                        Text("Экспорт схемы в AutoCAD (CSV)")
+                    }
+                }
+            }
+
+
             Spacer(Modifier.width(12.dp))
             Text("Щит ID: ${shieldId ?: "-"}", fontSize = 14.sp, color = textColor)
         }
@@ -720,6 +747,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             onChoose = { formattedMultilineString ->
                                 consumer?.let {
                                     it.protectionDevice = formattedMultilineString
+                                    // Сохраняем также полюса, чтобы экспорт мог их взять
+                                    it.protectionPoles = st?.selectedPoles ?: ""
                                     saveNow()
                                 }
                                 showBreakerThirdWindow = false

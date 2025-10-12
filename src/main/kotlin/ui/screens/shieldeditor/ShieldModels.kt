@@ -21,6 +21,8 @@ class ConsumerModel(
     lineName: String = "",
     breakerNumber: String = "",
     protectionDevice: String = "",
+    // Новое поле: текстовое представление количества полюсов, например "1P", "1P+N", "3P"
+    protectionPoles: String = "",
     cableType: String = "",
     voltageDropV: String = ""
 ) {
@@ -36,6 +38,8 @@ class ConsumerModel(
     var lineName by mutableStateOf(lineName)
     var breakerNumber by mutableStateOf(breakerNumber)
     var protectionDevice by mutableStateOf(protectionDevice)
+    // Здесь хранится выбранное пользователем количество полюсов (используется для экспорта CSV и т.д.)
+    var protectionPoles by mutableStateOf(protectionPoles)
     var cableType by mutableStateOf(cableType)
     var voltageDropV by mutableStateOf(voltageDropV)
 
@@ -52,6 +56,7 @@ class ConsumerModel(
             lineName = lineName,
             breakerNumber = breakerNumber,
             protectionDevice = protectionDevice,
+            protectionPoles = protectionPoles,
             cableType = cableType,
             voltageDropV = voltageDropV
         )
