@@ -1,31 +1,27 @@
 package ui.screens.shieldeditor
 
+// Дополнительные импорты для анимаций/индикаций/ввода мыши
 import androidx.compose.animation.*
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.zIndex
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.*
 import ui.screens.shieldeditor.protection.*
 import view.CompactOutlinedTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.MoreVert // Иконка для меню
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 
 // Параметры — компактные размеры (подгоняйте при необходимости)
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
@@ -70,6 +66,9 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     val hScrollState = rememberScrollState() // горизонтальный для колонок
     val vScrollState = rememberScrollState() // вертикальный для всей таблицы
 
+    // state for selected columns (multiple selection)
+    val selectedColumns = remember { mutableStateListOf<Int>() }
+
     // Анимируем ширину панели — это даёт плавный "сдвиг" таблицы
     val animatedPanelWidth by animateDpAsState(
         targetValue = if (metaExpanded) LEFT_PANEL_WIDTH else 0.dp,
@@ -94,7 +93,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
         val selectedCurve: String? = null
     )
 
-// map: индекс потребителя -> состояние выбора (если null — параметров ещё не задавали)
+    // map: индекс потребителя -> состояние выбора (если null — параметров ещё не задавали)
     val breakerDialogState = remember { mutableStateMapOf<Int, BreakerDialogState>() }
 
 
@@ -160,7 +159,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
         Spacer(Modifier.height(10.dp))
 
         Row(Modifier.fillMaxSize()) {
-            // Блок: контейнер с анимируемой шириной (если ширина 0 — колонка займет 0 места,
+            // Блок: контейнер с анимируемой шириной (если ширина 0 — колонка займет 0 место,
             // при этом AnimatedVisibility отвечает за появление контента внутри)
             Box(
                 modifier = Modifier
@@ -379,15 +378,53 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                             .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(6.dp))
                                     ) {
                                         Column(modifier = Modifier.padding(COLUMN_INNER_PADDING)) {
-                                            Box(
+                                            // ---------------------------
+                                            // BEGIN: selectable header (заменяет простой Box заголовка)
+                                            // ---------------------------
+                                            val isSelected = selectedColumns.contains(colIndex)
+
+                                            // анимируем фон и цвет текста
+                                            val targetBg = if (isSelected) Color(0xFF1976D2) else Color.Transparent
+                                            val animatedBg by animateColorAsState(targetValue = targetBg, animationSpec = tween(durationMillis = 260))
+                                            val targetTextColor = if (isSelected) Color.White else textColor
+                                            val animatedTextColor by animateColorAsState(targetValue = targetTextColor, animationSpec = tween(durationMillis = 260))
+
+                                            // лёгкая анимация масштаба при выделении
+                                            val targetScale = if (isSelected) 1.02f else 1f
+                                            val animatedScale by animateFloatAsState(targetValue = targetScale, animationSpec = spring(stiffness = 400f))
+
+                                            // interactionSource для ripple (используем LocalIndication.current, без deprecated rememberRipple)
+                                            val interactionSource = remember { MutableInteractionSource() }
+
+                                            Surface(
                                                 modifier = Modifier
                                                     .height(HEADER_HEIGHT)
                                                     .fillMaxWidth()
-                                                    .padding(start = 6.dp),
-                                                contentAlignment = Alignment.CenterStart
+                                                    .padding(start = 6.dp)
+                                                    .scale(animatedScale)
+                                                    // clickable обрабатывает только primary (левая) кнопка по умолчанию
+                                                    .clickable(
+                                                        interactionSource = interactionSource,
+                                                        indication = LocalIndication.current
+                                                    ) {
+                                                        if (selectedColumns.contains(colIndex)) selectedColumns.remove(colIndex)
+                                                        else selectedColumns.add(colIndex)
+                                                    },
+                                                color = animatedBg,
+                                                shape = RoundedCornerShape(6.dp),
+                                                elevation = if (isSelected) 4.dp else 0.dp
                                             ) {
-                                                Text(text = "Потребитель ${colIndex + 1}", fontSize = HEADER_FONT.sp, color = textColor)
+                                                Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+                                                    Text(
+                                                        text = "Потребитель ${colIndex + 1}",
+                                                        fontSize = HEADER_FONT.sp,
+                                                        color = animatedTextColor
+                                                    )
+                                                }
                                             }
+                                            // ---------------------------
+                                            // END: selectable header
+                                            // ---------------------------
 
                                             Divider(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), color = borderColor)
 
