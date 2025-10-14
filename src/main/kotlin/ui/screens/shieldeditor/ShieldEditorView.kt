@@ -4,6 +4,7 @@ package ui.screens.shieldeditor
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +23,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import ui.screens.shieldeditor.protection.*
 import view.CompactOutlinedTextField
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
+import androidx.compose.material.OutlinedTextField
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.DpOffset
+
 
 // Параметры — компактные размеры (подгоняйте при необходимости)
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
@@ -95,6 +106,19 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
     // map: индекс потребителя -> состояние выбора (если null — параметров ещё не задавали)
     val breakerDialogState = remember { mutableStateMapOf<Int, BreakerDialogState>() }
+
+    // Буфер для копирования выбранных потребителей
+    val copiedConsumers = remember { mutableStateListOf<ConsumerModel>() }
+
+    // Какой столбец сейчас показывает контекстное меню (по ПКМ)
+    var contextMenuForHeader by remember { mutableStateOf<Int?>(null) }
+
+    // Диалог «Добавить»
+    var showAddDialog by remember { mutableStateOf(false) }
+    var addCountStr by remember { mutableStateOf("1") }
+
+    // Состояние для хранения координат клика правой кнопкой мыши
+    var contextMenuPosition by remember { mutableStateOf(Offset.Zero) }
 
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
@@ -378,9 +402,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                             .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(6.dp))
                                     ) {
                                         Column(modifier = Modifier.padding(COLUMN_INNER_PADDING)) {
-                                            // ---------------------------
-                                            // BEGIN: selectable header (заменяет простой Box заголовка)
-                                            // ---------------------------
                                             val isSelected = selectedColumns.contains(colIndex)
 
                                             // анимируем фон и цвет текста
@@ -395,36 +416,128 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
                                             // interactionSource для ripple (используем LocalIndication.current, без deprecated rememberRipple)
                                             val interactionSource = remember { MutableInteractionSource() }
+                                            Box {
+                                                Surface(
+                                                    modifier = Modifier
+                                                        .height(HEADER_HEIGHT)
+                                                        .fillMaxWidth()
+                                                        .padding(start = 6.dp)
+                                                        .scale(animatedScale)
+                                                        // ПКМ на шапке: выбрать столбец (если не выбран) и открыть контекстное меню
+                                                        .pointerInput(colIndex) {
+                                                            awaitEachGesture {
+                                                                while (true) {
+                                                                    val event = awaitPointerEvent()
+                                                                    if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                                                                        // Сохраняем позицию клика относительно шапки
+                                                                        contextMenuPosition = event.changes.first().position
 
-                                            Surface(
-                                                modifier = Modifier
-                                                    .height(HEADER_HEIGHT)
-                                                    .fillMaxWidth()
-                                                    .padding(start = 6.dp)
-                                                    .scale(animatedScale)
-                                                    // clickable обрабатывает только primary (левая) кнопка по умолчанию
-                                                    .clickable(
-                                                        interactionSource = interactionSource,
-                                                        indication = LocalIndication.current
-                                                    ) {
-                                                        if (selectedColumns.contains(colIndex)) selectedColumns.remove(colIndex)
-                                                        else selectedColumns.add(colIndex)
-                                                    },
-                                                color = animatedBg,
-                                                shape = RoundedCornerShape(6.dp),
-                                                elevation = if (isSelected) 4.dp else 0.dp
-                                            ) {
-                                                Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-                                                    Text(
-                                                        text = "Потребитель ${colIndex + 1}",
-                                                        fontSize = HEADER_FONT.sp,
-                                                        color = animatedTextColor
-                                                    )
+                                                                        // Ваша остальная логика остается без изменений
+                                                                        if (!selectedColumns.contains(colIndex)) {
+                                                                            selectedColumns.clear()
+                                                                            selectedColumns.add(colIndex)
+                                                                        }
+                                                                        contextMenuForHeader = colIndex
+                                                                        break
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // ЛКМ (как у вас было): переключение выделения столбца
+                                                        .clickable(
+                                                            interactionSource = interactionSource,
+                                                            indication = LocalIndication.current
+                                                        ) {
+                                                            if (selectedColumns.contains(colIndex)) {
+                                                                selectedColumns.remove(colIndex)
+                                                            } else {
+                                                                selectedColumns.add(colIndex)
+                                                            }
+                                                        },
+                                                    color = animatedBg,
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    elevation = if (isSelected) 4.dp else 0.dp
+                                                ) {
+                                                    Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+                                                        Text(text = "Потребитель ${colIndex + 1}", fontSize = HEADER_FONT.sp, color = animatedTextColor)
+                                                    }
+                                                }
+
+                                                // Получаем плотность для конвертации px в dp
+                                                val density = LocalDensity.current
+
+                                                DropdownMenu(
+                                                    expanded = contextMenuForHeader == colIndex,
+                                                    onDismissRequest = { contextMenuForHeader = null },
+                                                    // Задаем смещение, равное координатам клика
+                                                    offset = with(density) {
+                                                        DpOffset(contextMenuPosition.x.toDp(), contextMenuPosition.y.toDp())
+                                                    }
+                                                ) {
+                                                    // 1) Удалить — множественное удаление выделенных
+                                                    DropdownMenuItem(onClick = {
+                                                        if (selectedColumns.isNotEmpty()) {
+                                                            // Удаляем по индексам в порядке убывания, чтобы не сдвигать ещё не удалённые
+                                                            selectedColumns.sortedDescending().forEach { idx ->
+                                                                if (idx in data.consumers.indices) {
+                                                                    data.consumers.removeAt(idx)
+                                                                }
+                                                            }
+                                                            selectedColumns.clear()
+                                                            saveNow()
+                                                        }
+                                                        contextMenuForHeader = null
+                                                    }) { Text("Удалить") }
+
+                                                    // 2) Копировать — копируем все выделенные в буфер
+                                                    DropdownMenuItem(onClick = {
+                                                        copiedConsumers.clear()
+                                                        selectedColumns.sorted().forEach { idx ->
+                                                            data.consumers.getOrNull(idx)
+                                                                ?.let { copiedConsumers.add(it.deepCopy()) }
+                                                        }
+                                                        contextMenuForHeader = null
+                                                    }) { Text("Копировать") }
+
+                                                    // 3) Вставить — после выбранного столбца (ровно 1 выбранный)
+                                                    DropdownMenuItem(onClick = {
+                                                        val target = selectedColumns.singleOrNull()
+                                                        if (target != null && copiedConsumers.isNotEmpty()) {
+                                                            var insertPos = target + 1
+                                                            // Вставляем копии, чтобы не делить состояние с буфером
+                                                            val newlyInsertedIndices = mutableListOf<Int>()
+                                                            copiedConsumers.forEach { c ->
+                                                                val copy = c.deepCopy()
+                                                                if (insertPos <= data.consumers.size) {
+                                                                    data.consumers.add(insertPos, copy)
+                                                                    newlyInsertedIndices.add(insertPos)
+                                                                    insertPos++
+                                                                }
+                                                            }
+                                                            // Обновим выделение на вставленные (удобно пользователю)
+                                                            selectedColumns.clear()
+                                                            selectedColumns.addAll(newlyInsertedIndices)
+                                                            saveNow()
+                                                        } else {
+                                                            // Можно показать Snackbar/toast, если захотите
+                                                            // println("Для вставки должен быть выбран ровно один столбец и буфер копирования не пуст.")
+                                                        }
+                                                        contextMenuForHeader = null
+                                                    }) { Text("Вставить") }
+
+                                                    // 4) Добавить — запросить количество и добавить N пустых после выбранного столбца (ровно 1 выбранный)
+                                                    DropdownMenuItem(onClick = {
+                                                        if (selectedColumns.size == 1) {
+                                                            addCountStr = "1"
+                                                            showAddDialog = true
+                                                        } else {
+                                                            // println("Для добавления должен быть выбран ровно один столбец.")
+                                                        }
+                                                        contextMenuForHeader = null
+                                                    }) { Text("Добавить") }
                                                 }
                                             }
-                                            // ---------------------------
-                                            // END: selectable header
-                                            // ---------------------------
 
                                             Divider(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), color = borderColor)
 
@@ -789,6 +902,62 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                     saveNow()
                                 }
                                 showBreakerThirdWindow = false
+                            }
+                        )
+                    }
+
+                    if (showAddDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showAddDialog = false },
+                            title = { Text("Количество новых потребителей") },
+                            text = {
+                                OutlinedTextField(
+                                    value = addCountStr,
+                                    onValueChange = { addCountStr = it.filter { ch -> ch.isDigit() } },
+                                    singleLine = true
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    val count = addCountStr.toIntOrNull() ?: 0
+                                    val target = selectedColumns.singleOrNull()
+                                    if (count > 0 && target != null) {
+                                        var insertPos = target + 1
+                                        val newlyInserted = mutableListOf<Int>()
+                                        repeat(count) {
+                                            // Пустой потребитель (у вас, судя по коду, есть дефолтный конструктор)
+                                            val newConsumer = ConsumerModel(
+                                                name = "",
+                                                voltage = "",
+                                                cosPhi = "",
+                                                powerKw = "",
+                                                modes = "",
+                                                cableLine = "",
+                                                currentA = "",
+                                                phaseNumber = "",
+                                                lineName = "",
+                                                breakerNumber = "",
+                                                protectionDevice = "",
+                                                protectionPoles = "",
+                                                cableType = "",
+                                                voltageDropV = ""
+                                            )
+                                            if (insertPos <= data.consumers.size) {
+                                                data.consumers.add(insertPos, newConsumer)
+                                                newlyInserted.add(insertPos)
+                                                insertPos++
+                                            }
+                                        }
+                                        // Выделим добавленные
+                                        selectedColumns.clear()
+                                        selectedColumns.addAll(newlyInserted)
+                                        saveNow()
+                                    }
+                                    showAddDialog = false
+                                }) { Text("OK") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showAddDialog = false }) { Text("Отмена") }
                             }
                         )
                     }
