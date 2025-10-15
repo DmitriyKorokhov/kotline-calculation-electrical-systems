@@ -1,6 +1,6 @@
 package ui.screens.shieldeditor
 
-// Дополнительные импорты для анимаций/индикаций/ввода мыши
+// Импорт вашего кастомного компонента и enum'а
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -16,23 +16,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import ui.screens.shieldeditor.protection.*
 import view.CompactOutlinedTextField
-import androidx.compose.material.DropdownMenu
-import androidx.compose.material.DropdownMenuItem
-import androidx.compose.material.OutlinedTextField
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.isSecondaryPressed
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.DpOffset
-
 
 // Параметры — компактные размеры (подгоняйте при необходимости)
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
@@ -120,7 +117,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     // Состояние для хранения координат клика правой кнопкой мыши
     var contextMenuPosition by remember { mutableStateOf(Offset.Zero) }
 
-
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // Top bar (Back only left)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -193,7 +189,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
             ) {
                 // Внутри этого Box показываем содержимое панели с плавной анимацией по появлению/исчезновению
                 // Вызваем функцию явно через полное имя, чтобы избежать конфликтов расширений.
-                androidx.compose.animation.AnimatedVisibility(
+                this@Row.AnimatedVisibility(
                     visible = metaExpanded,
                     enter = slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(360, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(200)),
                     exit = slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(360, easing = FastOutSlowInEasing)) + fadeOut(animationSpec = tween(180))
@@ -257,7 +253,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         Spacer(Modifier.height(6.dp))
                         Box {
                             OutlinedButton(onClick = { stdMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                                Text(if (data.protectionStandard.isBlank()) "Выберите стандарт" else data.protectionStandard)
+                                Text(data.protectionStandard.ifBlank { "Выберите стандарт" })
                             }
                             DropdownMenu(
                                 expanded = stdMenuExpanded,
@@ -278,7 +274,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         Spacer(Modifier.height(6.dp))
                         Box {
                             OutlinedButton(onClick = { manufMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                                Text(if (data.protectionManufacturer.isBlank()) "Выберите производителя" else data.protectionManufacturer)
+                                Text(data.protectionManufacturer.ifBlank { "Выберите производителя" })
                             }
                             DropdownMenu(
                                 expanded = manufMenuExpanded,
@@ -403,50 +399,44 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                     ) {
                                         Column(modifier = Modifier.padding(COLUMN_INNER_PADDING)) {
                                             val isSelected = selectedColumns.contains(colIndex)
-
-                                            // анимируем фон и цвет текста
                                             val targetBg = if (isSelected) Color(0xFF1976D2) else Color.Transparent
                                             val animatedBg by animateColorAsState(targetValue = targetBg, animationSpec = tween(durationMillis = 260))
                                             val targetTextColor = if (isSelected) Color.White else textColor
                                             val animatedTextColor by animateColorAsState(targetValue = targetTextColor, animationSpec = tween(durationMillis = 260))
-
-                                            // лёгкая анимация масштаба при выделении
                                             val targetScale = if (isSelected) 1.02f else 1f
                                             val animatedScale by animateFloatAsState(targetValue = targetScale, animationSpec = spring(stiffness = 400f))
 
-                                            // interactionSource для ripple (используем LocalIndication.current, без deprecated rememberRipple)
-                                            val interactionSource = remember { MutableInteractionSource() }
                                             Box {
-                                                Surface(
+                                                // Ваша шапка, но с добавленным обработчиком правой кнопки мыши
+                                                Box(
+                                                    contentAlignment = Alignment.CenterStart,
                                                     modifier = Modifier
                                                         .height(HEADER_HEIGHT)
                                                         .fillMaxWidth()
-                                                        .padding(start = 6.dp)
                                                         .scale(animatedScale)
-                                                        // ПКМ на шапке: выбрать столбец (если не выбран) и открыть контекстное меню
+                                                        .background(animatedBg, RoundedCornerShape(6.dp))
+                                                        .border(
+                                                            width = if (isSelected) 1.5.dp else 0.dp,
+                                                            color = if (isSelected) Color.White else Color.Transparent,
+                                                            shape = RoundedCornerShape(6.dp)
+                                                        )
+                                                        // ОБРАБОТЧИК ПРАВОЙ КНОПКИ МЫШИ (ПКМ)
                                                         .pointerInput(colIndex) {
                                                             awaitEachGesture {
-                                                                while (true) {
-                                                                    val event = awaitPointerEvent()
-                                                                    if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                                                                        // Сохраняем позицию клика относительно шапки
-                                                                        contextMenuPosition = event.changes.first().position
-
-                                                                        // Ваша остальная логика остается без изменений
-                                                                        if (!selectedColumns.contains(colIndex)) {
-                                                                            selectedColumns.clear()
-                                                                            selectedColumns.add(colIndex)
-                                                                        }
-                                                                        contextMenuForHeader = colIndex
-                                                                        break
+                                                                val event = awaitPointerEvent()
+                                                                if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                                                                    contextMenuPosition = event.changes.first().position
+                                                                    if (!selectedColumns.contains(colIndex)) {
+                                                                        selectedColumns.clear()
+                                                                        selectedColumns.add(colIndex)
                                                                     }
+                                                                    contextMenuForHeader = colIndex
                                                                 }
                                                             }
                                                         }
-
-                                                        // ЛКМ (как у вас было): переключение выделения столбца
+                                                        // Ваш старый обработчик левой кнопки мыши (ЛКМ)
                                                         .clickable(
-                                                            interactionSource = interactionSource,
+                                                            interactionSource = remember { MutableInteractionSource() },
                                                             indication = LocalIndication.current
                                                         ) {
                                                             if (selectedColumns.contains(colIndex)) {
@@ -454,89 +444,71 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                             } else {
                                                                 selectedColumns.add(colIndex)
                                                             }
-                                                        },
-                                                    color = animatedBg,
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    elevation = if (isSelected) 4.dp else 0.dp
+                                                        }
                                                 ) {
-                                                    Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-                                                        Text(text = "Потребитель ${colIndex + 1}", fontSize = HEADER_FONT.sp, color = animatedTextColor)
-                                                    }
+                                                    Text(
+                                                        text = "Потребитель ${colIndex + 1}",
+                                                        fontSize = HEADER_FONT.sp,
+                                                        color = animatedTextColor,
+                                                        modifier = Modifier.padding(start = 8.dp)
+                                                    )
                                                 }
 
-                                                // Получаем плотность для конвертации px в dp
-                                                val density = LocalDensity.current
-
-                                                DropdownMenu(
+                                                // ВЫЗОВ КОНТЕКСТНОГО МЕНЮ
+                                                ConsumerContextMenu(
                                                     expanded = contextMenuForHeader == colIndex,
+                                                    offset = IntOffset(
+                                                        contextMenuPosition.x.toInt(),
+                                                        contextMenuPosition.y.toInt()
+                                                    ),
                                                     onDismissRequest = { contextMenuForHeader = null },
-                                                    // Задаем смещение, равное координатам клика
-                                                    offset = with(density) {
-                                                        DpOffset(contextMenuPosition.x.toDp(), contextMenuPosition.y.toDp())
+                                                    isPasteEnabled = copiedConsumers.isNotEmpty() && selectedColumns.size == 1,
+                                                    isAddEnabled = selectedColumns.size == 1,
+                                                    onAction = { action ->
+                                                        when (action) {
+                                                            ContextMenuAction.DELETE -> {
+                                                                if (selectedColumns.isNotEmpty()) {
+                                                                    selectedColumns.sortedDescending().forEach { idx ->
+                                                                        if (idx in data.consumers.indices) data.consumers.removeAt(idx)
+                                                                    }
+                                                                    selectedColumns.clear()
+                                                                    saveNow()
+                                                                }
+                                                            }
+                                                            ContextMenuAction.COPY -> {
+                                                                copiedConsumers.clear()
+                                                                selectedColumns.sorted().forEach { idx ->
+                                                                    data.consumers.getOrNull(idx)?.let { copiedConsumers.add(it.deepCopy()) }
+                                                                }
+                                                            }
+                                                            ContextMenuAction.PASTE -> {
+                                                                val target = selectedColumns.singleOrNull()
+                                                                if (target != null && copiedConsumers.isNotEmpty()) {
+                                                                    var insertPos = target + 1
+                                                                    val newlyInsertedIndices = mutableListOf<Int>()
+                                                                    copiedConsumers.forEach { c ->
+                                                                        val copy = c.deepCopy()
+                                                                        if (insertPos <= data.consumers.size) {
+                                                                            data.consumers.add(insertPos, copy)
+                                                                            newlyInsertedIndices.add(insertPos)
+                                                                            insertPos++
+                                                                        }
+                                                                    }
+                                                                    selectedColumns.clear()
+                                                                    selectedColumns.addAll(newlyInsertedIndices)
+                                                                    saveNow()
+                                                                }
+                                                            }
+                                                            ContextMenuAction.ADD -> {
+                                                                if (selectedColumns.size == 1) {
+                                                                    addCountStr = "1"
+                                                                    showAddDialog = true
+                                                                }
+                                                            }
+                                                        }
+                                                        contextMenuForHeader = null // Закрываем меню после действия
                                                     }
-                                                ) {
-                                                    // 1) Удалить — множественное удаление выделенных
-                                                    DropdownMenuItem(onClick = {
-                                                        if (selectedColumns.isNotEmpty()) {
-                                                            // Удаляем по индексам в порядке убывания, чтобы не сдвигать ещё не удалённые
-                                                            selectedColumns.sortedDescending().forEach { idx ->
-                                                                if (idx in data.consumers.indices) {
-                                                                    data.consumers.removeAt(idx)
-                                                                }
-                                                            }
-                                                            selectedColumns.clear()
-                                                            saveNow()
-                                                        }
-                                                        contextMenuForHeader = null
-                                                    }) { Text("Удалить") }
-
-                                                    // 2) Копировать — копируем все выделенные в буфер
-                                                    DropdownMenuItem(onClick = {
-                                                        copiedConsumers.clear()
-                                                        selectedColumns.sorted().forEach { idx ->
-                                                            data.consumers.getOrNull(idx)
-                                                                ?.let { copiedConsumers.add(it.deepCopy()) }
-                                                        }
-                                                        contextMenuForHeader = null
-                                                    }) { Text("Копировать") }
-
-                                                    // 3) Вставить — после выбранного столбца (ровно 1 выбранный)
-                                                    DropdownMenuItem(onClick = {
-                                                        val target = selectedColumns.singleOrNull()
-                                                        if (target != null && copiedConsumers.isNotEmpty()) {
-                                                            var insertPos = target + 1
-                                                            // Вставляем копии, чтобы не делить состояние с буфером
-                                                            val newlyInsertedIndices = mutableListOf<Int>()
-                                                            copiedConsumers.forEach { c ->
-                                                                val copy = c.deepCopy()
-                                                                if (insertPos <= data.consumers.size) {
-                                                                    data.consumers.add(insertPos, copy)
-                                                                    newlyInsertedIndices.add(insertPos)
-                                                                    insertPos++
-                                                                }
-                                                            }
-                                                            // Обновим выделение на вставленные (удобно пользователю)
-                                                            selectedColumns.clear()
-                                                            selectedColumns.addAll(newlyInsertedIndices)
-                                                            saveNow()
-                                                        } else {
-                                                            // Можно показать Snackbar/toast, если захотите
-                                                            // println("Для вставки должен быть выбран ровно один столбец и буфер копирования не пуст.")
-                                                        }
-                                                        contextMenuForHeader = null
-                                                    }) { Text("Вставить") }
-
-                                                    // 4) Добавить — запросить количество и добавить N пустых после выбранного столбца (ровно 1 выбранный)
-                                                    DropdownMenuItem(onClick = {
-                                                        if (selectedColumns.size == 1) {
-                                                            addCountStr = "1"
-                                                            showAddDialog = true
-                                                        } else {
-                                                            // println("Для добавления должен быть выбран ровно один столбец.")
-                                                        }
-                                                        contextMenuForHeader = null
-                                                    }) { Text("Добавить") }
-                                                }
+                                                )
                                             }
 
                                             Divider(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), color = borderColor)
@@ -830,8 +802,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         )
                     }
 
-                    var breakerDialogSelectedCurve by remember { mutableStateOf<String?>(null) }
-
                     if (showBreakerSecondWindow) {
                         val idx = breakerDialogConsumerIndex
                         val consumer = idx?.let { data.consumers.getOrNull(it) }
@@ -857,7 +827,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                 // сохраняем выбранные параметры в state для данного consumer
                                 idx?.let {
                                     breakerDialogState[it] = BreakerDialogState(
-                                        manufacturer = st?.manufacturer ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
+                                        manufacturer = st?.manufacturer ?: data.protectionManufacturer.takeIf { it -> it.isNotBlank() },
                                         series = result.series,
                                         selectedAdditions = result.selectedAdditions,
                                         selectedPoles = result.selectedPoles,
@@ -925,22 +895,12 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         var insertPos = target + 1
                                         val newlyInserted = mutableListOf<Int>()
                                         repeat(count) {
-                                            // Пустой потребитель (у вас, судя по коду, есть дефолтный конструктор)
+                                            // Создание пустого потребителя
                                             val newConsumer = ConsumerModel(
-                                                name = "",
-                                                voltage = "",
-                                                cosPhi = "",
-                                                powerKw = "",
-                                                modes = "",
-                                                cableLine = "",
-                                                currentA = "",
-                                                phaseNumber = "",
-                                                lineName = "",
-                                                breakerNumber = "",
-                                                protectionDevice = "",
-                                                protectionPoles = "",
-                                                cableType = "",
-                                                voltageDropV = ""
+                                                name = "", voltage = "", cosPhi = "", powerKw = "", modes = "",
+                                                cableLine = "", currentA = "", phaseNumber = "", lineName = "",
+                                                breakerNumber = "", protectionDevice = "", protectionPoles = "",
+                                                cableType = "", voltageDropV = ""
                                             )
                                             if (insertPos <= data.consumers.size) {
                                                 data.consumers.add(insertPos, newConsumer)
@@ -948,7 +908,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                 insertPos++
                                             }
                                         }
-                                        // Выделим добавленные
+                                        // Выделяем новые столбцы
                                         selectedColumns.clear()
                                         selectedColumns.addAll(newlyInserted)
                                         saveNow()
