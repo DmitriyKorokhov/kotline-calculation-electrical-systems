@@ -122,6 +122,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     // Состояние для хранения координат клика правой кнопкой мыши
     var contextMenuPosition by remember { mutableStateOf(Offset.Zero) }
 
+    var modesDialogForIndex by remember { mutableStateOf<Int?>(null) }
+
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // Top bar (Back only left)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -631,38 +633,120 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                 unfocusedBorderColor = Color.LightGray,
                                                 modifier = Modifier.fillMaxWidth()
                                             )
-                                            Spacer(Modifier.height(FIELD_VSPACE))
 
-                                            CompactOutlinedTextField(
-                                                label = "Установленная мощность, кВт",
-                                                value = consumer.powerKw,
-                                                onValueChange = {
-                                                    consumer.powerKw = it
-                                                    saveNow()
-                                                },
-                                                contentPadding = FIELD_CONTENT_PADDING,
-                                                fontSizeSp = FIELD_FONT,
-                                                textColor = textColor,
-                                                focusedBorderColor = borderColor,
-                                                unfocusedBorderColor = Color.LightGray,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
                                             Spacer(Modifier.height(FIELD_VSPACE))
+                                            if (!consumer.dualMode) {
+                                                CompactOutlinedTextField(
+                                                    label = "Установленная мощность, Вт",
+                                                    value = consumer.powerKw,
+                                                    onValueChange = {
+                                                        consumer.powerKw = it
+                                                        saveNow()
+                                                    },
+                                                    contentPadding = FIELD_CONTENT_PADDING,
+                                                    fontSizeSp = FIELD_FONT,
+                                                    textColor = textColor,
+                                                    focusedBorderColor = borderColor,
+                                                    unfocusedBorderColor = Color.LightGray,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            } else {
+                                                Row(Modifier.fillMaxWidth()) {
+                                                    CompactOutlinedTextField(
+                                                        label = "P1, Вт",
+                                                        value = consumer.powerKw,
+                                                        onValueChange = {
+                                                            consumer.powerKw = it
+                                                            saveNow()
+                                                        },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    Spacer(Modifier.width(8.dp))
+                                                    CompactOutlinedTextField(
+                                                        label = "P2, Вт",
+                                                        value = consumer.powerKwMode2,
+                                                        onValueChange = {
+                                                            consumer.powerKwMode2 = it
+                                                            saveNow()
+                                                        },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                }
+                                            }
 
-                                            CompactOutlinedTextField(
-                                                label = "Режимы работы",
-                                                value = consumer.modes,
-                                                onValueChange = {
-                                                    consumer.modes = it
-                                                    saveNow()
-                                                },
-                                                contentPadding = FIELD_CONTENT_PADDING,
-                                                fontSizeSp = FIELD_FONT,
-                                                textColor = textColor,
-                                                focusedBorderColor = borderColor,
-                                                unfocusedBorderColor = Color.LightGray,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
+                                            Spacer(Modifier.height(FIELD_VSPACE))
+                                            val modeTitle = if (consumer.dualMode) {
+                                                val n1 = consumer.modeName1.ifBlank { "Режим 1" }
+                                                val n2 = consumer.modeName2.ifBlank { "Режим 2" }
+                                                "Режимы: 2 — $n1 / $n2"
+                                            } else {
+                                                "Режим: 1"
+                                            }
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text(modeTitle, color = textColor, fontSize = FIELD_FONT.sp)
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        if (consumer.dualMode) {
+                                                            consumer.dualMode = false
+                                                            consumer.modeName1 = ""
+                                                            consumer.modeName2 = ""
+                                                            consumer.powerKwMode2 = ""
+                                                            consumer.currentAMode1 = ""
+                                                            consumer.currentAMode2 = ""
+                                                        } else {
+                                                            consumer.dualMode = true
+                                                        }
+                                                        saveNow()
+                                                    },
+                                                    border = BorderStroke(1.dp, borderColor)
+                                                ) { Text(if (consumer.dualMode) "Удалить режим" else "Добавить режим") }
+                                            }
+
+                                            // 2) Поля для названий режимов (сразу под переключателем):
+                                            if (consumer.dualMode) {
+                                                Spacer(Modifier.height(FIELD_VSPACE))
+                                                Row(Modifier.fillMaxWidth()) {
+                                                    CompactOutlinedTextField(
+                                                        label = "Название режима 1",
+                                                        value = consumer.modeName1,
+                                                        onValueChange = {
+                                                            consumer.modeName1 = it
+                                                            saveNow()
+                                                        },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    Spacer(Modifier.width(8.dp))
+                                                    CompactOutlinedTextField(
+                                                        label = "Название режима 2",
+                                                        value = consumer.modeName2,
+                                                        onValueChange = {
+                                                            consumer.modeName2 = it
+                                                            saveNow()
+                                                        },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                }
+                                            }
                                             Spacer(Modifier.height(FIELD_VSPACE))
 
                                             CompactOutlinedTextField(
@@ -681,22 +765,48 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                             )
 
                                             Spacer(Modifier.height(FIELD_VSPACE))
-
-                                            // Блок 2
-                                            CompactOutlinedTextField(
-                                                label = "Расчетный ток, А",
-                                                value = consumer.currentA,
-                                                onValueChange = {
-                                                    consumer.currentA = it
-                                                    saveNow()
-                                                },
-                                                contentPadding = FIELD_CONTENT_PADDING,
-                                                fontSizeSp = FIELD_FONT,
-                                                textColor = textColor,
-                                                focusedBorderColor = borderColor,
-                                                unfocusedBorderColor = Color.LightGray,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
+                                            if (!consumer.dualMode) {
+                                                OutlinedTextField(
+                                                    value = consumer.currentA,
+                                                    onValueChange = {},
+                                                    readOnly = true,
+                                                    label = { Text("Расчетный ток, А") },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                                                        textColor = textColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        focusedBorderColor = borderColor
+                                                    )
+                                                )
+                                            } else {
+                                                Row(Modifier.fillMaxWidth()) {
+                                                    OutlinedTextField(
+                                                        value = consumer.currentAMode1,
+                                                        onValueChange = {},
+                                                        readOnly = true,
+                                                        label = { Text("I1, А") },
+                                                        modifier = Modifier.weight(1f),
+                                                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                                                            textColor = textColor,
+                                                            unfocusedBorderColor = Color.LightGray,
+                                                            focusedBorderColor = borderColor
+                                                        )
+                                                    )
+                                                    Spacer(Modifier.width(8.dp))
+                                                    OutlinedTextField(
+                                                        value = consumer.currentAMode2,
+                                                        onValueChange = {},
+                                                        readOnly = true,
+                                                        label = { Text("I2, А") },
+                                                        modifier = Modifier.weight(1f),
+                                                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                                                            textColor = textColor,
+                                                            unfocusedBorderColor = Color.LightGray,
+                                                            focusedBorderColor = borderColor
+                                                        )
+                                                    )
+                                                }
+                                            }
                                             Spacer(Modifier.height(FIELD_VSPACE))
 
                                             CompactOutlinedTextField(

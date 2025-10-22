@@ -1,47 +1,46 @@
+// CalculationEngine.kt
 package ui.screens.shieldeditor
 
 import kotlin.math.sqrt
 import kotlin.math.abs
 
 object CalculationEngine {
-    /**
-     * Рассчитать ток для одного потребителя.
-     * - powerRaw: берётся из consumer.powerKw (теперь это Вт).
-     * - cosPhi: consumer.cosPhi (если неверно — принимаем 1.0)
-     * - U: consumer.voltage (ожидается 230 или 400, но можно и другое значение)
-     *
-     * Формулы:
-     *  - U == 230 -> I = P / (U * cosf)
-     *  - U == 400 -> I = P / (U * cosf * sqrt(3))
-     *
-     * Возвращает Double? — значение тока в амперах, либо null при ошибке парсинга.
-     */
-    fun calculateCurrentFor(consumer: ConsumerModel): Double? {
-        val p = NumberUtils.parseDouble(consumer.powerKw) ?: return null // теперь мощность в Вт
-        val cosPhi = NumberUtils.parseDouble(consumer.cosPhi) ?: 1.0
-        val u = NumberUtils.parseDouble(consumer.voltage) ?: return null
 
+    // Единая функция расчёта тока из мощности в кВт, с выбором одно/трёхфазной формулы
+    private fun calcI(u: Double, cosPhi: Double, pKwStr: String?): Double? {
+        val pW = NumberUtils.parseDouble(pKwStr) ?: return null
         val i = if (nearlyEquals(u, 400.0)) {
-            // трехфазный
-            p / (u * cosPhi * sqrt(3.0))
+            pW / (u * cosPhi * sqrt(3.0))
         } else {
-            // однофазный (или другое напряжение)
-            p / (u * cosPhi)
+            pW / (u * cosPhi)
         }
-
         return if (i.isFinite()) i else null
     }
 
-    /**
-     * Произвести расчёт для всех потребителей: заполнить consumer.currentA (строка)
-     * Возвращает количество успешно рассчитанных потребителей.
-     */
+    // Главная кнопка "Произвести расчёт"
     fun calculateAll(shieldData: ShieldData): Int {
         var success = 0
         shieldData.consumers.forEach { c ->
-            val i = calculateCurrentFor(c)
-            if (i != null) {
-                c.currentA = NumberUtils.formatDoubleTwoDecimals(i)
+            val u = NumberUtils.parseDouble(c.voltage)
+            val cosPhi = NumberUtils.parseDouble(c.cosPhi) ?: 1.0
+            if (u == null) {
+                c.currentAMode1 = ""
+                c.currentAMode2 = ""
+                c.currentA = ""
+                return@forEach
+            }
+
+            val i1 = calcI(u, cosPhi, c.powerKw)
+            val i2 = if (c.dualMode) calcI(u, cosPhi, c.powerKwMode2) else null
+
+            // Заполняем токи режимов только здесь
+            c.currentAMode1 = i1?.let { NumberUtils.formatDoubleTwoDecimals(it) } ?: ""
+            c.currentAMode2 = if (c.dualMode) (i2?.let { NumberUtils.formatDoubleTwoDecimals(it) } ?: "") else ""
+
+            // Агрегируем для выбора защиты/экспорта
+            val imax = listOfNotNull(i1, i2).maxOrNull()
+            if (imax != null) {
+                c.currentA = NumberUtils.formatDoubleTwoDecimals(imax)
                 success++
             } else {
                 c.currentA = ""
