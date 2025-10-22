@@ -30,6 +30,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import ui.screens.shieldeditor.protection.*
 import view.CompactOutlinedTextField
+import java.io.File
+import java.awt.FileDialog
+import javax.swing.JFrame
+import javax.swing.JOptionPane
+import kotlin.concurrent.thread
 
 // Параметры — компактные размеры (подгоняйте при необходимости)
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
@@ -158,16 +163,84 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 ) {
                     DropdownMenuItem(onClick = {
                         showMoreMenu = false
-                        val path = csvExporter.chooseSavePath(
-                            defaultName = "${data.shieldName.ifBlank { "shield" }}.csv"
-                        )
-                        if (path != null) {
-                            val file = java.io.File(path)
-                            csvExporter.export(data, file)
+
+                        // 1) Выбор места сохранения DWG
+                        val frame = JFrame().apply { isAlwaysOnTop = true }
+                        val dlg = java.awt.FileDialog(frame, "Сохранить DWG как...", java.awt.FileDialog.SAVE).apply {
+                            file = "${data.shieldName.ifBlank { "scheme" }}.dwg"
+                            isVisible = true
                         }
-                    }) {
-                        Text("Экспорт схемы в AutoCAD (CSV)")
-                    }
+                        val outPath = dlg.file?.let { File(dlg.directory, it).absolutePath }
+                        frame.dispose()
+                        if (outPath == null) return@DropdownMenuItem
+
+                        // 2) Найти accoreconsole
+                        var accorePath = ShieldStorage.accoreConsolePath
+                        if (accorePath.isNullOrBlank()) {
+                            accorePath = AutoCadExporter.tryFindAccoreConsole()
+                            if (accorePath != null) ShieldStorage.accoreConsolePath = accorePath
+                        }
+                        if (accorePath.isNullOrBlank()) {
+                            val fc = javax.swing.JFileChooser().apply {
+                                dialogTitle = "Укажите путь к accoreconsole.exe"
+                                fileSelectionMode = javax.swing.JFileChooser.FILES_ONLY
+                            }
+                            val res = fc.showOpenDialog(null)
+                            if (res == javax.swing.JFileChooser.APPROVE_OPTION) {
+                                accorePath = fc.selectedFile.absolutePath
+                                ShieldStorage.accoreConsolePath = accorePath
+                            } else {
+                                javax.swing.JOptionPane.showMessageDialog(null, "accoreconsole.exe не выбран", "Отмена", javax.swing.JOptionPane.INFORMATION_MESSAGE)
+                                return@DropdownMenuItem
+                            }
+                        }
+
+                        // 3) Найти шаблон DWG
+                        var templatePath = ShieldStorage.templateDwgPath
+                        if (templatePath.isNullOrBlank()) {
+                            val guess = File(System.getProperty("user.dir"), "template_with_blocks.dwg")
+                            if (guess.exists()) {
+                                templatePath = guess.absolutePath
+                                ShieldStorage.templateDwgPath = templatePath
+                            } else {
+                                val fc2 = javax.swing.JFileChooser().apply {
+                                    dialogTitle = "Выберите template_with_blocks.dwg"
+                                    fileSelectionMode = javax.swing.JFileChooser.FILES_ONLY
+                                }
+                                val res2 = fc2.showOpenDialog(null)
+                                if (res2 == javax.swing.JFileChooser.APPROVE_OPTION) {
+                                    templatePath = fc2.selectedFile.absolutePath
+                                    ShieldStorage.templateDwgPath = templatePath
+                                } else {
+                                    javax.swing.JOptionPane.showMessageDialog(null, "Шаблон DWG не выбран", "Отмена", javax.swing.JOptionPane.INFORMATION_MESSAGE)
+                                    return@DropdownMenuItem
+                                }
+                            }
+                        }
+
+                        // 4) Запуск экспорта (асинхронно)
+                        thread {
+                            val result = AutoCadExporter.exportUsingTrustedStaging(
+                                accorePath = accorePath, // можно null — функция сама поищет accoreconsole.exe
+                                templateDwgPath = templatePath!!, // путь к вашему source_blocks.dwg
+                                outDwgPath = outPath,
+                                shieldData = data,
+                                baseX = 0,
+                                stepX = 300,
+                                y = 0,
+                                timeoutSec = 300L,
+                                useTemplateCopy = false
+                            )
+
+                            javax.swing.SwingUtilities.invokeLater {
+                                val msg = javax.swing.JTextArea(result.output).apply { isEditable = false; lineWrap = true; wrapStyleWord = true }
+                                val scroll = javax.swing.JScrollPane(msg).apply { preferredSize = java.awt.Dimension(900, 420) }
+                                val title = if (result.exitCode == 0) "Экспорт успешен" else "Экспорт завершился с ошибкой"
+                                val type = if (result.exitCode == 0) javax.swing.JOptionPane.INFORMATION_MESSAGE else javax.swing.JOptionPane.ERROR_MESSAGE
+                                javax.swing.JOptionPane.showMessageDialog(null, scroll, title, type)
+                            }
+                        }
+                    }) { Text("Экспорт схемы в AutoCAD (DWG)") }
                 }
             }
 
@@ -179,8 +252,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
         Spacer(Modifier.height(10.dp))
 
         Row(Modifier.fillMaxSize()) {
-            // Блок: контейнер с анимируемой шириной (если ширина 0 — колонка займет 0 место,
-            // при этом AnimatedVisibility отвечает за появление контента внутри)
             Box(
                 modifier = Modifier
                     .width(animatedPanelWidth)

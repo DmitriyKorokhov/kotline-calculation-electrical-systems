@@ -6,7 +6,7 @@ import ui.screens.shieldeditor.protection.ProtectionType
 import ui.screens.shieldeditor.protection.protectionTypeFromString
 
 /**
- * Экспорт в CSV для AutoCAD / Lisp.
+ * Экспорт в CSV для AutoCAD.
  */
 class CsvExporter {
 
@@ -140,6 +140,6 @@ class CsvExporter {
         val dir = dialog.directory
         val name = dialog.file
         frame.dispose()
-        return if (name != null) java.io.File(dir, name).absolutePath else null
+        return if (name != null) File(dir, name).absolutePath else null
     }
 }
