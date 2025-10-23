@@ -1,6 +1,6 @@
 package ui.screens.shieldeditor
 
-// Импорт вашего кастомного компонента и enum'а
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -15,15 +15,15 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,9 +31,7 @@ import androidx.compose.ui.zIndex
 import ui.screens.shieldeditor.protection.*
 import view.CompactOutlinedTextField
 import java.io.File
-import java.awt.FileDialog
 import javax.swing.JFrame
-import javax.swing.JOptionPane
 import kotlin.concurrent.thread
 
 // Параметры — компактные размеры (подгоняйте при необходимости)
@@ -48,6 +46,7 @@ private const val FIELD_FONT = 15
 private val FIELD_CONTENT_PADDING = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
 private val FIELD_VSPACE: Dp = 8.dp
 private val SCROLLBAR_HEIGHT: Dp = 22.dp
+private val BlueAccent = Color(0xFF2196F3)
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -653,7 +652,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                             } else {
                                                 Row(Modifier.fillMaxWidth()) {
                                                     CompactOutlinedTextField(
-                                                        label = "P1, Вт",
+                                                        label = "P₁, Вт",
                                                         value = consumer.powerKw,
                                                         onValueChange = {
                                                             consumer.powerKw = it
@@ -668,7 +667,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                     )
                                                     Spacer(Modifier.width(8.dp))
                                                     CompactOutlinedTextField(
-                                                        label = "P2, Вт",
+                                                        label = "P₂, Вт",
                                                         value = consumer.powerKwMode2,
                                                         onValueChange = {
                                                             consumer.powerKwMode2 = it
@@ -684,71 +683,126 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                 }
                                             }
 
-                                            Spacer(Modifier.height(FIELD_VSPACE))
-                                            val modeTitle = if (consumer.dualMode) {
-                                                val n1 = consumer.modeName1.ifBlank { "Режим 1" }
-                                                val n2 = consumer.modeName2.ifBlank { "Режим 2" }
-                                                "Режимы: 2 — $n1 / $n2"
-                                            } else {
-                                                "Режим: 1"
+                                            var editingModeName by remember(colIndex) { mutableStateOf<String?>(null) }  // "mode1" | "mode2"
+                                            var tempName by remember(colIndex, editingModeName) {
+                                                mutableStateOf(if (editingModeName == "mode2") consumer.modeName2 else consumer.modeName1)
                                             }
-                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                                Text(modeTitle, color = textColor, fontSize = FIELD_FONT.sp)
+
+                                            Spacer(Modifier.height(FIELD_VSPACE))
+                                            if (!consumer.dualMode) {
                                                 OutlinedButton(
                                                     onClick = {
-                                                        if (consumer.dualMode) {
+                                                        consumer.dualMode = true
+                                                        // Сбрасываем текст временного ввода на стартовое имя 1 режима
+                                                        tempName = consumer.modeName1
+                                                        saveNow()
+                                                    },
+                                                    border = BorderStroke(1.dp, BlueAccent),
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        backgroundColor = BlueAccent.copy(alpha = 0.12f),
+                                                        contentColor = BlueAccent
+                                                    ),
+                                                    modifier = Modifier.fillMaxWidth().height(56.dp)
+                                                ) {
+                                                    Text("Добавить\nрежим", fontSize = FIELD_FONT.sp, textAlign = TextAlign.Center, maxLines = 2, color = textColor)
+                                                }
+                                            } else {
+                                                // Ряд: Режим 1 | Режим 2 | Удалить режим
+                                                Row(
+                                                    Modifier.fillMaxWidth().height(56.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    // Режим 1 (кликабельный)
+                                                    Surface(
+                                                        color = Color.Transparent,
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        border = BorderStroke(1.dp, Color.LightGray),
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .clip(RoundedCornerShape(4.dp))
+                                                            .clickable {
+                                                                editingModeName = "mode1"
+                                                                tempName = consumer.modeName1
+                                                            }
+                                                    ) {
+                                                        Box(Modifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.Center) {
+                                                            Text(consumer.modeName1.ifBlank { "Режим 1" }, fontSize = FIELD_FONT.sp, textAlign = TextAlign.Center, color = textColor)
+                                                        }
+                                                    }
+
+                                                    // Режим 2 (кликабельный)
+                                                    Surface(
+                                                        color = Color.Transparent,
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        border = BorderStroke(1.dp, Color.LightGray),
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .clip(RoundedCornerShape(4.dp))
+                                                            .clickable {
+                                                                editingModeName = "mode2"
+                                                                tempName = consumer.modeName2
+                                                            }
+                                                    ) {
+                                                        Box(Modifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.Center) {
+                                                            Text(consumer.modeName2.ifBlank { "Режим 2" }, fontSize = FIELD_FONT.sp, textAlign = TextAlign.Center, color = textColor)
+                                                        }
+                                                    }
+
+                                                    // Удалить режим (фиксированная ширина, без weight — не перекрывает клики слева)
+                                                    OutlinedButton(
+                                                        onClick = {
                                                             consumer.dualMode = false
                                                             consumer.modeName1 = ""
                                                             consumer.modeName2 = ""
                                                             consumer.powerKwMode2 = ""
                                                             consumer.currentAMode1 = ""
                                                             consumer.currentAMode2 = ""
-                                                        } else {
-                                                            consumer.dualMode = true
-                                                        }
-                                                        saveNow()
-                                                    },
-                                                    border = BorderStroke(1.dp, borderColor)
-                                                ) { Text(if (consumer.dualMode) "Удалить режим" else "Добавить режим") }
-                                            }
-
-                                            // 2) Поля для названий режимов (сразу под переключателем):
-                                            if (consumer.dualMode) {
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-                                                Row(Modifier.fillMaxWidth()) {
-                                                    CompactOutlinedTextField(
-                                                        label = "Название режима 1",
-                                                        value = consumer.modeName1,
-                                                        onValueChange = {
-                                                            consumer.modeName1 = it
                                                             saveNow()
                                                         },
-                                                        contentPadding = FIELD_CONTENT_PADDING,
-                                                        fontSizeSp = FIELD_FONT,
-                                                        textColor = textColor,
-                                                        focusedBorderColor = borderColor,
-                                                        unfocusedBorderColor = Color.LightGray,
-                                                        modifier = Modifier.weight(1f)
-                                                    )
-                                                    Spacer(Modifier.width(8.dp))
-                                                    CompactOutlinedTextField(
-                                                        label = "Название режима 2",
-                                                        value = consumer.modeName2,
-                                                        onValueChange = {
-                                                            consumer.modeName2 = it
-                                                            saveNow()
-                                                        },
-                                                        contentPadding = FIELD_CONTENT_PADDING,
-                                                        fontSizeSp = FIELD_FONT,
-                                                        textColor = textColor,
-                                                        focusedBorderColor = borderColor,
-                                                        unfocusedBorderColor = Color.LightGray,
-                                                        modifier = Modifier.weight(1f)
-                                                    )
+                                                        border = BorderStroke(1.dp, BlueAccent),
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            backgroundColor = BlueAccent.copy(alpha = 0.12f),
+                                                            contentColor = BlueAccent
+                                                        ),
+                                                        modifier = Modifier.widthIn(min = 140.dp).height(56.dp)
+                                                    ) {
+                                                        Text("Удалить\nрежим", fontSize = FIELD_FONT.sp, textAlign = TextAlign.Center, maxLines = 2, color = textColor)
+                                                    }
                                                 }
                                             }
-                                            Spacer(Modifier.height(FIELD_VSPACE))
 
+                                            if (editingModeName != null) {
+                                                AlertDialog(
+                                                    onDismissRequest = { editingModeName = null },
+                                                    title = { Text(if (editingModeName == "mode2") "Режим 2" else "Режим 1", color = textColor) },
+                                                    text = {
+                                                        CompactOutlinedTextField(
+                                                            value = tempName,
+                                                            onValueChange = { tempName = it },
+                                                            label = "Название режима",
+                                                            contentPadding = FIELD_CONTENT_PADDING,
+                                                            fontSizeSp = FIELD_FONT,
+                                                            textColor = textColor,
+                                                            focusedBorderColor = borderColor,
+                                                            unfocusedBorderColor = Color.LightGray,
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        )
+                                                    },
+                                                    confirmButton = {
+                                                        TextButton(onClick = {
+                                                            if (editingModeName == "mode2") consumer.modeName2 = tempName else consumer.modeName1 = tempName
+                                                            saveNow()
+                                                            editingModeName = null
+                                                        }) { Text("OK", color = textColor) }
+                                                    },
+                                                    dismissButton = {
+                                                        TextButton(onClick = { editingModeName = null }) { Text("Отмена", color = textColor) }
+                                                    }
+                                                )
+                                            }
+
+                                            Spacer(Modifier.height(FIELD_VSPACE))
                                             CompactOutlinedTextField(
                                                 label = "Кабельная линия",
                                                 value = consumer.cableLine,
@@ -784,7 +838,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                         value = consumer.currentAMode1,
                                                         onValueChange = {},
                                                         readOnly = true,
-                                                        label = { Text("I1, А") },
+                                                        label = { Text("I₁, А") },
                                                         modifier = Modifier.weight(1f),
                                                         colors = TextFieldDefaults.outlinedTextFieldColors(
                                                             textColor = textColor,
@@ -797,7 +851,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                         value = consumer.currentAMode2,
                                                         onValueChange = {},
                                                         readOnly = true,
-                                                        label = { Text("I2, А") },
+                                                        label = { Text("I₂, А") },
                                                         modifier = Modifier.weight(1f),
                                                         colors = TextFieldDefaults.outlinedTextFieldColors(
                                                             textColor = textColor,
