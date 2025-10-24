@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import data.PowerSourceNode
 import data.ShieldNode
+import data.TransformerNode
 
 // Константы размеров для позиционирования текста и превью
 private const val NODE_WIDTH = 120f
@@ -31,7 +32,8 @@ private val PALETTE_CELL_HEIGHT_DP = 110.dp
 /**
  * Типы узлов для палетки.
  */
-private enum class PaletteNodeType { SHIELD, POWER_SOURCE }
+private enum class PaletteNodeType { SHIELD, POWER_SOURCE, TRANSFORMER }
+
 
 /**
  * Полный ProjectView.kt — интегрированная и исправленная версия.
@@ -152,6 +154,16 @@ fun ProjectView(
                     } else if (node is PowerSourceNode) {
                         PowerSourceNameText(node.name, screenPos, POWER_SOURCE_WIDTH * scale, nodeHeight, scale)
                     }
+                    if (node is TransformerNode) {
+                        val screenCenter = state.worldToScreen(node.position)
+                        val scale = state.scale
+                        val r = node.radiusOuter * scale
+                        TransformerNameText(node.name, screenCenter, r)
+                    } else if (node is ShieldNode) {
+                        NodeNameText(node.name, screenPos, NODE_WIDTH * scale, nodeHeight)
+                    } else if (node is PowerSourceNode) {
+                        PowerSourceNameText(node.name, screenPos, POWER_SOURCE_WIDTH * scale, nodeHeight, scale)
+                    }
                 }
             }
 
@@ -217,6 +229,7 @@ fun ProjectView(
                     when (paletteDragType) {
                         PaletteNodeType.SHIELD -> state.addShieldNode(worldPos)
                         PaletteNodeType.POWER_SOURCE -> state.addPowerSourceNode(worldPos)
+                        PaletteNodeType.TRANSFORMER -> state.addTransformerNode(worldPos)
                         null -> {}
                     }
                     paletteDragType = null
@@ -249,6 +262,9 @@ private fun PaletteRow(
             onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
         Spacer(modifier = Modifier.width(16.dp))
         PaletteItem(label = "Ист. питания", widthDp = cellWidthSource, heightDp = cellHeight, drawType = PaletteNodeType.POWER_SOURCE,
+            onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
+        Spacer(modifier = Modifier.width(16.dp))
+        PaletteItem(label = "Трансформатор", widthDp = 160.dp, heightDp = 110.dp, drawType = PaletteNodeType.TRANSFORMER,
             onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
     }
 }
@@ -349,6 +365,21 @@ private fun PowerSourceNameText(name: String, screenPos: Offset, nodeWidth: Floa
         fontSize = (14 * LocalDensity.current.fontScale).sp
     )
 }
+
+@Composable
+private fun TransformerNameText(name: String, screenCenter: Offset, radiusScreen: Float) {
+    // Рисуем текст слева от внешнего круга, со смещением
+    val x = screenCenter.x - radiusScreen - 10f // 10px отступ
+    val y = screenCenter.y - 8f // чуть выше центра по вертикали
+    Text(
+        text = name,
+        modifier = Modifier
+            .offset(x.dp, y.dp),
+        color = MaterialTheme.colors.onSurface,
+        fontSize = (14 * LocalDensity.current.fontScale).sp
+    )
+}
+
 
 @Composable
 private fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (shieldId: Int) -> Unit) {

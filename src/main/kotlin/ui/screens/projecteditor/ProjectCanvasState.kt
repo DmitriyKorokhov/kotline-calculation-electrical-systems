@@ -7,7 +7,9 @@ import data.LevelLine
 import data.PowerSourceNode
 import data.ProjectNode
 import data.ShieldNode
+import data.TransformerNode
 import kotlin.math.floor
+import kotlin.math.max
 
 // Константы размеров объектов и сетки
 private const val NODE_WIDTH = 120f
@@ -63,15 +65,27 @@ class ProjectCanvasState {
     fun findNodeAtScreenPosition(screenPos: Offset): ProjectNode? {
         val worldPos = screenToWorld(screenPos)
         return nodes.findLast { node ->
-            val width = if (node is PowerSourceNode) POWER_SOURCE_WIDTH else NODE_WIDTH
-            val height = getNodeHeight(node)
-            (worldPos.x in (node.position.x - width / 2)..(node.position.x + width / 2)) &&
-                    (worldPos.y in (node.position.y - height / 2)..(node.position.y + height / 2))
+            when (node) {
+                is TransformerNode -> {
+                    val rOuter = node.radiusOuter
+                    val rInner = node.radiusInner
+                    val width = max(2 * rOuter, 2 * rInner)
+                    val height = 2 * rOuter + rInner // от верхней точки внешнего до нижней внутреннего
+                    (worldPos.x in (node.position.x - width / 2)..(node.position.x + width / 2)) &&
+                            (worldPos.y in (node.position.y - height / 2)..(node.position.y + height / 2))
+                }
+                else -> {
+                    val width = if (node is PowerSourceNode) POWER_SOURCE_WIDTH else NODE_WIDTH
+                    val height = getNodeHeight(node)
+                    (worldPos.x in (node.position.x - width / 2)..(node.position.x + width / 2)) &&
+                            (worldPos.y in (node.position.y - height / 2)..(node.position.y + height / 2))
+                }
+            }
         }
     }
 
     /**
-     * --- ИЗМЕНЕНО: Обновляет позицию узла по его ID. ---
+     * Обновляет позицию узла по его ID.
      */
     fun updateNodePosition(nodeId: Int, newPosition: Offset) {
         val index = nodes.indexOfFirst { it.id == nodeId }
@@ -80,13 +94,15 @@ class ProjectCanvasState {
             val updatedNode = when (node) {
                 is ShieldNode -> node.copy(position = newPosition)
                 is PowerSourceNode -> node.copy(position = newPosition)
+                is TransformerNode -> node.copy(position = newPosition)
+                else -> node
             }
             nodes[index] = updatedNode
         }
     }
 
     /**
-     * --- ИЗМЕНЕНО: Привязывает узел к сетке по его ID. ---
+     * Привязывает узел к сетке по его ID.
      */
     fun snapNodeToEndPosition(nodeId: Int) {
         val node = nodes.find { it.id == nodeId }
@@ -105,6 +121,13 @@ class ProjectCanvasState {
     fun addPowerSourceNode(worldPos: Offset) {
         val snappedPosition = snapToGrid(worldPos)
         nodes.add(PowerSourceNode(id = nextId++, name = "Источник", position = snappedPosition))
+        showCanvasContextMenu = false
+    }
+
+    fun addTransformerNode(worldPos: Offset) {
+        val snappedPosition = snapToGrid(worldPos)
+        // default radii - можно настроить
+        nodes.add(TransformerNode(id = nextId++, name = "T", position = snappedPosition, radiusOuter = 40f, radiusInner = 30f))
         showCanvasContextMenu = false
     }
 
@@ -138,6 +161,8 @@ class ProjectCanvasState {
             val updatedNode = when (it) {
                 is ShieldNode -> it.copy(name = newName)
                 is PowerSourceNode -> it.copy(name = newName)
+                is TransformerNode -> it.copy(name = newName)
+                else -> it
             }
             val index = nodes.indexOf(it)
             if (index != -1) nodes[index] = updatedNode
@@ -158,6 +183,12 @@ class ProjectCanvasState {
  * Вспомогательная функция для получения высоты узла.
  */
 fun getNodeHeight(node: ProjectNode): Float {
-    return if (node is PowerSourceNode) POWER_SOURCE_HEIGHT else NODE_HEIGHT
+    return when (node) {
+        is PowerSourceNode -> POWER_SOURCE_HEIGHT
+        is TransformerNode -> {
+            // вертикальный размер от верхней точки внешнего круга до нижней точки внутреннего круга
+            2f * node.radiusOuter + node.radiusInner
+        }
+        else -> NODE_HEIGHT
+    }
 }
-

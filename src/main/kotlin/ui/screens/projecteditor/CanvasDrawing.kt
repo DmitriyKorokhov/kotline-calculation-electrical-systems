@@ -13,6 +13,8 @@ import data.LevelLine
 import data.PowerSourceNode
 import data.ProjectNode
 import data.ShieldNode
+import data.TransformerNode
+import kotlin.math.max
 
 // Константы, необходимые для расчетов отрисовки
 private const val NODE_WIDTH = 120f
@@ -81,14 +83,42 @@ private fun DrawScope.drawConnections(connections: List<Connection>, nodes: List
 
             val isFromNodeOnTop = fromNode.position.y < toNode.position.y
 
-            val startOffset = Offset(
-                startX,
-                if (isFromNodeOnTop) fromNode.position.y + getNodeHeight(fromNode) / 2 else fromNode.position.y - getNodeHeight(fromNode) / 2
-            )
-            val endOffset = Offset(
-                endX,
-                if (isFromNodeOnTop) toNode.position.y - getNodeHeight(toNode) / 2 else toNode.position.y + getNodeHeight(toNode) / 2
-            )
+            // --- Вычисляем стартовую точку в зависимости от типа узла ---
+            val startOffset = when (fromNode) {
+                is TransformerNode -> {
+                    val c1 = fromNode.position
+                    val r = fromNode.radiusOuter
+                    val c2 = Offset(c1.x, c1.y + r)
+                    // Если fromNode выше toNode (isFromNodeOnTop == true),
+                    // то старт должен быть САМЫМ НИЖНИМ местом нижнего круга:
+                    // y = c2.y + r
+                    // Иначе (если fromNode ниже toNode) — присоединяем к самой верхней точке верхнего круга:
+                    // y = c1.y - r
+                    val y = if (isFromNodeOnTop) c2.y + r else c1.y - r
+                    Offset(startX, y)
+                }
+                else -> Offset(
+                    startX,
+                    if (isFromNodeOnTop) fromNode.position.y + getNodeHeight(fromNode) / 2 else fromNode.position.y - getNodeHeight(fromNode) / 2
+                )
+            }
+
+            val endOffset = when (toNode) {
+                is TransformerNode -> {
+                    val c1 = toNode.position
+                    val r = toNode.radiusOuter
+                    val c2 = Offset(c1.x, c1.y + r)
+                    // Аналогично: если fromNode выше toNode, то toNode находится ниже -> подключаемся к верхней точке верхнего круга:
+                    // y = c1.y - r
+                    // Иначе подключаемся к нижней точке нижнего круга: y = c2.y + r
+                    val y = if (isFromNodeOnTop) c1.y - r else c2.y + r
+                    Offset(endX, y)
+                }
+                else -> Offset(
+                    endX,
+                    if (isFromNodeOnTop) toNode.position.y - getNodeHeight(toNode) / 2 else toNode.position.y + getNodeHeight(toNode) / 2
+                )
+            }
 
             val midY = (startOffset.y + endOffset.y) / 2
 
@@ -110,22 +140,61 @@ private fun DrawScope.drawNodes(nodes: List<ProjectNode>, connectingFromNodeId: 
     val surfaceColor = Color.White
 
     nodes.forEach { node ->
-        val width = if (node is PowerSourceNode) POWER_SOURCE_WIDTH else NODE_WIDTH
-        val height = getNodeHeight(node)
-        val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
-        val nodeSize = Size(width, height)
+        when (node) {
+            is PowerSourceNode -> {
+                val width = POWER_SOURCE_WIDTH
+                val height = getNodeHeight(node)
+                val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
+                val nodeSize = Size(width, height)
+                drawRect(color = Color.Black, topLeft = topLeft, size = nodeSize)
+                drawRect(color = Color.Black, topLeft = topLeft, size = nodeSize, style = Stroke(1.5f / scale))
+                if (node.id == connectingFromNodeId) {
+                    drawRect(color = primaryColor, topLeft = topLeft, size = nodeSize, style = Stroke(3f / scale))
+                }
+            }
+            is ShieldNode -> {
+                val width = NODE_WIDTH
+                val height = getNodeHeight(node)
+                val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
+                val nodeSize = Size(width, height)
+                drawRect(color = surfaceColor, topLeft = topLeft, size = nodeSize)
+                drawRect(color = Color.Gray, topLeft = topLeft, size = nodeSize, style = Stroke(1.5f / scale))
+                if (node.id == connectingFromNodeId) {
+                    drawRect(color = primaryColor, topLeft = topLeft, size = nodeSize, style = Stroke(3f / scale))
+                }
+            }
+            is TransformerNode -> {
+                // Нарисуем два круга одинакового радиуса: внешний и внутренний, центр внутреннего смещён вниз на r
+                val c1 = node.position
+                val r = node.radiusOuter // оба круга одного диаметра, как надо по ТЗ
+                val c2 = Offset(c1.x, c1.y + r) // центр второго круга смещён вниз на r
 
-        val fillColor = when (node) {
-            is PowerSourceNode -> Color.Black
-            is ShieldNode -> surfaceColor
-        }
-        val borderColor = if (node is PowerSourceNode) Color.Black else Color.Gray
+                // Нарисуем внешний круг (fill + stroke)
+                drawCircle(color = Color.White, radius = r, center = c1)
+                drawCircle(color = Color.Gray, radius = r, center = c1, style = Stroke(1.5f / scale))
 
-        drawRect(color = fillColor, topLeft = topLeft, size = nodeSize)
-        drawRect(color = borderColor, topLeft = topLeft, size = nodeSize, style = Stroke(1.5f / scale))
+                // Нарисуем второй круг (fill + stroke) — тот же радиус
+                drawCircle(color = Color.White, radius = r, center = c2)
+                drawCircle(color = Color.Gray, radius = r, center = c2, style = Stroke(1.5f / scale))
 
-        if (node.id == connectingFromNodeId) {
-            drawRect(color = primaryColor, topLeft = topLeft, size = nodeSize, style = Stroke(3f / scale))
+                // Выделение, если соединение начато с этого узла
+                if (node.id == connectingFromNodeId) {
+                    drawCircle(color = primaryColor, radius = r + 4f / scale, center = c1, style = Stroke(3f / scale))
+                }
+            }
+
+            else -> {
+                // По умолчанию - прямоугольник
+                val width = NODE_WIDTH
+                val height = getNodeHeight(node)
+                val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
+                val nodeSize = Size(width, height)
+                drawRect(color = Color.LightGray, topLeft = topLeft, size = nodeSize)
+                drawRect(color = Color.Gray, topLeft = topLeft, size = nodeSize, style = Stroke(1.5f / scale))
+                if (node.id == connectingFromNodeId) {
+                    drawRect(color = primaryColor, topLeft = topLeft, size = nodeSize, style = Stroke(3f / scale))
+                }
+            }
         }
     }
 }
@@ -140,4 +209,3 @@ private fun calculateConnectionX(nodeCenterX: Float, connectionIndex: Int, total
     val startX = nodeCenterX - connectionSpan / 2
     return startX + connectionIndex * step
 }
-
