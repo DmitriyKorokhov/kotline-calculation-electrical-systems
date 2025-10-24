@@ -18,7 +18,6 @@ import data.ShieldNode
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
 private const val POWER_SOURCE_WIDTH = NODE_WIDTH
-private const val POWER_SOURCE_HEIGHT = NODE_HEIGHT / 4f
 private const val GRID_WIDTH = 200f
 private const val GRID_HEIGHT = 140f
 

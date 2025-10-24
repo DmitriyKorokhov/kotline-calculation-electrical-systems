@@ -759,7 +759,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                                 contentAlignment = Alignment.Center
                                                             ) {
                                                                 Text(
-                                                                    consumer.modeName1.ifBlank { "Режим 1" },
+                                                                    consumer.modeName1.ifBlank { "1" },
                                                                     fontSize = FIELD_FONT.sp,
                                                                     textAlign = TextAlign.Center,
                                                                     color = textColor
@@ -784,7 +784,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                                 contentAlignment = Alignment.Center
                                                             ) {
                                                                 Text(
-                                                                    consumer.modeName2.ifBlank { "Режим 2" },
+                                                                    consumer.modeName2.ifBlank { "2" },
                                                                     fontSize = FIELD_FONT.sp,
                                                                     textAlign = TextAlign.Center,
                                                                     color = textColor
