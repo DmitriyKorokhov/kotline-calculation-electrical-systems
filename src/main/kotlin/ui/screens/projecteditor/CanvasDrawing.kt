@@ -5,28 +5,20 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
-import data.Connection
-import data.LevelLine
-import data.PowerSourceNode
-import data.ProjectNode
-import data.ShieldNode
-import data.TransformerNode
-import kotlin.math.max
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextMeasurer
+import data.*
 
-// Константы, необходимые для расчетов отрисовки
 private const val NODE_WIDTH = 120f
-private const val NODE_HEIGHT = 80f
 private const val POWER_SOURCE_WIDTH = NODE_WIDTH
+
 private const val GRID_WIDTH = 200f
 private const val GRID_HEIGHT = 140f
 
-/**
- * Функция-расширение для DrawScope, инкапсулирующая всю логику отрисовки.
- */
-fun DrawScope.drawProjectCanvas(state: ProjectCanvasState) {
+@OptIn(ExperimentalTextApi::class)
+fun DrawScope.drawProjectCanvas(textMeasurer: TextMeasurer, state: ProjectCanvasState) {
     withTransform({
         translate(left = state.offset.x, top = state.offset.y)
         scale(scale = state.scale, pivot = Offset.Zero)
@@ -37,7 +29,7 @@ fun DrawScope.drawProjectCanvas(state: ProjectCanvasState) {
         drawGrid(topLeftWorld, bottomRightWorld)
         drawLevels(state.levels, topLeftWorld, bottomRightWorld, state.scale)
         drawConnections(state.connections, state.nodes, state.scale)
-        drawNodes(state.nodes, state.connectingFromNodeId, state.scale)
+        drawNodes(textMeasurer, state.nodes, state.connectingFromNodeId, state.scale)
     }
 }
 
@@ -72,56 +64,31 @@ private fun DrawScope.drawConnections(connections: List<Connection>, nodes: List
     connections.forEach { conn ->
         val fromNode = nodes.find { it.id == conn.fromId }
         val toNode = nodes.find { it.id == conn.toId }
+
         if (fromNode != null && toNode != null) {
             val outgoingConnections = connections.filter { it.fromId == fromNode.id }
             val outgoingIndex = outgoingConnections.indexOf(conn)
-            val startX = calculateConnectionX(fromNode.position.x, outgoingIndex, outgoingConnections.size)
+            val startX = calculateConnectionX(fromNode, outgoingIndex, outgoingConnections.size)
 
             val incomingConnections = connections.filter { it.toId == toNode.id }
             val incomingIndex = incomingConnections.indexOf(conn)
-            val endX = calculateConnectionX(toNode.position.x, incomingIndex, incomingConnections.size)
+            val endX = calculateConnectionX(toNode, incomingIndex, incomingConnections.size)
 
             val isFromNodeOnTop = fromNode.position.y < toNode.position.y
 
-            // --- Вычисляем стартовую точку в зависимости от типа узла ---
             val startOffset = when (fromNode) {
-                is TransformerNode -> {
-                    val c1 = fromNode.position
-                    val r = fromNode.radiusOuter
-                    val c2 = Offset(c1.x, c1.y + r)
-                    // Если fromNode выше toNode (isFromNodeOnTop == true),
-                    // то старт должен быть САМЫМ НИЖНИМ местом нижнего круга:
-                    // y = c2.y + r
-                    // Иначе (если fromNode ниже toNode) — присоединяем к самой верхней точке верхнего круга:
-                    // y = c1.y - r
-                    val y = if (isFromNodeOnTop) c2.y + r else c1.y - r
-                    Offset(startX, y)
-                }
-                else -> Offset(
-                    startX,
-                    if (isFromNodeOnTop) fromNode.position.y + getNodeHeight(fromNode) / 2 else fromNode.position.y - getNodeHeight(fromNode) / 2
-                )
+                is TransformerNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + 1.5f * fromNode.radiusOuter else fromNode.position.y - 1.5f * fromNode.radiusOuter)
+                is GeneratorNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + fromNode.radius else fromNode.position.y - fromNode.radius)
+                else -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + getNodeHeight(fromNode) / 2 else fromNode.position.y - getNodeHeight(fromNode) / 2)
             }
 
             val endOffset = when (toNode) {
-                is TransformerNode -> {
-                    val c1 = toNode.position
-                    val r = toNode.radiusOuter
-                    val c2 = Offset(c1.x, c1.y + r)
-                    // Аналогично: если fromNode выше toNode, то toNode находится ниже -> подключаемся к верхней точке верхнего круга:
-                    // y = c1.y - r
-                    // Иначе подключаемся к нижней точке нижнего круга: y = c2.y + r
-                    val y = if (isFromNodeOnTop) c1.y - r else c2.y + r
-                    Offset(endX, y)
-                }
-                else -> Offset(
-                    endX,
-                    if (isFromNodeOnTop) toNode.position.y - getNodeHeight(toNode) / 2 else toNode.position.y + getNodeHeight(toNode) / 2
-                )
+                is TransformerNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - 1.5f * toNode.radiusOuter else toNode.position.y + 1.5f * toNode.radiusOuter)
+                is GeneratorNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - toNode.radius else toNode.position.y + toNode.radius)
+                else -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - getNodeHeight(toNode) / 2 else toNode.position.y + getNodeHeight(toNode) / 2)
             }
 
             val midY = (startOffset.y + endOffset.y) / 2
-
             val point1 = startOffset
             val point2 = Offset(startOffset.x, midY)
             val point3 = Offset(endOffset.x, midY)
@@ -135,77 +102,51 @@ private fun DrawScope.drawConnections(connections: List<Connection>, nodes: List
     }
 }
 
-private fun DrawScope.drawNodes(nodes: List<ProjectNode>, connectingFromNodeId: Int?, scale: Float) {
-    val primaryColor = Color(0xFF6200EE)
-    val surfaceColor = Color.White
-
+@OptIn(ExperimentalTextApi::class)
+private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectNode>, connectingFromNodeId: Int?, scale: Float) {
     nodes.forEach { node ->
+        val isSelected = node.id == connectingFromNodeId
         when (node) {
             is PowerSourceNode -> {
                 val width = POWER_SOURCE_WIDTH
                 val height = getNodeHeight(node)
                 val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
-                val nodeSize = Size(width, height)
-                drawRect(color = Color.Black, topLeft = topLeft, size = nodeSize)
-                drawRect(color = Color.Black, topLeft = topLeft, size = nodeSize, style = Stroke(1.5f / scale))
-                if (node.id == connectingFromNodeId) {
-                    drawRect(color = primaryColor, topLeft = topLeft, size = nodeSize, style = Stroke(3f / scale))
-                }
+                drawPowerSourceShape(topLeft, Size(width, height), isSelected)
             }
             is ShieldNode -> {
                 val width = NODE_WIDTH
                 val height = getNodeHeight(node)
                 val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
-                val nodeSize = Size(width, height)
-                drawRect(color = surfaceColor, topLeft = topLeft, size = nodeSize)
-                drawRect(color = Color.Gray, topLeft = topLeft, size = nodeSize, style = Stroke(1.5f / scale))
-                if (node.id == connectingFromNodeId) {
-                    drawRect(color = primaryColor, topLeft = topLeft, size = nodeSize, style = Stroke(3f / scale))
-                }
+                drawShieldShape(topLeft, Size(width, height), isSelected)
             }
             is TransformerNode -> {
-                // Нарисуем два круга одинакового радиуса: внешний и внутренний, центр внутреннего смещён вниз на r
-                val c1 = node.position
-                val r = node.radiusOuter // оба круга одного диаметра, как надо по ТЗ
-                val c2 = Offset(c1.x, c1.y + r) // центр второго круга смещён вниз на r
-
-                // Нарисуем внешний круг (fill + stroke)
-                drawCircle(color = Color.White, radius = r, center = c1)
-                drawCircle(color = Color.Gray, radius = r, center = c1, style = Stroke(1.5f / scale))
-
-                // Нарисуем второй круг (fill + stroke) — тот же радиус
-                drawCircle(color = Color.White, radius = r, center = c2)
-                drawCircle(color = Color.Gray, radius = r, center = c2, style = Stroke(1.5f / scale))
-
-                // Выделение, если соединение начато с этого узла
-                if (node.id == connectingFromNodeId) {
-                    drawCircle(color = primaryColor, radius = r + 4f / scale, center = c1, style = Stroke(3f / scale))
-                }
+                drawTransformerShape(node.position, node.radiusOuter, isSelected)
             }
-
+            is GeneratorNode -> {
+                drawGeneratorShape(textMeasurer, node.position, node.radius, isSelected)
+            }
             else -> {
-                // По умолчанию - прямоугольник
                 val width = NODE_WIDTH
                 val height = getNodeHeight(node)
                 val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
-                val nodeSize = Size(width, height)
-                drawRect(color = Color.LightGray, topLeft = topLeft, size = nodeSize)
-                drawRect(color = Color.Gray, topLeft = topLeft, size = nodeSize, style = Stroke(1.5f / scale))
-                if (node.id == connectingFromNodeId) {
-                    drawRect(color = primaryColor, topLeft = topLeft, size = nodeSize, style = Stroke(3f / scale))
-                }
+                drawRect(Color.LightGray, topLeft, Size(width, height))
             }
         }
     }
 }
 
-// --- Вспомогательная функция ---
-private fun calculateConnectionX(nodeCenterX: Float, connectionIndex: Int, totalConnections: Int): Float {
+private fun calculateConnectionX(node: ProjectNode, connectionIndex: Int, totalConnections: Int): Float {
     if (totalConnections <= 1) {
-        return nodeCenterX
+        return node.position.x
     }
-    val connectionSpan = NODE_WIDTH * 0.8f
-    val step = connectionSpan / (totalConnections - 1)
-    val startX = nodeCenterX - connectionSpan / 2
+
+    val span = when (node) {
+        is TransformerNode -> node.radiusOuter * 1.5f
+        is GeneratorNode -> node.radius * 1.5f
+        else -> NODE_WIDTH * 0.8f
+    }
+
+    val step = span / (totalConnections - 1)
+    val startX = node.position.x - span / 2
     return startX + connectionIndex * step
 }

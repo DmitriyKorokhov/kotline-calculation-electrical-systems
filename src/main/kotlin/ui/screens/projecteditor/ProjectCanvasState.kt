@@ -3,6 +3,7 @@ package ui.screens.projecteditor
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import data.Connection
+import data.GeneratorNode
 import data.LevelLine
 import data.PowerSourceNode
 import data.ProjectNode
@@ -18,7 +19,6 @@ private const val POWER_SOURCE_WIDTH = NODE_WIDTH
 private const val POWER_SOURCE_HEIGHT = NODE_HEIGHT / 4f
 private const val GRID_WIDTH = 200f
 private const val GRID_HEIGHT = 140f
-
 /**
  * Класс-хранитель состояния (State Holder).
  */
@@ -62,27 +62,35 @@ class ProjectCanvasState {
         offset = zoomCenter - ((zoomCenter - offset) / oldScale) * newScale
     }
 
+
     fun findNodeAtScreenPosition(screenPos: Offset): ProjectNode? {
         val worldPos = screenToWorld(screenPos)
+        // Ищем в обратном порядке, чтобы верхние узлы проверялись первыми
         return nodes.findLast { node ->
             when (node) {
                 is TransformerNode -> {
-                    val rOuter = node.radiusOuter
-                    val rInner = node.radiusInner
-                    val width = max(2 * rOuter, 2 * rInner)
-                    val height = 2 * rOuter + rInner // от верхней точки внешнего до нижней внутреннего
-                    (worldPos.x in (node.position.x - width / 2)..(node.position.x + width / 2)) &&
-                            (worldPos.y in (node.position.y - height / 2)..(node.position.y + height / 2))
+                    // Проверка попадания в одну из двух окружностей трансформатора
+                    val c1 = Offset(node.position.x, node.position.y - node.radiusOuter / 2)
+                    val c2 = Offset(node.position.x, node.position.y + node.radiusOuter / 2)
+                    (worldPos - c1).getDistanceSquared() < node.radiusOuter * node.radiusOuter ||
+                            (worldPos - c2).getDistanceSquared() < node.radiusOuter * node.radiusOuter
+                }
+                is GeneratorNode -> {
+                    // Проверка попадания в круг генератора
+                    (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
                 }
                 else -> {
+                    // Стандартная проверка для прямоугольных узлов
                     val width = if (node is PowerSourceNode) POWER_SOURCE_WIDTH else NODE_WIDTH
                     val height = getNodeHeight(node)
-                    (worldPos.x in (node.position.x - width / 2)..(node.position.x + width / 2)) &&
-                            (worldPos.y in (node.position.y - height / 2)..(node.position.y + height / 2))
+                    val nodeTopLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
+                    worldPos.x >= nodeTopLeft.x && worldPos.x <= nodeTopLeft.x + width &&
+                            worldPos.y >= nodeTopLeft.y && worldPos.y <= nodeTopLeft.y + height
                 }
             }
         }
     }
+
 
     /**
      * Обновляет позицию узла по его ID.
@@ -95,6 +103,7 @@ class ProjectCanvasState {
                 is ShieldNode -> node.copy(position = newPosition)
                 is PowerSourceNode -> node.copy(position = newPosition)
                 is TransformerNode -> node.copy(position = newPosition)
+                is GeneratorNode -> node.copy(position = newPosition)
                 else -> node
             }
             nodes[index] = updatedNode
@@ -176,6 +185,18 @@ class ProjectCanvasState {
         val snappedX = cellX * GRID_WIDTH + (GRID_WIDTH / 2)
         val snappedY = cellY * GRID_HEIGHT + (GRID_HEIGHT / 2)
         return Offset(snappedX, snappedY)
+    }
+
+    fun addGeneratorNode(worldPos: Offset) {
+        val snappedPosition = snapToGrid(worldPos)
+        nodes.add(
+            GeneratorNode(
+                id = nextId++,
+                name = "G",
+                position = snappedPosition
+            )
+        )
+        showCanvasContextMenu = false
     }
 }
 
