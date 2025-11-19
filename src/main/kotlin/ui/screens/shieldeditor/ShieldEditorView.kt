@@ -636,6 +636,25 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
                                                 Spacer(Modifier.height(FIELD_VSPACE))
 
+                                                // Номер помещения (новое поле)
+                                                CompactOutlinedTextField(
+                                                    label = "Номер помещения",
+                                                    value = consumer.roomNumber,
+                                                    onValueChange = {
+                                                        consumer.roomNumber = it
+                                                        saveNow()
+                                                    },
+                                                    contentPadding = FIELD_CONTENT_PADDING,
+                                                    fontSizeSp = FIELD_FONT,
+                                                    textColor = textColor,
+                                                    focusedBorderColor = borderColor,
+                                                    unfocusedBorderColor = Color.LightGray,
+                                                    singleLine = true,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+
+                                                Spacer(Modifier.height(FIELD_VSPACE))
+
                                                 // Напряжение
                                                 CompactOutlinedTextField(
                                                     label = "Напряжение, В",

@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 
 class ConsumerModel(
     name: String = "",
+    roomNumber: String = "",
     voltage: String = "",
     cosPhi: String = "",
     powerKw: String = "",
@@ -24,6 +25,7 @@ class ConsumerModel(
     voltageDropV: String = ""
 ) {
     var name by mutableStateOf(name)
+    var roomNumber by mutableStateOf(roomNumber)
     var voltage by mutableStateOf(voltage)
     var cosPhi by mutableStateOf(cosPhi)
     var powerKw by mutableStateOf(powerKw)
@@ -43,6 +45,7 @@ class ConsumerModel(
     fun deepCopy(): ConsumerModel {
         return ConsumerModel(
             name = name,
+            roomNumber = roomNumber,
             voltage = voltage,
             cosPhi = cosPhi,
             powerKw = powerKw,
