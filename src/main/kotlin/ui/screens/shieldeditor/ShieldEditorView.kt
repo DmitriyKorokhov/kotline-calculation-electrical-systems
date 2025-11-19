@@ -244,7 +244,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                 outDwgPath = outPath,
                                 shieldData = data,
                                 baseX = 0,
-                                stepX = 300,
+                                stepX = 50,
                                 y = 0,
                                 timeoutSec = 300L,
                                 useTemplateCopy = false

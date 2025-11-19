@@ -184,7 +184,7 @@ _.QUIT
         outDwgPath: String,
         shieldData: ShieldData,
         baseX: Int = 0,
-        stepX: Int = 300,
+        stepX: Int = 50,
         y: Int = 0,
         timeoutSec: Long = 300L,
         useTemplateCopy: Boolean = false

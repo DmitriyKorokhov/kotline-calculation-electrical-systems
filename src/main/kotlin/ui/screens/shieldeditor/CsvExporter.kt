@@ -15,7 +15,8 @@ class CsvExporter {
         val polesText: String?,
         val x: Int,
         val y: Int,
-        val attributeText: String
+        val attributeText: String,
+        val explicitBlockName: String? = null
     )
 
     /**
@@ -24,18 +25,18 @@ class CsvExporter {
      */
     fun exportEntries(entries: List<ExportEntry>, file: File) {
         val lines = entries.map { entry ->
-            val poles = normalizePoles(entry.polesText)
-            val block = (entry.blockTypePrefix.takeIf { it.isNotBlank() } ?: "AV") + "_" + poles
-
-            // заменяем реальные переводы строк на буквальную последовательность "\n"
+            val blockName = entry.explicitBlockName ?: run {
+                val poles = normalizePoles(entry.polesText)
+                (entry.blockTypePrefix.takeIf { it.isNotBlank() } ?: "AV") + "_" + poles
+            }
             val attrEscaped = entry.attributeText
                 .replace("\r\n", "\n")
                 .replace("\r", "\n")
                 .replace("\n", "\\n")
 
-            listOf(block, entry.x.toString(), entry.y.toString(), attrEscaped).joinToString(";")
+            listOf(blockName, entry.x.toString(), entry.y.toString(), attrEscaped)
+                .joinToString(";")
         }
-
         val csv = lines.joinToString("\r\n")
         writeFileOverwrite(file, csv)
     }
@@ -44,28 +45,116 @@ class CsvExporter {
      * Удобная обёртка: экспорт по ShieldData.
      * Всегда перезаписывает целевой файл.
      */
-    fun export(shieldData: ShieldData, file: File, baseX: Int = 0, stepX: Int = 50, y: Int = 0) {
-        val rows = mutableListOf<String>()
+    fun export(
+        shieldData: ShieldData,
+        file: File,
+        baseX: Int = 0,
+        stepX: Int = 50,
+        y: Int = 0
+    ) {
+        val entries = mutableListOf<ExportEntry>()
 
-        shieldData.consumers.forEachIndexed { index, c ->
-            if (c.protectionDevice.isNullOrBlank()) return@forEachIndexed
+        // 1) Устройства защиты и коммутации (как раньше)
+        val protected = shieldData.consumers.withIndex()
+            .filter { it.value.protectionDevice.isNotBlank() }
 
+        protected.forEachIndexed { idx, (consIndex, c) ->
             val prefix = typePrefixForProtection(c.protectionDevice)
-            val polesFromModel = c.protectionPoles.takeIf { it.isNotBlank() } ?: extractPolesFromText(c.protectionDevice)
-            val poles = normalizePoles(polesFromModel)
-            val block = "${prefix}_${poles}"
+            val polesFromModel =
+                c.protectionPoles.takeIf { it.isNotBlank() } ?: extractPolesFromText(c.protectionDevice)
+            val x = baseX + idx * stepX
 
-            val attrEscaped = c.protectionDevice
-                .replace("\r\n", "\n")
-                .replace("\r", "\n")
-                .replace("\n", "\\n")
+            // сам автомат
+            entries += ExportEntry(
+                blockTypePrefix = prefix,
+                polesText = polesFromModel,
+                x = x,
+                y = y,
+                attributeText = c.protectionDevice
+            )
 
-            val x = baseX + index * stepX
-            rows += listOf(block, x.toString(), y.toString(), attrEscaped).joinToString(";")
+            // 4) Кабель под тем же X,Y
+            val cableBrand = c.cableLine
+            val cableType = c.cableType        // число жил, сечение
+            val laying = c.layingMethod
+            val drop = c.voltageDropV
+
+            val hasAnyCableData = listOf(cableBrand, cableType, laying, drop).any { it.isNotBlank() }
+
+            if (hasAnyCableData) {
+                val line1 = listOf(cableBrand, cableType)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")                  // "Марка кабеля Число жил, сечение"
+
+                val line2 = listOf(laying, drop)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")                  // "Способ прокладки Падение напряжения..."
+
+                val cableAttr = if (line2.isNotBlank()) "$line1\n$line2" else line1
+
+                entries += ExportEntry(
+                    blockTypePrefix = "",
+                    polesText = null,
+                    x = x,
+                    y = y,
+                    attributeText = cableAttr,
+                    explicitBlockName = "cable"
+                )
+            }
         }
 
-        val csv = rows.joinToString("\r\n")
-        writeFileOverwrite(file, csv)
+        // 2) Линия (startLine, middleLine, endLine)
+        if (protected.isNotEmpty()) {
+            val lineY = y + 40          // 40.62 округляем до 41
+            val firstX = baseX
+
+            // startLine один раз
+            entries += ExportEntry(
+                blockTypePrefix = "",
+                polesText = null,
+                x = firstX,
+                y = lineY,
+                attributeText = "",
+                explicitBlockName = "startLine"
+            )
+
+            // middleLine — только до предпоследнего автомата
+            protected.dropLast(1).forEachIndexed { idx, _ ->
+                val xLine = baseX + idx * stepX
+                entries += ExportEntry(
+                    blockTypePrefix = "",
+                    polesText = null,
+                    x = xLine,
+                    y = lineY,
+                    attributeText = "",
+                    explicitBlockName = "middleLine"
+                )
+            }
+
+            // endLine — на координате последнего автомата
+            val endX = baseX + (protected.size - 1) * stepX
+            entries += ExportEntry(
+                blockTypePrefix = "",
+                polesText = null,
+                x = endX,
+                y = lineY,
+                attributeText = "",
+                explicitBlockName = "endLine"
+            )
+
+        }
+
+        // 3) Боковая панель sidebar
+        entries += ExportEntry(
+            blockTypePrefix = "",
+            polesText = null,
+            x = baseX - 85,   // x = -85 при baseX = 0
+            y = y + 90,       // y = 90 при y = 0
+            attributeText = "",
+            explicitBlockName = "sidebar"
+        )
+
+        exportEntries(entries, file)
     }
 
     private fun writeFileOverwrite(file: File, content: String) {
