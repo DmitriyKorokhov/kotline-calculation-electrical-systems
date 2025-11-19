@@ -23,6 +23,7 @@ import data.GeneratorNode
 import data.PowerSourceNode
 import data.ShieldNode
 import data.TransformerNode
+import ui.screens.shieldeditor.ShieldStorage
 
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
@@ -123,12 +124,15 @@ fun ProjectView(
             }
 
             state.nodes.forEach { node ->
-                if (node.name.isNotBlank()) {
+                if (node.name.isNotBlank() || node is ShieldNode) {
                     val screenPos = state.worldToScreen(node.position)
                     val scale = state.scale
                     val nodeHeight = if (node is PowerSourceNode) getNodeHeight(node) * scale else NODE_HEIGHT * scale
                     when (node) {
-                        is ShieldNode -> NodeNameText(node.name, screenPos, NODE_WIDTH * scale, nodeHeight)
+                        is ShieldNode -> {
+                            val displayName = ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
+                            NodeNameText(displayName, screenPos, NODE_WIDTH * scale, nodeHeight)
+                        }
                         is PowerSourceNode -> PowerSourceNameText(node.name, screenPos, POWER_SOURCE_WIDTH * scale, nodeHeight, scale)
                         is TransformerNode -> {
                             val screenCenter = state.worldToScreen(node.position)
@@ -143,6 +147,7 @@ fun ProjectView(
                     }
                 }
             }
+
 
             if (paletteDragType != null && palettePreviewWorldPos != null) {
                 val previewScreen = state.worldToScreen(palettePreviewWorldPos!!)
@@ -231,7 +236,7 @@ private fun PaletteRow(
     Row(modifier = Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.Start) {
         PaletteItem(textMeasurer = textMeasurer, label = "Щит", widthDp = 130.dp, heightDp = cellHeight, drawType = PaletteNodeType.SHIELD, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
         Spacer(modifier = Modifier.width(16.dp))
-        PaletteItem(textMeasurer = textMeasurer, label = "Ист. питания", widthDp = 160.dp, heightDp = cellHeight, drawType = PaletteNodeType.POWER_SOURCE, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
+        PaletteItem(textMeasurer = textMeasurer, label = "Шина", widthDp = 160.dp, heightDp = cellHeight, drawType = PaletteNodeType.POWER_SOURCE, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
         Spacer(modifier = Modifier.width(16.dp))
         PaletteItem(textMeasurer = textMeasurer, label = "Трансформатор", widthDp = 160.dp, heightDp = 110.dp, drawType = PaletteNodeType.TRANSFORMER, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
         Spacer(modifier = Modifier.width(16.dp))
@@ -392,7 +397,16 @@ private fun RenameNodeDialog(state: ProjectCanvasState) {
             onDismissRequest = { state.showRenameDialog = false },
             title = { Text("Изменить название") },
             text = { OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Новое название") }, singleLine = true) },
-            confirmButton = { Button(onClick = { state.updateSelectedNodeName(newName); state.showRenameDialog = false }) { Text("Сохранить") } },
+            confirmButton = { Button(onClick = { val sel = state.selectedNode
+                if (sel is ShieldNode) {
+                    // синхронизируем имя с данными щита
+                    val data = ShieldStorage.loadOrCreate(sel.id)
+                    data.shieldName = newName
+                    ShieldStorage.save(sel.id, data)
+                }
+                state.updateSelectedNodeName(newName);
+                state.showRenameDialog = false })
+            { Text("Сохранить") } },
             dismissButton = { Button(onClick = { state.showRenameDialog = false }) { Text("Отмена") } }
         )
     }

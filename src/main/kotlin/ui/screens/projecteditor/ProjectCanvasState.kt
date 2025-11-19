@@ -129,7 +129,7 @@ class ProjectCanvasState {
 
     fun addPowerSourceNode(worldPos: Offset) {
         val snappedPosition = snapToGrid(worldPos)
-        nodes.add(PowerSourceNode(id = nextId++, name = "Источник", position = snappedPosition))
+        nodes.add(PowerSourceNode(id = nextId++, name = "Шина", position = snappedPosition))
         showCanvasContextMenu = false
     }
 

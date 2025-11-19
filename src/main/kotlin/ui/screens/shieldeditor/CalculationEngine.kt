@@ -17,28 +17,25 @@ object CalculationEngine {
         return if (i.isFinite()) i else null
     }
 
-    // Главная кнопка "Произвести расчёт"
+
     fun calculateAll(shieldData: ShieldData): Int {
         var success = 0
         shieldData.consumers.forEach { c ->
             val u = NumberUtils.parseDouble(c.voltage)
             val cosPhi = NumberUtils.parseDouble(c.cosPhi) ?: 1.0
             if (u == null) {
-                c.currentAMode1 = ""
-                c.currentAMode2 = ""
                 c.currentA = ""
                 return@forEach
             }
 
-            val i1 = calcI(u, cosPhi, c.powerKw)
-            val i2 = if (c.dualMode) calcI(u, cosPhi, c.powerKwMode2) else null
+            val i = calcI(u, cosPhi, c.powerKw)
 
             // Заполняем токи режимов только здесь
-            c.currentAMode1 = i1?.let { NumberUtils.formatDoubleTwoDecimals(it) } ?: ""
-            c.currentAMode2 = if (c.dualMode) (i2?.let { NumberUtils.formatDoubleTwoDecimals(it) } ?: "") else ""
+            c.currentA = i?.let { NumberUtils.formatDoubleTwoDecimals(it) } ?: ""
+
 
             // Агрегируем для выбора защиты/экспорта
-            val imax = listOfNotNull(i1, i2).maxOrNull()
+            val imax = listOfNotNull(i).maxOrNull()
             if (imax != null) {
                 c.currentA = NumberUtils.formatDoubleTwoDecimals(imax)
                 success++

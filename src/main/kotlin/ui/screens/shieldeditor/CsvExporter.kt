@@ -44,7 +44,7 @@ class CsvExporter {
      * Удобная обёртка: экспорт по ShieldData.
      * Всегда перезаписывает целевой файл.
      */
-    fun export(shieldData: ShieldData, file: File, baseX: Int = 0, stepX: Int = 300, y: Int = 0) {
+    fun export(shieldData: ShieldData, file: File, baseX: Int = 0, stepX: Int = 50, y: Int = 0) {
         val rows = mutableListOf<String>()
 
         shieldData.consumers.forEachIndexed { index, c ->
