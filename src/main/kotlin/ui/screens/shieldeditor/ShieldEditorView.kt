@@ -144,26 +144,10 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 saveNow()
                 onBack()
             }) {
-                Text("Назад (сохранить)")
+                Text("Назад")
             }
 
             Spacer(Modifier.width(8.dp))
-
-            Button(onClick = {
-                // 1) рассчитываем токи для всех потребителей (заполняется consumer.currentA)
-                val success = CalculationEngine.calculateAll(data)
-
-                // 2) распределяем фазы и считаем суммарные токи по фазам
-                PhaseDistributor.distributePhases(data)
-
-                // 3) сохраняем
-                saveNow()
-
-                // можете показать Snackbar / уведомление, но здесь просто логируем
-                println("Расчёт выполнен: $success потребителей рассчитано, суммарные токи: L1=${data.phaseL1}, L2=${data.phaseL2}, L3=${data.phaseL3}")
-            }) {
-                Text("Произвести расчёт")
-            }
 
             Spacer(Modifier.weight(1f)) // Занимает все доступное пространство
 
@@ -218,13 +202,13 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         // 3) Найти шаблон DWG
                         var templatePath = ShieldStorage.templateDwgPath
                         if (templatePath.isNullOrBlank()) {
-                            val guess = File(System.getProperty("user.dir"), "template_with_blocks.dwg")
+                            val guess = File(System.getProperty("user.dir"), "source_blocks.dwg")
                             if (guess.exists()) {
                                 templatePath = guess.absolutePath
                                 ShieldStorage.templateDwgPath = templatePath
                             } else {
                                 val fc2 = javax.swing.JFileChooser().apply {
-                                    dialogTitle = "Выберите template_with_blocks.dwg"
+                                    dialogTitle = "Выберите source_blocks"
                                     fileSelectionMode = javax.swing.JFileChooser.FILES_ONLY
                                 }
                                 val res2 = fc2.showOpenDialog(null)
@@ -439,111 +423,129 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             fontSizeSp = FIELD_FONT,
                             singleLine = true
                         )
-                        // --- Визуальный разделитель ---
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-                        // --- Поля для ввода ---
-                        CompactOutlinedTextField(
-                            label = "Коэф. спроса",
-                            value = data.demandFactor,
-                            onValueChange = { data.demandFactor = it }, // обновляем значение в модели
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = FIELD_CONTENT_PADDING,
-                            textColor = textColor,
-                            focusedBorderColor = borderColor,
-                            unfocusedBorderColor = Color.LightGray,
-                            fontSizeSp = FIELD_FONT,
-                            singleLine = true
-                        )
 
                         Spacer(Modifier.height(8.dp))
 
-                        CompactOutlinedTextField(
-                            label = "Коэф. одновременности",
-                            value = data.simultaneityFactor,
-                            onValueChange = { data.simultaneityFactor = it }, // обновляем значение в модели
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = FIELD_CONTENT_PADDING,
-                            textColor = textColor,
-                            focusedBorderColor = borderColor,
-                            unfocusedBorderColor = Color.LightGray,
-                            fontSizeSp = FIELD_FONT,
-                            singleLine = true
-                        )
-                        // --- Визуальный разделитель ---
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-                        // --- Поля для вывода расчётов ---
-                        CompactOutlinedTextField(
-                            label = "Установ. мощность, Вт",
-                            value = data.totalInstalledPower,
-                            onValueChange = {}, // read-only
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = FIELD_CONTENT_PADDING,
-                            textColor = textColor,
-                            focusedBorderColor = borderColor,
-                            unfocusedBorderColor = Color.LightGray,
-                            fontSizeSp = FIELD_FONT,
-                            singleLine = true
-                        )
+                        Button(
+                            onClick = {
+                                CalculationEngine.calculateAll(data)
+                                PhaseDistributor.distributePhases(data)
+                                saveNow()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Распределить нагрузку")
+                        }
 
                         Spacer(Modifier.height(8.dp))
 
-                        CompactOutlinedTextField(
-                            label = "Расчетная мощность, Вт",
-                            value = data.totalCalculatedPower,
-                            onValueChange = {}, // read-only
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = FIELD_CONTENT_PADDING,
-                            textColor = textColor,
-                            focusedBorderColor = borderColor,
-                            unfocusedBorderColor = Color.LightGray,
-                            fontSizeSp = FIELD_FONT,
-                            singleLine = true
-                        )
+                        BlockPanel(BLOCK_BLUE) {
+                            // --- Поля для ввода ---
+                            CompactOutlinedTextField(
+                                label = "Коэф. спроса",
+                                value = data.demandFactor,
+                                onValueChange = { data.demandFactor = it }, // обновляем значение в модели
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = FIELD_CONTENT_PADDING,
+                                textColor = textColor,
+                                focusedBorderColor = borderColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                fontSizeSp = FIELD_FONT,
+                                singleLine = true
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            CompactOutlinedTextField(
+                                label = "Коэф. одновременности",
+                                value = data.simultaneityFactor,
+                                onValueChange = { data.simultaneityFactor = it }, // обновляем значение в модели
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = FIELD_CONTENT_PADDING,
+                                textColor = textColor,
+                                focusedBorderColor = borderColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                fontSizeSp = FIELD_FONT,
+                                singleLine = true
+                            )
+                        }
 
                         Spacer(Modifier.height(8.dp))
 
-                        CompactOutlinedTextField(
-                            label = "cos(φ)",
-                            value = data.averageCosPhi,
-                            onValueChange = {}, // read-only
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = FIELD_CONTENT_PADDING,
-                            textColor = textColor,
-                            focusedBorderColor = borderColor,
-                            unfocusedBorderColor = Color.LightGray,
-                            fontSizeSp = FIELD_FONT,
-                            singleLine = true
-                        )
-                        Spacer(Modifier.height(8.dp))
+                        BlockPanel(BLOCK_WHITE) {
 
-                        CompactOutlinedTextField(
-                            label = "Ток, А",
-                            value = data.totalCurrent,
-                            onValueChange = {}, // read-only
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = FIELD_CONTENT_PADDING,
-                            textColor = textColor,
-                            focusedBorderColor = borderColor,
-                            unfocusedBorderColor = Color.LightGray,
-                            fontSizeSp = FIELD_FONT,
-                            singleLine = true
-                        )
-                        Spacer(Modifier.height(8.dp))
+                            // --- Поля для вывода расчётов ---
+                            CompactOutlinedTextField(
+                                label = "Установ. мощность, Вт",
+                                value = data.totalInstalledPower,
+                                onValueChange = {}, // read-only
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = FIELD_CONTENT_PADDING,
+                                textColor = textColor,
+                                focusedBorderColor = borderColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                fontSizeSp = FIELD_FONT,
+                                singleLine = true
+                            )
 
-                        CompactOutlinedTextField(
-                            label = "Коэф. спроса щита",
-                            value = data.shieldDemandFactor,
-                            onValueChange = {}, // read-only
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = FIELD_CONTENT_PADDING,
-                            textColor = textColor,
-                            focusedBorderColor = borderColor,
-                            unfocusedBorderColor = Color.LightGray,
-                            fontSizeSp = FIELD_FONT,
-                            singleLine = true
-                        )
+                            Spacer(Modifier.height(8.dp))
+
+                            CompactOutlinedTextField(
+                                label = "Расчетная мощность, Вт",
+                                value = data.totalCalculatedPower,
+                                onValueChange = {}, // read-only
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = FIELD_CONTENT_PADDING,
+                                textColor = textColor,
+                                focusedBorderColor = borderColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                fontSizeSp = FIELD_FONT,
+                                singleLine = true
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            CompactOutlinedTextField(
+                                label = "cos(φ)",
+                                value = data.averageCosPhi,
+                                onValueChange = {}, // read-only
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = FIELD_CONTENT_PADDING,
+                                textColor = textColor,
+                                focusedBorderColor = borderColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                fontSizeSp = FIELD_FONT,
+                                singleLine = true
+                            )
+                            Spacer(Modifier.height(8.dp))
+
+                            CompactOutlinedTextField(
+                                label = "Ток, А",
+                                value = data.totalCurrent,
+                                onValueChange = {}, // read-only
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = FIELD_CONTENT_PADDING,
+                                textColor = textColor,
+                                focusedBorderColor = borderColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                fontSizeSp = FIELD_FONT,
+                                singleLine = true
+                            )
+                            Spacer(Modifier.height(8.dp))
+
+                            CompactOutlinedTextField(
+                                label = "Коэф. спроса щита",
+                                value = data.shieldDemandFactor,
+                                onValueChange = {}, // read-only
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = FIELD_CONTENT_PADDING,
+                                textColor = textColor,
+                                focusedBorderColor = borderColor,
+                                unfocusedBorderColor = Color.LightGray,
+                                fontSizeSp = FIELD_FONT,
+                                singleLine = true
+                            )
+                        }
                     }
                 }
             }
@@ -781,7 +783,11 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                 CompactOutlinedTextField(
                                                     label = "Напряжение, В",
                                                     value = consumer.voltage,
-                                                    onValueChange = { consumer.voltage = it; saveNow() },
+                                                    onValueChange = {
+                                                        consumer.voltage = it
+                                                        CalculationEngine.calculateAll(data)
+                                                        saveNow()
+                                                    },
                                                     contentPadding = FIELD_CONTENT_PADDING,
                                                     fontSizeSp = FIELD_FONT,
                                                     textColor = textColor,
@@ -796,7 +802,11 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                 CompactOutlinedTextField(
                                                     label = "cos(φ)",
                                                     value = consumer.cosPhi,
-                                                    onValueChange = { consumer.cosPhi = it; saveNow() },
+                                                    onValueChange = {
+                                                        consumer.cosPhi = it
+                                                        CalculationEngine.calculateAll(data)
+                                                        saveNow()
+                                                    },
                                                     contentPadding = FIELD_CONTENT_PADDING,
                                                     fontSizeSp = FIELD_FONT,
                                                     textColor = textColor,
@@ -827,7 +837,11 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                 CompactOutlinedTextField(
                                                     label = "Расчетная мощность, Вт",
                                                     value = consumer.powerKw,
-                                                    onValueChange = { consumer.powerKw = it; saveNow() },
+                                                    onValueChange = {
+                                                        consumer.powerKw = it
+                                                        CalculationEngine.calculateAll(data)
+                                                        saveNow()
+                                                    },
                                                     contentPadding = FIELD_CONTENT_PADDING,
                                                     fontSizeSp = FIELD_FONT,
                                                     textColor = textColor,
@@ -939,6 +953,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                     )
                                                 }
                                             }
+
+                                            Spacer(Modifier.height(FIELD_VSPACE))
 
                                             BlockPanel(BLOCK_WHITE) {
                                                 // Марка кабеля (начало Блока)

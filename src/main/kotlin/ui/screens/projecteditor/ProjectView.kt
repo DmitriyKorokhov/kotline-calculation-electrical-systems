@@ -2,6 +2,7 @@ package ui.screens.projecteditor
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.runtime.*
@@ -56,6 +57,16 @@ fun ProjectView(
                 .padding(top = PALETTE_HEIGHT_DP)
                 .onGloballyPositioned { coords ->
                     canvasTopLeft = coords.positionInRoot()
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            val node = state.findNodeAtScreenPosition(offset)
+                            if (node is ShieldNode) {
+                                onOpenShield(node.id)
+                            }
+                        }
+                    )
                 }
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
