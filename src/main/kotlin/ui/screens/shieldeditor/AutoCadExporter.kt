@@ -65,6 +65,26 @@ object AutoCadExporter {
   )
 )
 
+(defun parse-attr-map (txt / items item eqpos key val res)
+  (setq res '())
+  (setq items (str-split txt "|"))
+  (foreach item items
+    (if (setq eqpos (vl-string-search "=" item))
+      (progn
+        (setq key (substr item 1 eqpos))
+        (setq val (substr item (+ eqpos 2)))
+        ;; храним TAG в верхнем регистре для надёжного сравнения
+        (setq res (cons (cons (strcase key) val) res))
+      )
+      ;; если нет '=', трактуем всю строку как INFO (для старых блоков)
+      (if (> (strlen item) 0)
+        (setq res (cons (cons "INFO" item) res))
+      )
+    )
+  )
+res
+)
+
 (defun clear-modelspace-all ( / ss i en)
   (setq ss (ssget "_X" '((410 . "Model"))))
   (if ss
@@ -83,6 +103,7 @@ object AutoCadExporter {
 (defun C:GENERATE-SCHEME (csv_path log_path /
   csv_file line parts log_file row block_name pt attr_text
   new_insert e a old_attreq old_attdia
+  attr_map tag pair
 )
   (princ "\n[LISP] Старт...")
   (setq log_file (open log_path "w"))
@@ -109,6 +130,7 @@ object AutoCadExporter {
             (setq pt (list (distof (nth 1 parts)) (distof (nth 2 parts)) 0.0))
             ;; CSV хранит переносы как \n — превращаем в реальный перенос
             (setq attr_text (vl-string-subst "\n" "\\n" (nth 3 parts)))
+            (setq attr_map (parse-attr-map attr_text))
             (if (tblsearch "BLOCK" block_name)
               (progn
                 (command "_.-INSERT" block_name pt 1.0 1.0 0.0)
@@ -118,9 +140,11 @@ object AutoCadExporter {
                     (setq e (entnext new_insert))
                     (while (and e (= "ATTRIB" (cdr (assoc 0 (entget e)))))
                       (setq a (entget e))
-                      (if (= "INFO" (cdr (assoc 2 a)))
+                      (setq tag (strcase (cdr (assoc 2 a))))
+                      (setq pair (assoc tag attr_map))
+                      (if pair
                         (progn
-                          (setq a (subst (cons 1 attr_text) (assoc 1 a) a))
+                          (setq a (subst (cons 1 (cdr pair)) (assoc 1 a) a))
                           (entmod a)
                         )
                       )

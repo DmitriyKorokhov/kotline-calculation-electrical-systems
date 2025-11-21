@@ -101,6 +101,26 @@ class CsvExporter {
                     explicitBlockName = "cable"
                 )
             }
+
+            val tableAttr = listOf(
+                "NAME=${c.name}",
+                "NOMROM=${c.roomNumber}",
+                "PINST=${c.installedPowerW}",
+                "PEST=${c.powerKw}",
+                "ICALC=${c.currentA}",
+                "GROUP=${c.lineName}"
+            ).joinToString("|")
+
+            val tableY = y - 104    //
+
+            entries += ExportEntry(
+                blockTypePrefix = "",
+                polesText = null,
+                x = x,              // тот же X, что у автомата и кабеля
+                y = tableY,         // сразу за концом кабеля
+                attributeText = tableAttr,
+                explicitBlockName = "consumer_table"
+                )
         }
 
         // 2) Линия (startLine, middleLine, endLine)
@@ -152,6 +172,27 @@ class CsvExporter {
             y = y + 90,       // y = 90 при y = 0
             attributeText = "",
             explicitBlockName = "sidebar"
+        )
+
+        // 4) Шапка щита shield_cap с данными из ShieldData
+        val shieldCapAttr = listOf(
+            "PINSTSH=${shieldData.totalInstalledPower}",     // Установ. мощность, Вт
+            "PESTSH=${shieldData.totalCalculatedPower}",     // Расчетная мощность, Вт
+            "ICALCSH=${shieldData.totalCurrent}",            // Ток
+            "PFACTSH=${shieldData.averageCosPhi}",           // cos(f)
+            "DEMRATSH=${shieldData.shieldDemandFactor}",     // Коэф. спроса щита
+            "IL1=${shieldData.phaseL1}",                     // Нагрузка на фазу L1
+            "IL2=${shieldData.phaseL2}",                     // Нагрузка на фазу L2
+            "IL3=${shieldData.phaseL3}"                      // Нагрузка на фазу L3
+        ).joinToString("|")
+
+        entries += ExportEntry(
+            blockTypePrefix = "",
+            polesText = null,
+            x = 30,
+            y = 60,
+            attributeText = shieldCapAttr,
+            explicitBlockName = "shield_cap"
         )
 
         exportEntries(entries, file)

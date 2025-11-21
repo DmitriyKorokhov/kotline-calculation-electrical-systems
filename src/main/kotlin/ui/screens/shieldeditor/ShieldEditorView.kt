@@ -46,9 +46,6 @@ private const val FIELD_FONT = 15
 private val FIELD_CONTENT_PADDING = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
 private val FIELD_VSPACE: Dp = 8.dp
 private val SCROLLBAR_HEIGHT: Dp = 22.dp
-
-private val BlueAccent = Color(0xFF2196F3)
-
 private val BLOCK_BLUE     = Color(0xFFE3F2FD).copy(alpha = 0.15f)  // голубой
 private val BLOCK_LAVENDER = Color(0xFFEDE7F6).copy(alpha = 0.15f)  // сиреневый
 private val BLOCK_WHITE    = Color.White.copy(alpha = 0.15f)        // белый
@@ -208,7 +205,12 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                 accorePath = fc.selectedFile.absolutePath
                                 ShieldStorage.accoreConsolePath = accorePath
                             } else {
-                                javax.swing.JOptionPane.showMessageDialog(null, "accoreconsole.exe не выбран", "Отмена", javax.swing.JOptionPane.INFORMATION_MESSAGE)
+                                javax.swing.JOptionPane.showMessageDialog(
+                                    null,
+                                    "accoreconsole.exe не выбран",
+                                    "Отмена",
+                                    javax.swing.JOptionPane.INFORMATION_MESSAGE
+                                )
                                 return@DropdownMenuItem
                             }
                         }
@@ -230,7 +232,12 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                     templatePath = fc2.selectedFile.absolutePath
                                     ShieldStorage.templateDwgPath = templatePath
                                 } else {
-                                    javax.swing.JOptionPane.showMessageDialog(null, "Шаблон DWG не выбран", "Отмена", javax.swing.JOptionPane.INFORMATION_MESSAGE)
+                                    javax.swing.JOptionPane.showMessageDialog(
+                                        null,
+                                        "Шаблон DWG не выбран",
+                                        "Отмена",
+                                        javax.swing.JOptionPane.INFORMATION_MESSAGE
+                                    )
                                     return@DropdownMenuItem
                                 }
                             }
@@ -251,10 +258,14 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             )
 
                             javax.swing.SwingUtilities.invokeLater {
-                                val msg = javax.swing.JTextArea(result.output).apply { isEditable = false; lineWrap = true; wrapStyleWord = true }
-                                val scroll = javax.swing.JScrollPane(msg).apply { preferredSize = java.awt.Dimension(900, 420) }
-                                val title = if (result.exitCode == 0) "Экспорт успешен" else "Экспорт завершился с ошибкой"
-                                val type = if (result.exitCode == 0) javax.swing.JOptionPane.INFORMATION_MESSAGE else javax.swing.JOptionPane.ERROR_MESSAGE
+                                val msg = javax.swing.JTextArea(result.output)
+                                    .apply { isEditable = false; lineWrap = true; wrapStyleWord = true }
+                                val scroll =
+                                    javax.swing.JScrollPane(msg).apply { preferredSize = java.awt.Dimension(900, 420) }
+                                val title =
+                                    if (result.exitCode == 0) "Экспорт успешен" else "Экспорт завершился с ошибкой"
+                                val type =
+                                    if (result.exitCode == 0) javax.swing.JOptionPane.INFORMATION_MESSAGE else javax.swing.JOptionPane.ERROR_MESSAGE
                                 javax.swing.JOptionPane.showMessageDialog(null, scroll, title, type)
                             }
                         }
@@ -280,8 +291,14 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 // Вызваем функцию явно через полное имя, чтобы избежать конфликтов расширений.
                 this@Row.AnimatedVisibility(
                     visible = metaExpanded,
-                    enter = slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(360, easing = FastOutSlowInEasing)) + fadeIn(animationSpec = tween(200)),
-                    exit = slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(360, easing = FastOutSlowInEasing)) + fadeOut(animationSpec = tween(180))
+                    enter = slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(360, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(200)),
+                    exit = slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(360, easing = FastOutSlowInEasing)
+                    ) + fadeOut(animationSpec = tween(180))
                 ) {
                     Column(
                         modifier = Modifier
@@ -413,6 +430,111 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         CompactOutlinedTextField(
                             label = "Нагрузка на фазу L3, А",
                             value = data.phaseL3,
+                            onValueChange = {}, // read-only
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = FIELD_CONTENT_PADDING,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            fontSizeSp = FIELD_FONT,
+                            singleLine = true
+                        )
+                        // --- Визуальный разделитель ---
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                        // --- Поля для ввода ---
+                        CompactOutlinedTextField(
+                            label = "Коэф. спроса",
+                            value = data.demandFactor,
+                            onValueChange = { data.demandFactor = it }, // обновляем значение в модели
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = FIELD_CONTENT_PADDING,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            fontSizeSp = FIELD_FONT,
+                            singleLine = true
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        CompactOutlinedTextField(
+                            label = "Коэф. одновременности",
+                            value = data.simultaneityFactor,
+                            onValueChange = { data.simultaneityFactor = it }, // обновляем значение в модели
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = FIELD_CONTENT_PADDING,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            fontSizeSp = FIELD_FONT,
+                            singleLine = true
+                        )
+                        // --- Визуальный разделитель ---
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                        // --- Поля для вывода расчётов ---
+                        CompactOutlinedTextField(
+                            label = "Установ. мощность, Вт",
+                            value = data.totalInstalledPower,
+                            onValueChange = {}, // read-only
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = FIELD_CONTENT_PADDING,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            fontSizeSp = FIELD_FONT,
+                            singleLine = true
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        CompactOutlinedTextField(
+                            label = "Расчетная мощность, Вт",
+                            value = data.totalCalculatedPower,
+                            onValueChange = {}, // read-only
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = FIELD_CONTENT_PADDING,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            fontSizeSp = FIELD_FONT,
+                            singleLine = true
+                        )
+
+                        Spacer(Modifier.height(8.dp))
+
+                        CompactOutlinedTextField(
+                            label = "cos(φ)",
+                            value = data.averageCosPhi,
+                            onValueChange = {}, // read-only
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = FIELD_CONTENT_PADDING,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            fontSizeSp = FIELD_FONT,
+                            singleLine = true
+                        )
+                        Spacer(Modifier.height(8.dp))
+
+                        CompactOutlinedTextField(
+                            label = "Ток, А",
+                            value = data.totalCurrent,
+                            onValueChange = {}, // read-only
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = FIELD_CONTENT_PADDING,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            fontSizeSp = FIELD_FONT,
+                            singleLine = true
+                        )
+                        Spacer(Modifier.height(8.dp))
+
+                        CompactOutlinedTextField(
+                            label = "Коэф. спроса щита",
+                            value = data.shieldDemandFactor,
                             onValueChange = {}, // read-only
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = FIELD_CONTENT_PADDING,
@@ -703,19 +825,19 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                 Spacer(Modifier.height(FIELD_VSPACE))
 
                                                 CompactOutlinedTextField(
-                                                label = "Расчетная мощность, Вт",
-                                                value = consumer.powerKw,
-                                                onValueChange = { consumer.powerKw = it; saveNow() },
-                                                contentPadding = FIELD_CONTENT_PADDING,
-                                                fontSizeSp = FIELD_FONT,
-                                                textColor = textColor,
-                                                focusedBorderColor = borderColor,
-                                                unfocusedBorderColor = Color.LightGray,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
+                                                    label = "Расчетная мощность, Вт",
+                                                    value = consumer.powerKw,
+                                                    onValueChange = { consumer.powerKw = it; saveNow() },
+                                                    contentPadding = FIELD_CONTENT_PADDING,
+                                                    fontSizeSp = FIELD_FONT,
+                                                    textColor = textColor,
+                                                    focusedBorderColor = borderColor,
+                                                    unfocusedBorderColor = Color.LightGray,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
                                                 Spacer(Modifier.height(FIELD_VSPACE))
 
-                                                   }
+                                            }
 
                                             Spacer(Modifier.height(8.dp))
 
@@ -886,7 +1008,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         }
                                     }
 
-                                        Spacer(modifier = Modifier.width(COLUMN_SPACER))
+                                    Spacer(modifier = Modifier.width(COLUMN_SPACER))
                                 }
 
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -930,7 +1052,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         breakerDialogState[idx] = BreakerDialogState(manufacturer = manufacturer)
                                     } else {
                                         // обновим manufacturer, если он изменился
-                                        breakerDialogState[idx] = prev.copy(manufacturer = manufacturer ?: prev.manufacturer)
+                                        breakerDialogState[idx] =
+                                            prev.copy(manufacturer = manufacturer ?: prev.manufacturer)
                                     }
 
                                     // Всегда открываем второе окно (теперь оно будет предзаполнено из breakerDialogState[idx] если параметры были сохранены ранее)
@@ -952,7 +1075,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         val st = idx?.let { breakerDialogState[it] }
 
                         BreakerSecondWindow(
-                            initialManufacturer = st?.manufacturer ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
+                            initialManufacturer = st?.manufacturer
+                                ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
                             initialSeries = st?.series,
                             initialSelectedAdditions = st?.selectedAdditions ?: emptyList(),
                             initialSelectedPoles = st?.selectedPoles,
@@ -971,7 +1095,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                 // сохраняем выбранные параметры в state для данного consumer
                                 idx?.let {
                                     breakerDialogState[it] = BreakerDialogState(
-                                        manufacturer = st?.manufacturer ?: data.protectionManufacturer.takeIf { it -> it.isNotBlank() },
+                                        manufacturer = st?.manufacturer
+                                            ?: data.protectionManufacturer.takeIf { it -> it.isNotBlank() },
                                         series = result.series,
                                         selectedAdditions = result.selectedAdditions,
                                         selectedPoles = result.selectedPoles,
@@ -1068,5 +1193,38 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    // Эффект для автоматического перерасчёта данных щита
+    LaunchedEffect(data.consumers.toList(), data.demandFactor, data.simultaneityFactor) {
+        // Коэффициенты, вводимые пользователем
+        val demandFactor = data.demandFactor.toFloatOrNull() ?: 1.0f
+        val simultaneityFactor = data.simultaneityFactor.toFloatOrNull() ?: 1.0f
+
+        // Б) Установленная мощность
+        val totalInstalled = data.consumers.sumOf { it.installedPowerW.toDoubleOrNull() ?: 0.0 }
+        data.totalInstalledPower = "%.2f".format(totalInstalled)
+
+        // В) Расчетная мощность
+        val totalCalculated =
+            data.consumers.sumOf { it.powerKw.toDoubleOrNull() ?: 0.0 } * demandFactor * simultaneityFactor
+        data.totalCalculatedPower = "%.2f".format(totalCalculated)
+
+        // Г) Средний cos(f)
+        val cosPhiValues = data.consumers.mapNotNull { it.cosPhi.toDoubleOrNull() }
+        val avgCosPhi = if (cosPhiValues.isNotEmpty()) cosPhiValues.average() else 0.0
+        data.averageCosPhi = "%.3f".format(avgCosPhi)
+
+        // Д) Ток
+        val totalCurrent = if (avgCosPhi > 0) {
+            totalCalculated / (1.732 * 400 * avgCosPhi) // sqrt(3) ≈ 1.732, U = 400В
+        } else {
+            0.0
+        }
+        data.totalCurrent = "%.2f".format(totalCurrent)
+
+        // Е) Коэф. спроса щита
+        val shieldDemand = if (totalCalculated > 0) totalInstalled / totalCalculated else 0.0
+        data.shieldDemandFactor = "%.2f".format(shieldDemand)
     }
 }

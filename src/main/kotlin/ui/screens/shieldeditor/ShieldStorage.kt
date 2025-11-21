@@ -18,6 +18,18 @@ class ShieldData(
     var phaseL1 by mutableStateOf("0.00")
     var phaseL2 by mutableStateOf("0.00")
     var phaseL3 by mutableStateOf("0.00")
+
+    // Вводимые пользователем
+    var demandFactor by mutableStateOf("1.0")         // Коэф. спроса
+    var simultaneityFactor by mutableStateOf("1.0") // Коэф. одновременности
+
+    // Расчётные
+    var totalInstalledPower by mutableStateOf("0.0") // Установ. мощность, Вт
+    var totalCalculatedPower by mutableStateOf("0.0")// Расчетная мощность, Вт
+    var averageCosPhi by mutableStateOf("0.0")       // cos(f)
+    var totalCurrent by mutableStateOf("0.0")        // Ток
+    var shieldDemandFactor by mutableStateOf("0.0")  // Коэф.спросащита
+
 }
 
 object ShieldStorage {
