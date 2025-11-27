@@ -15,19 +15,19 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import ui.screens.shieldeditor.exporter.AutoCadExporter
 import ui.screens.shieldeditor.protection.*
 import view.CompactOutlinedTextField
 import java.io.File
@@ -39,7 +39,6 @@ private val LEFT_PANEL_WIDTH: Dp = 300.dp
 private val COLUMN_WIDTH: Dp = 220.dp
 private val COLUMN_OUTER_PADDING: Dp = 4.dp
 private val COLUMN_INNER_PADDING: Dp = 8.dp
-private val COLUMN_SPACER: Dp = 6.dp
 private val HEADER_HEIGHT: Dp = 24.dp
 private const val HEADER_FONT = 13
 private const val FIELD_FONT = 15
@@ -89,7 +88,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     var stdMenuExpanded by remember { mutableStateOf(false) }
     var manufMenuExpanded by remember { mutableStateOf(false) }
     val standards = listOf("ГОСТ IEC 60898-1-2020", "ГОСТ IEC 60947-2-2021")
-    val manufacturers = listOf("Nader", "Sistem Electric", "Dekraft", "Hyundai")
+    val manufacturers = listOf("Nader", "Systeme electric", "DEKraft", "Hyundai")
 
     // Scroll states
     val hScrollState = rememberScrollState() // горизонтальный для колонок
@@ -110,6 +109,9 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     var showBreakerThirdWindow by remember { mutableStateOf(false) }
     var breakerDialogConsumerIndex by remember { mutableStateOf<Int?>(null) }
 
+    var showRcboSecondWindow by remember { mutableStateOf(false) }
+    var showRcboThirdWindow by remember { mutableStateOf(false) }
+
     var showMoreMenu by remember { mutableStateOf(false) } // Состояние для видимости меню
 
     // состояние выбора второго окна для каждого потребителя (ключ — индекс колонки)
@@ -120,6 +122,32 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
         val selectedPoles: String? = null,
         val selectedCurve: String? = null
     )
+
+    data class RcboDialogState(
+        val manufacturer: String? = null,
+        val series: String? = null,
+        val selectedAdditions: List<String> = emptyList(),
+        val selectedPoles: String? = null,
+        val selectedCurve: String? = null,
+        val selectedResidualCurrent: String? = null
+    )
+
+    data class RcdDialogState(
+        val manufacturer: String? = null,
+        val series: String? = null,
+        val selectedPoles: String? = null,
+        val selectedResidualCurrent: String? = null
+    )
+    var isComboMode by remember { mutableStateOf(false) }
+
+    val rcdDialogState = remember { mutableStateMapOf<Int, RcdDialogState>() }
+
+    var showRcdSecondWindow by remember { mutableStateOf(false) }
+    var showRcdThirdWindow by remember { mutableStateOf(false) }
+
+    var tempBreakerResult by remember { mutableStateOf<String?>(null) }
+
+    val rcboDialogState = remember { mutableStateMapOf<Int, RcboDialogState>() }
 
     // map: индекс потребителя -> состояние выбора (если null — параметров ещё не задавали)
     val breakerDialogState = remember { mutableStateMapOf<Int, BreakerDialogState>() }
@@ -136,6 +164,16 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
     // Состояние для хранения координат клика правой кнопкой мыши
     var contextMenuPosition by remember { mutableStateOf(Offset.Zero) }
+
+    var showInputTypeDialog by remember { mutableStateOf(false) }
+    var selectedInputType by remember { mutableStateOf<InputType?>(null) }
+
+    // Состояния для окон автомата (используем те же переменные для данных, но флаги видимости свои)
+    var showInputBreakerSecond by remember { mutableStateOf(false) }
+    var showInputBreakerThird by remember { mutableStateOf(false) }
+
+    // Временное хранилище параметров автомата ввода
+    val inputBreakerState = remember { mutableStateOf(BreakerDialogState()) }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // Top bar (Back only left)
@@ -569,365 +607,332 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 Spacer(modifier = Modifier.width(12.dp))
             }
 
-            // ====== CENTER: таблица ======
-            // Занимает всё оставшееся вертикальное пространство — высота адаптируется к размеру окна
-            Box(
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(4.dp)
+                    .padding(start = 4.dp)
             ) {
-                // Column, где верхний блок (table area) растянется по высоте,
-                // а scrollbar разместится внизу.
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Контейнер таблицы — занимает всё доступное пространство (weight = 1)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .border(1.dp, Color.Gray, RoundedCornerShape(6.dp))
-                            .padding(6.dp)
-                    ) {
-                        // Внешняя вертикальная прокрутка для всей таблицы целиком
-                        Column(
+
+                // --- БЛОК "ВВОД" (Над таблицей) ---
+                Box(modifier = Modifier.padding(start = 6.dp, top = 6.dp, end = 6.dp, bottom = 12.dp)) {
+                    BlockPanel(color = Color(0xFFE8F5E9).copy(alpha = 0.5f)) { // Зеленоватый оттенок
+                        Text("Параметры ввода", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                        Spacer(Modifier.height(8.dp))
+
+                        CompactOutlinedTextField(
+                            label = "Тип и устройство",
+                            value = data.inputInfo,
+                            onValueChange = { data.inputInfo = it; saveNow() }, // Позволяем редактировать текст вручную
+                            modifier = Modifier.width(300.dp),
+                            contentPadding = FIELD_CONTENT_PADDING,
+                            fontSizeSp = FIELD_FONT,
+                            singleLine = false,
+                            minLines = 2,
+                            maxLines = 6,
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.ArrowDropDown,
+                                    "Выбрать",
+                                    Modifier.clickable { showInputTypeDialog = true }
+                                )
+                            }
+                        )
+                    }
+                }
+
+                //Spacer(Modifier.height(12.dp))
+
+                // --- ЛОГИКА ОКОН ДЛЯ ВВОДА ---
+
+                // 1. Окно выбора типа ввода
+                if (showInputTypeDialog) {
+                    InputTypePopup(
+                        onDismissRequest = { showInputTypeDialog = false },
+                        onConfirm = { type ->
+                            selectedInputType = type
+                            showInputTypeDialog = false
+
+                            if (type.needsBreakerConfig) {
+                                // Если нужен автомат (Вариант 4) -> запускаем цепочку окон
+                                // Сбрасываем состояние (или можно сохранять, если нужно)
+                                inputBreakerState.value = BreakerDialogState(
+                                    manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
+                                )
+                                showInputBreakerSecond = true
+                            } else {
+                                // Для остальных вариантов - просто пишем название (заглушка)
+                                data.inputInfo = type.title
+                                saveNow()
+                            }
+                        }
+                    )
+                }
+
+                // 2. Второе окно (Серия, Кривая) - ТОЛЬКО для Варианта 4
+                if (showInputBreakerSecond) {
+                    val st = inputBreakerState.value
+                    BreakerSecondWindow(
+                        initialManufacturer = st.manufacturer,
+                        initialSeries = st.series,
+                        initialSelectedAdditions = st.selectedAdditions,
+                        initialSelectedPoles = st.selectedPoles,
+                        initialSelectedCurve = st.selectedCurve,
+                        consumerVoltageStr = "400", // Для ввода обычно 3 фазы, или можно брать из параметров щита
+                        onBack = { showInputBreakerSecond = false; showInputTypeDialog = true },
+                        onDismiss = { showInputBreakerSecond = false },
+                        onConfirm = { result ->
+                            inputBreakerState.value = BreakerDialogState(
+                                manufacturer = data.protectionManufacturer,
+                                series = result.series,
+                                selectedAdditions = result.selectedAdditions,
+                                selectedPoles = result.selectedPoles,
+                                selectedCurve = result.selectedCurve
+                            )
+                            showInputBreakerSecond = false
+                            showInputBreakerThird = true
+                        }
+                    )
+                }
+
+                // 3. Третье окно (Номинал тока) - ТОЛЬКО для Варианта 4
+                if (showInputBreakerThird) {
+                    val st = inputBreakerState.value
+                    BreakerThirdWindow(
+                        maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
+                        standard = data.protectionStandard,
+                        consumerCurrentAStr = data.totalCurrent, // Ток щита для подбора
+                        consumerVoltageStr = "400",
+                        selectedSeries = st.series,
+                        selectedPoles = st.selectedPoles,
+                        selectedAdditions = st.selectedAdditions,
+                        selectedCurve = st.selectedCurve,
+                        onBack = { showInputBreakerThird = false; showInputBreakerSecond = true },
+                        onDismiss = { showInputBreakerThird = false },
+                        onChoose = { resultFromWindow ->
+                            // resultFromWindow приходит в формате: Модель \n Кривая Ток \n Дополнения
+
+                            // Исправляем пробел в токе (как делали ранее)
+                            val correctedDeviceStr = resultFromWindow.replace(Regex("(\\d)\\sA"), "$1A")
+
+                            // Формируем итоговую строку для ячейки ввода
+                            val header = selectedInputType?.title ?: "Ввод"
+                            val separator = "---------------------------------"
+
+                            val fullText = "$header\n$separator\n$correctedDeviceStr"
+
+                            data.inputInfo = fullText
+                            saveNow()
+
+                            showInputBreakerThird = false
+                        }
+                    )
+                }
+
+                // ====== CENTER: таблица ======
+                // Занимает всё оставшееся вертикальное пространство — высота адаптируется к размеру окна
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(4.dp)
+                ) {
+                    // Column, где верхний блок (table area) растянется по высоте,
+                    // а scrollbar разместится внизу.
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Контейнер таблицы — занимает всё доступное пространство (weight = 1)
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(vScrollState)
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp) // Внешний отступ для таблицы
+                                .border(1.dp, Color.Gray, RoundedCornerShape(6.dp))
+                                .padding(6.dp) // Внутренний отступ
                         ) {
-                            Row(
+                            // Внешняя вертикальная прокрутка для всей таблицы целиком
+                            Column(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(hScrollState)
-                                    .padding(vertical = 6.dp)
+                                    .fillMaxSize()
+                                    .verticalScroll(vScrollState)
                             ) {
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(hScrollState)
+                                        .padding(vertical = 6.dp)
+                                ) {
+                                    Spacer(modifier = Modifier.width(6.dp))
 
-                                data.consumers.forEachIndexed { colIndex, consumer ->
-                                    Box(
-                                        modifier = Modifier
-                                            .width(COLUMN_WIDTH)
-                                            .padding(COLUMN_OUTER_PADDING)
-                                            .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(6.dp))
-                                    ) {
-                                        Column(modifier = Modifier.padding(COLUMN_INNER_PADDING)) {
-                                            val isSelected = selectedColumns.contains(colIndex)
-                                            val targetBg = if (isSelected) Color(0xFF1976D2) else Color.Transparent
-                                            val animatedBg by animateColorAsState(
-                                                targetValue = targetBg,
-                                                animationSpec = tween(durationMillis = 260)
-                                            )
-                                            val targetTextColor = if (isSelected) Color.White else textColor
-                                            val animatedTextColor by animateColorAsState(
-                                                targetValue = targetTextColor,
-                                                animationSpec = tween(durationMillis = 260)
-                                            )
-                                            val targetScale = if (isSelected) 1.02f else 1f
-                                            val animatedScale by animateFloatAsState(
-                                                targetValue = targetScale,
-                                                animationSpec = spring(stiffness = 400f)
-                                            )
+                                    data.consumers.forEachIndexed { colIndex, consumer ->
+                                        Box(
+                                            modifier = Modifier
+                                                .width(COLUMN_WIDTH)
+                                                .padding(COLUMN_OUTER_PADDING)
+                                                .border(
+                                                    width = 1.dp,
+                                                    color = borderColor,
+                                                    shape = RoundedCornerShape(6.dp)
+                                                )
+                                        ) {
+                                            Column(modifier = Modifier.padding(COLUMN_INNER_PADDING)) {
+                                                val isSelected = selectedColumns.contains(colIndex)
+                                                val targetBg = if (isSelected) Color(0xFF1976D2) else Color.Transparent
+                                                val animatedBg by animateColorAsState(
+                                                    targetValue = targetBg,
+                                                    animationSpec = tween(durationMillis = 260)
+                                                )
+                                                val targetTextColor = if (isSelected) Color.White else textColor
+                                                val animatedTextColor by animateColorAsState(
+                                                    targetValue = targetTextColor,
+                                                    animationSpec = tween(durationMillis = 260)
+                                                )
+                                                val targetScale = if (isSelected) 1.02f else 1f
+                                                val animatedScale by animateFloatAsState(
+                                                    targetValue = targetScale,
+                                                    animationSpec = spring(stiffness = 400f)
+                                                )
 
-                                            // Шапка столбца с выбором и контекстным меню
-                                            Box {
-                                                Box(
-                                                    contentAlignment = Alignment.CenterStart,
-                                                    modifier = Modifier
-                                                        .height(HEADER_HEIGHT)
-                                                        .fillMaxWidth()
-                                                        .scale(animatedScale)
-                                                        .background(animatedBg, RoundedCornerShape(6.dp))
-                                                        .border(
-                                                            width = if (isSelected) 1.5.dp else 0.dp,
-                                                            color = if (isSelected) Color.White else Color.Transparent,
-                                                            shape = RoundedCornerShape(6.dp)
-                                                        )
-                                                        .pointerInput(colIndex) {
-                                                            awaitEachGesture {
-                                                                val event = awaitPointerEvent()
-                                                                if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                                                                    contextMenuPosition = event.changes.first().position
-                                                                    if (!selectedColumns.contains(colIndex)) {
-                                                                        selectedColumns.clear()
-                                                                        selectedColumns.add(colIndex)
+                                                // Шапка столбца с выбором и контекстным меню
+                                                Box {
+                                                    Box(
+                                                        contentAlignment = Alignment.CenterStart,
+                                                        modifier = Modifier
+                                                            .height(HEADER_HEIGHT)
+                                                            .fillMaxWidth()
+                                                            .scale(animatedScale)
+                                                            .background(animatedBg, RoundedCornerShape(6.dp))
+                                                            .border(
+                                                                width = if (isSelected) 1.5.dp else 0.dp,
+                                                                color = if (isSelected) Color.White else Color.Transparent,
+                                                                shape = RoundedCornerShape(6.dp)
+                                                            )
+                                                            .pointerInput(colIndex) {
+                                                                awaitEachGesture {
+                                                                    val event = awaitPointerEvent()
+                                                                    if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                                                                        contextMenuPosition =
+                                                                            event.changes.first().position
+                                                                        if (!selectedColumns.contains(colIndex)) {
+                                                                            selectedColumns.clear()
+                                                                            selectedColumns.add(colIndex)
+                                                                        }
+                                                                        contextMenuForHeader = colIndex
                                                                     }
-                                                                    contextMenuForHeader = colIndex
                                                                 }
                                                             }
-                                                        }
-                                                        .clickable(
-                                                            interactionSource = remember { MutableInteractionSource() },
-                                                            indication = LocalIndication.current
-                                                        ) {
-                                                            if (selectedColumns.contains(colIndex)) {
-                                                                selectedColumns.remove(colIndex)
-                                                            } else {
-                                                                selectedColumns.add(colIndex)
+                                                            .clickable(
+                                                                interactionSource = remember { MutableInteractionSource() },
+                                                                indication = LocalIndication.current
+                                                            ) {
+                                                                if (selectedColumns.contains(colIndex)) {
+                                                                    selectedColumns.remove(colIndex)
+                                                                } else {
+                                                                    selectedColumns.add(colIndex)
+                                                                }
                                                             }
+                                                    ) {
+                                                        Text(
+                                                            text = "Потребитель ${colIndex + 1}",
+                                                            fontSize = HEADER_FONT.sp,
+                                                            color = animatedTextColor,
+                                                            modifier = Modifier.padding(start = 8.dp)
+                                                        )
+                                                    }
+
+                                                    ConsumerContextMenu(
+                                                        expanded = contextMenuForHeader == colIndex,
+                                                        offset = IntOffset(
+                                                            contextMenuPosition.x.toInt(),
+                                                            contextMenuPosition.y.toInt()
+                                                        ),
+                                                        onDismissRequest = { contextMenuForHeader = null },
+                                                        isPasteEnabled = copiedConsumers.isNotEmpty() && selectedColumns.size == 1,
+                                                        isAddEnabled = selectedColumns.size == 1,
+                                                        onAction = { action ->
+                                                            when (action) {
+                                                                ContextMenuAction.DELETE -> {
+                                                                    if (selectedColumns.isNotEmpty()) {
+                                                                        selectedColumns.sortedDescending()
+                                                                            .forEach { idx ->
+                                                                                if (idx in data.consumers.indices) data.consumers.removeAt(
+                                                                                    idx
+                                                                                )
+                                                                            }
+                                                                        selectedColumns.clear()
+                                                                        saveNow()
+                                                                    }
+                                                                }
+
+                                                                ContextMenuAction.COPY -> {
+                                                                    copiedConsumers.clear()
+                                                                    selectedColumns.sorted().forEach { idx ->
+                                                                        data.consumers.getOrNull(idx)
+                                                                            ?.let { copiedConsumers.add(it.deepCopy()) }
+                                                                    }
+                                                                }
+
+                                                                ContextMenuAction.PASTE -> {
+                                                                    val target = selectedColumns.singleOrNull()
+                                                                    if (target != null && copiedConsumers.isNotEmpty()) {
+                                                                        var insertPos = target + 1
+                                                                        val newlyInsertedIndices = mutableListOf<Int>()
+                                                                        copiedConsumers.forEach { c ->
+                                                                            val copy = c.deepCopy()
+                                                                            if (insertPos <= data.consumers.size) {
+                                                                                data.consumers.add(insertPos, copy)
+                                                                                newlyInsertedIndices.add(insertPos)
+                                                                                insertPos++
+                                                                            }
+                                                                        }
+                                                                        selectedColumns.clear()
+                                                                        selectedColumns.addAll(newlyInsertedIndices)
+                                                                        saveNow()
+                                                                    }
+                                                                }
+
+                                                                ContextMenuAction.ADD -> {
+                                                                    if (selectedColumns.size == 1) {
+                                                                        addCountStr = "1"
+                                                                        showAddDialog = true
+                                                                    }
+                                                                }
+                                                            }
+                                                            contextMenuForHeader = null
                                                         }
-                                                ) {
-                                                    Text(
-                                                        text = "Потребитель ${colIndex + 1}",
-                                                        fontSize = HEADER_FONT.sp,
-                                                        color = animatedTextColor,
-                                                        modifier = Modifier.padding(start = 8.dp)
                                                     )
                                                 }
 
-                                                ConsumerContextMenu(
-                                                    expanded = contextMenuForHeader == colIndex,
-                                                    offset = IntOffset(
-                                                        contextMenuPosition.x.toInt(),
-                                                        contextMenuPosition.y.toInt()
-                                                    ),
-                                                    onDismissRequest = { contextMenuForHeader = null },
-                                                    isPasteEnabled = copiedConsumers.isNotEmpty() && selectedColumns.size == 1,
-                                                    isAddEnabled = selectedColumns.size == 1,
-                                                    onAction = { action ->
-                                                        when (action) {
-                                                            ContextMenuAction.DELETE -> {
-                                                                if (selectedColumns.isNotEmpty()) {
-                                                                    selectedColumns.sortedDescending().forEach { idx ->
-                                                                        if (idx in data.consumers.indices) data.consumers.removeAt(
-                                                                            idx
-                                                                        )
-                                                                    }
-                                                                    selectedColumns.clear()
-                                                                    saveNow()
-                                                                }
-                                                            }
-
-                                                            ContextMenuAction.COPY -> {
-                                                                copiedConsumers.clear()
-                                                                selectedColumns.sorted().forEach { idx ->
-                                                                    data.consumers.getOrNull(idx)
-                                                                        ?.let { copiedConsumers.add(it.deepCopy()) }
-                                                                }
-                                                            }
-
-                                                            ContextMenuAction.PASTE -> {
-                                                                val target = selectedColumns.singleOrNull()
-                                                                if (target != null && copiedConsumers.isNotEmpty()) {
-                                                                    var insertPos = target + 1
-                                                                    val newlyInsertedIndices = mutableListOf<Int>()
-                                                                    copiedConsumers.forEach { c ->
-                                                                        val copy = c.deepCopy()
-                                                                        if (insertPos <= data.consumers.size) {
-                                                                            data.consumers.add(insertPos, copy)
-                                                                            newlyInsertedIndices.add(insertPos)
-                                                                            insertPos++
-                                                                        }
-                                                                    }
-                                                                    selectedColumns.clear()
-                                                                    selectedColumns.addAll(newlyInsertedIndices)
-                                                                    saveNow()
-                                                                }
-                                                            }
-
-                                                            ContextMenuAction.ADD -> {
-                                                                if (selectedColumns.size == 1) {
-                                                                    addCountStr = "1"
-                                                                    showAddDialog = true
-                                                                }
-                                                            }
-                                                        }
-                                                        contextMenuForHeader = null
-                                                    }
-                                                )
-                                            }
-
-                                            Divider(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                                color = borderColor
-                                            )
-
-                                            // ---------------- БЛОК 1: Наименование ... Кабельная линия (голубой) ----------------
-                                            BlockPanel(BLOCK_BLUE) {
-                                                // Наименование
-                                                CompactOutlinedTextField(
-                                                    label = "Наим. потребителя",
-                                                    value = consumer.name,
-                                                    onValueChange = { consumer.name = it; saveNow() },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    singleLine = false,
-                                                    minLines = 1,
-                                                    maxLines = 3,
-                                                    modifier = Modifier.fillMaxWidth()
+                                                Divider(
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                                    color = borderColor
                                                 )
 
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                // Номер помещения (новое поле)
-                                                CompactOutlinedTextField(
-                                                    label = "Номер помещения",
-                                                    value = consumer.roomNumber,
-                                                    onValueChange = {
-                                                        consumer.roomNumber = it
-                                                        saveNow()
-                                                    },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    singleLine = true,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                // Напряжение
-                                                CompactOutlinedTextField(
-                                                    label = "Напряжение, В",
-                                                    value = consumer.voltage,
-                                                    onValueChange = {
-                                                        consumer.voltage = it
-                                                        CalculationEngine.calculateAll(data)
-                                                        saveNow()
-                                                    },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                // cosφ
-                                                CompactOutlinedTextField(
-                                                    label = "cos(φ)",
-                                                    value = consumer.cosPhi,
-                                                    onValueChange = {
-                                                        consumer.cosPhi = it
-                                                        CalculationEngine.calculateAll(data)
-                                                        saveNow()
-                                                    },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                CompactOutlinedTextField(
-                                                    label = "Установ. мощность, Вт",
-                                                    value = consumer.installedPowerW,
-                                                    onValueChange = {
-                                                        consumer.installedPowerW = it
-                                                        saveNow()
-                                                    },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                CompactOutlinedTextField(
-                                                    label = "Расчетная мощность, Вт",
-                                                    value = consumer.powerKw,
-                                                    onValueChange = {
-                                                        consumer.powerKw = it
-                                                        CalculationEngine.calculateAll(data)
-                                                        saveNow()
-                                                    },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                            }
-
-                                            Spacer(Modifier.height(8.dp))
-
-                                            // ---------------- БЛОК 2: Расчетный ток, А ... Наименование линии (сиреневый) ----------------
-                                            BlockPanel(BLOCK_WHITE) {
-                                                CompactOutlinedTextField(
-                                                    label = "Расчетный ток, А",
-                                                    value = consumer.currentA,
-                                                    onValueChange = {}, // read-only
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    singleLine = true,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                CompactOutlinedTextField(
-                                                    label = "Номер фазы",
-                                                    value = consumer.phaseNumber,
-                                                    onValueChange = { consumer.phaseNumber = it; saveNow() },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                CompactOutlinedTextField(
-                                                    label = "Номер группы",
-                                                    value = consumer.lineName,
-                                                    onValueChange = { consumer.lineName = it; saveNow() },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    singleLine = false,
-                                                    minLines = 1,
-                                                    maxLines = 3,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
-
-                                            Spacer(Modifier.height(8.dp))
-
-                                            // ---------------- БЛОК 3: Номер автомата ... Падение напряжения на кабель, В (белый) ----------------
-                                            BlockPanel(BLOCK_LAVENDER) {
-                                                CompactOutlinedTextField(
-                                                    label = "Номер автомата",
-                                                    value = consumer.breakerNumber,
-                                                    onValueChange = { consumer.breakerNumber = it; saveNow() },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                Box(
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
+                                                // ---------------- БЛОК 1: Наименование ... Кабельная линия (голубой) ----------------
+                                                BlockPanel(BLOCK_BLUE) {
+                                                    // Наименование
                                                     CompactOutlinedTextField(
-                                                        label = "Устройство защиты",
-                                                        value = consumer.protectionDevice,
+                                                        label = "Наим. потребителя",
+                                                        value = consumer.name,
+                                                        onValueChange = { consumer.name = it; saveNow() },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        singleLine = false,
+                                                        minLines = 1,
+                                                        maxLines = 3,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    // Номер помещения (новое поле)
+                                                    CompactOutlinedTextField(
+                                                        label = "Номер помещения",
+                                                        value = consumer.roomNumber,
                                                         onValueChange = {
-                                                            consumer.protectionDevice = it
+                                                            consumer.roomNumber = it
                                                             saveNow()
                                                         },
                                                         contentPadding = FIELD_CONTENT_PADDING,
@@ -936,275 +941,616 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                         focusedBorderColor = borderColor,
                                                         unfocusedBorderColor = Color.LightGray,
                                                         singleLine = true,
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
+                                                        modifier = Modifier.fillMaxWidth()
                                                     )
 
-                                                    Icon(
-                                                        imageVector = Icons.Default.ArrowDropDown,
-                                                        contentDescription = "Выбрать тип защиты",
-                                                        modifier = Modifier
-                                                            .align(Alignment.CenterEnd)   // по вертикали по центру ячейки
-                                                            .padding(end = 4.dp)          // небольшой отступ от рамки
-                                                            .size(18.dp)                  // компактный размер иконки
-                                                            .clickable {
-                                                                protectionDialogForIndex = colIndex
-                                                            }
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    // Напряжение
+                                                    CompactOutlinedTextField(
+                                                        label = "Напряжение, В",
+                                                        value = consumer.voltage,
+                                                        onValueChange = {
+                                                            consumer.voltage = it
+                                                            CalculationEngine.calculateAll(data)
+                                                            saveNow()
+                                                        },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    // cosφ
+                                                    CompactOutlinedTextField(
+                                                        label = "cos(φ)",
+                                                        value = consumer.cosPhi,
+                                                        onValueChange = {
+                                                            consumer.cosPhi = it
+                                                            CalculationEngine.calculateAll(data)
+                                                            saveNow()
+                                                        },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    CompactOutlinedTextField(
+                                                        label = "Установ. мощность, Вт",
+                                                        value = consumer.installedPowerW,
+                                                        onValueChange = {
+                                                            consumer.installedPowerW = it
+                                                            saveNow()
+                                                        },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    CompactOutlinedTextField(
+                                                        label = "Расчетная мощность, Вт",
+                                                        value = consumer.powerKw,
+                                                        onValueChange = {
+                                                            consumer.powerKw = it
+                                                            CalculationEngine.calculateAll(data)
+                                                            saveNow()
+                                                        },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                }
+
+                                                Spacer(Modifier.height(8.dp))
+
+                                                // ---------------- БЛОК 2: Расчетный ток, А ... Наименование линии (сиреневый) ----------------
+                                                BlockPanel(BLOCK_WHITE) {
+                                                    CompactOutlinedTextField(
+                                                        label = "Расчетный ток, А",
+                                                        value = consumer.currentA,
+                                                        onValueChange = {}, // read-only
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        singleLine = true,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    CompactOutlinedTextField(
+                                                        label = "Номер фазы",
+                                                        value = consumer.phaseNumber,
+                                                        onValueChange = { consumer.phaseNumber = it; saveNow() },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    CompactOutlinedTextField(
+                                                        label = "Номер группы",
+                                                        value = consumer.lineName,
+                                                        onValueChange = { consumer.lineName = it; saveNow() },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        singleLine = false,
+                                                        minLines = 1,
+                                                        maxLines = 3,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+                                                }
+
+                                                Spacer(Modifier.height(8.dp))
+
+                                                // ---------------- БЛОК 3: Номер автомата ... Падение напряжения на кабель, В (белый) ----------------
+                                                BlockPanel(BLOCK_LAVENDER) {
+                                                    CompactOutlinedTextField(
+                                                        label = "Номер автомата",
+                                                        value = consumer.breakerNumber,
+                                                        onValueChange = { consumer.breakerNumber = it; saveNow() },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    Box(
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        CompactOutlinedTextField(
+                                                            label = "Устройство защиты",
+                                                            value = consumer.protectionDevice,
+                                                            onValueChange = {
+                                                                consumer.protectionDevice = it
+                                                                saveNow()
+                                                            },
+                                                            contentPadding = FIELD_CONTENT_PADDING,
+                                                            fontSizeSp = FIELD_FONT,
+                                                            textColor = textColor,
+                                                            focusedBorderColor = borderColor,
+                                                            unfocusedBorderColor = Color.LightGray,
+                                                            singleLine = false,
+                                                            minLines = 1,
+                                                            maxLines = 8,
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                        )
+
+                                                        Icon(
+                                                            imageVector = Icons.Default.ArrowDropDown,
+                                                            contentDescription = "Выбрать тип защиты",
+                                                            modifier = Modifier
+                                                                .align(Alignment.CenterEnd)   // по вертикали по центру ячейки
+                                                                .padding(end = 4.dp)          // небольшой отступ от рамки
+                                                                .size(18.dp)                  // компактный размер иконки
+                                                                .clickable {
+                                                                    protectionDialogForIndex = colIndex
+                                                                }
+                                                        )
+                                                    }
+                                                }
+
+                                                Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                BlockPanel(BLOCK_WHITE) {
+                                                    // Марка кабеля (начало Блока)
+                                                    CompactOutlinedTextField(
+                                                        label = "Марка кабеля",
+                                                        value = consumer.cableLine,
+                                                        onValueChange = { consumer.cableLine = it; saveNow() },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        singleLine = false,
+                                                        minLines = 1,
+                                                        maxLines = 3,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    CompactOutlinedTextField(
+                                                        label = "Способ прокладки",
+                                                        value = consumer.layingMethod,
+                                                        onValueChange = { consumer.layingMethod = it; saveNow() },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        singleLine = false,
+                                                        minLines = 1,
+                                                        maxLines = 3,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    CompactOutlinedTextField(
+                                                        label = "Число жил, сечение",
+                                                        value = consumer.cableType,
+                                                        onValueChange = { consumer.cableType = it; saveNow() },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        singleLine = false,
+                                                        minLines = 1,
+                                                        maxLines = 3,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    Spacer(Modifier.height(FIELD_VSPACE))
+
+                                                    CompactOutlinedTextField(
+                                                        label = "Падение напряжения, В",
+                                                        value = consumer.voltageDropV,
+                                                        onValueChange = { consumer.voltageDropV = it; saveNow() },
+                                                        contentPadding = FIELD_CONTENT_PADDING,
+                                                        fontSizeSp = FIELD_FONT,
+                                                        textColor = textColor,
+                                                        focusedBorderColor = borderColor,
+                                                        unfocusedBorderColor = Color.LightGray,
+                                                        modifier = Modifier.fillMaxWidth()
                                                     )
                                                 }
                                             }
-
-                                            Spacer(Modifier.height(FIELD_VSPACE))
-
-                                            BlockPanel(BLOCK_WHITE) {
-                                                // Марка кабеля (начало Блока)
-                                                CompactOutlinedTextField(
-                                                    label = "Марка кабеля",
-                                                    value = consumer.cableLine,
-                                                    onValueChange = { consumer.cableLine = it; saveNow() },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    singleLine = false,
-                                                    minLines = 1,
-                                                    maxLines = 3,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                CompactOutlinedTextField(
-                                                    label = "Способ прокладки",
-                                                    value = consumer.layingMethod,
-                                                    onValueChange = { consumer.layingMethod = it; saveNow() },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    singleLine = false,
-                                                    minLines = 1,
-                                                    maxLines = 3,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                CompactOutlinedTextField(
-                                                    label = "Число жил, сечение",
-                                                    value = consumer.cableType,
-                                                    onValueChange = { consumer.cableType = it; saveNow() },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    singleLine = false,
-                                                    minLines = 1,
-                                                    maxLines = 3,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-
-                                                Spacer(Modifier.height(FIELD_VSPACE))
-
-                                                CompactOutlinedTextField(
-                                                    label = "Падение напряжения, В",
-                                                    value = consumer.voltageDropV,
-                                                    onValueChange = { consumer.voltageDropV = it; saveNow() },
-                                                    contentPadding = FIELD_CONTENT_PADDING,
-                                                    fontSizeSp = FIELD_FONT,
-                                                    textColor = textColor,
-                                                    focusedBorderColor = borderColor,
-                                                    unfocusedBorderColor = Color.LightGray,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                            }
                                         }
                                     }
-
-                                    Spacer(modifier = Modifier.width(COLUMN_SPACER))
                                 }
-
-                                Spacer(modifier = Modifier.width(8.dp))
                             }
                         }
-                    }
 
-                    // Горизонтальный scrollbar снизу (толще для удобства)
-                    HorizontalScrollbar(
-                        adapter = rememberScrollbarAdapter(hScrollState),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(SCROLLBAR_HEIGHT)
-                            .padding(vertical = 6.dp)
-                    )
+                        // Горизонтальный scrollbar снизу (толще для удобства)
+                        HorizontalScrollbar(
+                            adapter = rememberScrollbarAdapter(hScrollState),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(SCROLLBAR_HEIGHT)
+                                .padding(vertical = 6.dp)
+                        )
 
-                    // Если protectionDialogForIndex != null, показываем окно выбора
-                    if (protectionDialogForIndex != null) {
-                        val idx = protectionDialogForIndex!!
-                        val consumer = data.consumers.getOrNull(idx)
+                        // Если protectionDialogForIndex != null, показываем окно выбора
+                        if (protectionDialogForIndex != null) {
+                            val idx = protectionDialogForIndex!!
+                            val consumer = data.consumers.getOrNull(idx)
 
-                        val initial = protectionTypeFromString(consumer?.protectionDevice)
+                            val initial = protectionTypeFromString(consumer?.protectionDevice)
 
-                        ProtectionChooserPopup(
-                            initial = initial,
-                            onDismissRequest = { protectionDialogForIndex = null },
-                            onConfirm = { selected ->
-                                // Закрываем первое окно (ProtectionChooser)
-                                protectionDialogForIndex = null
-
-                                if (selected == ProtectionType.CIRCUIT_BREAKER) {
-                                    // Для выбранного потребителя сохраняем индекс
+                            ProtectionChooserPopup(
+                                initial = initial,
+                                onDismissRequest = { protectionDialogForIndex = null },
+                                onConfirm = { selected ->
+                                    protectionDialogForIndex = null
                                     breakerDialogConsumerIndex = idx
 
-                                    // Сохраняем производителя из левой панели (если он есть) в state — чтобы 2-е окно знало производителя
                                     val manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
                                     val prev = breakerDialogState[idx]
-
-                                    // если ранее у нас не было state для этого потребителя — создаём базовый
                                     if (prev == null) {
                                         breakerDialogState[idx] = BreakerDialogState(manufacturer = manufacturer)
                                     } else {
-                                        // обновим manufacturer, если он изменился
-                                        breakerDialogState[idx] =
-                                            prev.copy(manufacturer = manufacturer ?: prev.manufacturer)
+                                        breakerDialogState[idx] = prev.copy(manufacturer = manufacturer ?: prev.manufacturer)
                                     }
 
-                                    // Всегда открываем второе окно (теперь оно будет предзаполнено из breakerDialogState[idx] если параметры были сохранены ранее)
-                                    showBreakerSecondWindow = true
-                                } else {
-                                    // для других типов защиты — обычная логика (как у вас была)
-                                    consumer?.let {
-                                        it.protectionDevice = selected.displayName()
-                                        saveNow()
+                                    if (selected == ProtectionType.CIRCUIT_BREAKER) {
+                                        isComboMode = false
+                                        showBreakerSecondWindow = true
+                                    } else if (selected == ProtectionType.DIFF_CURRENT_BREAKER) {
+                                        isComboMode = false // Сбрасываем флаг
+                                        showRcboSecondWindow = true
+                                    } else if (selected == ProtectionType.CIRCUIT_BREAKER_AND_RCD) {
+                                        // !!! ИЗМЕНЕНИЕ: Не пишем текст в ячейку, просто ставим флаг
+                                        isComboMode = true
+                                        tempBreakerResult = null
+                                        showBreakerSecondWindow = true
+                                    } else {
+                                        // Для остальных типов (рубильник и т.д.)
+                                        isComboMode = false
+                                        consumer?.let {
+                                            it.protectionDevice = selected.displayName()
+                                            saveNow()
+                                        }
                                     }
                                 }
-                            }
-                        )
-                    }
+                            )
+                        }
 
-                    if (showBreakerSecondWindow) {
-                        val idx = breakerDialogConsumerIndex
-                        val consumer = idx?.let { data.consumers.getOrNull(it) }
-                        val st = idx?.let { breakerDialogState[it] }
+                        if (showBreakerSecondWindow) {
+                            val idx = breakerDialogConsumerIndex
+                            val consumer = idx?.let { data.consumers.getOrNull(it) }
+                            val st = idx?.let { breakerDialogState[it] }
 
-                        BreakerSecondWindow(
-                            initialManufacturer = st?.manufacturer
-                                ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
-                            initialSeries = st?.series,
-                            initialSelectedAdditions = st?.selectedAdditions ?: emptyList(),
-                            initialSelectedPoles = st?.selectedPoles,
-                            initialSelectedCurve = st?.selectedCurve,
-                            consumerVoltageStr = consumer?.voltage,
-                            onBack = {
-                                // вернуться к первому окну: показываем protection chooser для того же consumer
-                                showBreakerSecondWindow = false
-                                protectionDialogForIndex = idx
-                            },
-                            onDismiss = {
-                                showBreakerSecondWindow = false
-                                breakerDialogConsumerIndex = null
-                            },
-                            onConfirm = { result ->
-                                // сохраняем выбранные параметры в state для данного consumer
-                                idx?.let {
-                                    breakerDialogState[it] = BreakerDialogState(
-                                        manufacturer = st?.manufacturer
-                                            ?: data.protectionManufacturer.takeIf { it -> it.isNotBlank() },
-                                        series = result.series,
-                                        selectedAdditions = result.selectedAdditions,
-                                        selectedPoles = result.selectedPoles,
-                                        selectedCurve = result.selectedCurve
-                                    )
+                            BreakerSecondWindow(
+                                initialManufacturer = st?.manufacturer
+                                    ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
+                                initialSeries = st?.series,
+                                initialSelectedAdditions = st?.selectedAdditions ?: emptyList(),
+                                initialSelectedPoles = st?.selectedPoles,
+                                initialSelectedCurve = st?.selectedCurve,
+                                consumerVoltageStr = consumer?.voltage,
+                                onBack = {
+                                    // вернуться к первому окну: показываем protection chooser для того же consumer
+                                    showBreakerSecondWindow = false
+                                    protectionDialogForIndex = idx
+                                },
+                                onDismiss = {
+                                    showBreakerSecondWindow = false
+                                    breakerDialogConsumerIndex = null
+                                },
+                                onConfirm = { result ->
+                                    // сохраняем выбранные параметры в state для данного consumer
+                                    idx?.let {
+                                        breakerDialogState[it] = BreakerDialogState(
+                                            manufacturer = st?.manufacturer
+                                                ?: data.protectionManufacturer.takeIf { it -> it.isNotBlank() },
+                                            series = result.series,
+                                            selectedAdditions = result.selectedAdditions,
+                                            selectedPoles = result.selectedPoles,
+                                            selectedCurve = result.selectedCurve
+                                        )
+                                    }
+
+                                    // переходим в 3-е окно
+                                    showBreakerSecondWindow = false
+                                    showBreakerThirdWindow = true
                                 }
+                            )
+                        }
 
-                                // переходим в 3-е окно
-                                showBreakerSecondWindow = false
-                                showBreakerThirdWindow = true
-                            }
-                        )
-                    }
-
-                    if (showBreakerThirdWindow) {
-                        val idx = breakerDialogConsumerIndex
-                        val consumer = idx?.let { data.consumers.getOrNull(it) }
-                        val st = idx?.let { breakerDialogState[it] }
-
-                        BreakerThirdWindow(
-                            maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
-                            standard = data.protectionStandard,
-                            consumerCurrentAStr = consumer?.currentA ?: "",
-                            consumerVoltageStr = consumer?.voltage,
-                            selectedSeries = st?.series,
-                            selectedPoles = st?.selectedPoles,
-                            selectedAdditions = st?.selectedAdditions ?: emptyList(),
-                            selectedCurve = st?.selectedCurve,
-                            onBack = {
-                                // вернуться в 2-е окно (параметры st останутся)
-                                showBreakerThirdWindow = false
-                                showBreakerSecondWindow = true
-                            },
-                            onDismiss = {
-                                showBreakerThirdWindow = false
-                            },
-                            onChoose = { formattedMultilineString ->
-                                consumer?.let {
-                                    it.protectionDevice = formattedMultilineString
-                                    // Сохраняем также полюса, чтобы экспорт мог их взять
-                                    it.protectionPoles = st?.selectedPoles ?: ""
-                                    saveNow()
+                        if (showRcboSecondWindow) {
+                            val idx = breakerDialogConsumerIndex
+                            val consumer = idx?.let { data.consumers.getOrNull(it) }
+                            val st = idx?.let { rcboDialogState[it] }
+                            RcboSecondWindow(
+                                initialManufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() },
+                                consumerVoltageStr = consumer?.voltage,
+                                onBack = {
+                                    showRcboSecondWindow = false
+                                    protectionDialogForIndex = idx // Вернуться к выбору типа
+                                },
+                                onDismiss = {
+                                    showRcboSecondWindow = false
+                                    breakerDialogConsumerIndex = null
+                                },
+                                onConfirm = { result ->
+                                    idx?.let {
+                                        rcboDialogState[it] = RcboDialogState(
+                                            manufacturer = st?.manufacturer ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
+                                            series = result.series,
+                                            selectedAdditions = result.selectedAdditions,
+                                            selectedPoles = result.selectedPoles,
+                                            selectedCurve = result.selectedCurve,
+                                            selectedResidualCurrent = result.selectedResidualCurrent
+                                        )
+                                    }
+                                    showRcboSecondWindow = false
+                                    showRcboThirdWindow = true
                                 }
-                                showBreakerThirdWindow = false
-                            }
-                        )
-                    }
+                            )
+                        }
 
-                    if (showAddDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showAddDialog = false },
-                            title = { Text("Количество новых потребителей") },
-                            text = {
-                                OutlinedTextField(
-                                    value = addCountStr,
-                                    onValueChange = { addCountStr = it.filter { ch -> ch.isDigit() } },
-                                    singleLine = true
-                                )
-                            },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    val count = addCountStr.toIntOrNull() ?: 0
-                                    val target = selectedColumns.singleOrNull()
-                                    if (count > 0 && target != null) {
-                                        var insertPos = target + 1
-                                        val newlyInserted = mutableListOf<Int>()
-                                        repeat(count) {
-                                            // Создание пустого потребителя
-                                            val newConsumer = ConsumerModel(
-                                                name = "", voltage = "", cosPhi = "", powerKw = "", modes = "",
-                                                cableLine = "", currentA = "", phaseNumber = "", lineName = "",
-                                                breakerNumber = "", protectionDevice = "", protectionPoles = "",
-                                                cableType = "", voltageDropV = ""
-                                            )
-                                            if (insertPos <= data.consumers.size) {
-                                                data.consumers.add(insertPos, newConsumer)
-                                                newlyInserted.add(insertPos)
-                                                insertPos++
+                        if (showBreakerThirdWindow) {
+                            val idx = breakerDialogConsumerIndex
+                            if (idx != null) {
+                                val consumer = data.consumers.getOrNull(idx)
+                                // Получаем сохраненное состояние выбора (серия, кривая, дополнения)
+                                val state = breakerDialogState[idx] ?: BreakerDialogState()
+
+                                if (consumer != null) {
+                                    BreakerThirdWindow(
+                                        maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
+                                        standard = data.protectionStandard,
+                                        consumerCurrentAStr = consumer.currentA,
+                                        consumerVoltageStr = consumer.voltage,
+                                        selectedSeries = state.series,
+                                        selectedPoles = state.selectedPoles,
+                                        selectedAdditions = state.selectedAdditions, // Список строк-дополнений
+                                        selectedCurve = state.selectedCurve,
+                                        onBack = {
+                                            showBreakerThirdWindow = false
+                                            showBreakerSecondWindow = true
+                                        },
+                                        onDismiss = {
+                                            showBreakerThirdWindow = false
+                                            breakerDialogConsumerIndex = null
+                                        },
+                                        onChoose = { resultFromWindow ->
+                                            val correctedString = resultFromWindow.replace(Regex("(\\d)\\sA"), "$1A")
+
+                                            if (isComboMode) {
+                                                tempBreakerResult = correctedString
+
+                                                val manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
+                                                val prevRcd = rcdDialogState[idx]
+                                                if (prevRcd == null) {
+                                                    rcdDialogState[idx] = RcdDialogState(manufacturer = manufacturer)
+                                                } else {
+                                                    rcdDialogState[idx] = prevRcd.copy(manufacturer = manufacturer ?: prevRcd.manufacturer)
+                                                }
+
+                                                showBreakerThirdWindow = false
+                                                showRcdSecondWindow = true
+                                            } else {
+
+                                                consumer.let {
+                                                    it.protectionDevice = correctedString
+                                                    it.protectionPoles = state.selectedPoles ?: ""
+                                                    saveNow()
+                                                }
+                                                showBreakerThirdWindow = false
+                                                breakerDialogConsumerIndex = null
                                             }
                                         }
-                                        // Выделяем новые столбцы
-                                        selectedColumns.clear()
-                                        selectedColumns.addAll(newlyInserted)
-                                        saveNow()
-                                    }
-                                    showAddDialog = false
-                                }) { Text("OK") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showAddDialog = false }) { Text("Отмена") }
+                                    )
+                                }
                             }
-                        )
+                        }
+
+                        if (showRcboThirdWindow) {
+                            val idx = breakerDialogConsumerIndex
+                            if (idx != null) {
+                                val consumer = data.consumers.getOrNull(idx)
+                                val state = rcboDialogState[idx] ?: RcboDialogState()
+
+                                if (consumer != null) {
+                                    RcboThirdWindow(
+                                        maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
+                                        standard = data.protectionStandard,
+                                        consumerCurrentAStr = consumer.currentA,
+                                        consumerVoltageStr = consumer.voltage,
+                                        selectedSeries = state.series,
+                                        selectedPoles = state.selectedPoles,
+                                        selectedAdditions = state.selectedAdditions,
+                                        selectedCurve = state.selectedCurve,
+                                        selectedResidualCurrent = state.selectedResidualCurrent,
+                                        onBack = {
+                                            showRcboThirdWindow = false
+                                            showRcboSecondWindow = true
+                                        },
+                                        onDismiss = {
+                                            showRcboThirdWindow = false
+                                            breakerDialogConsumerIndex = null
+                                        },
+                                        onChoose = { resultFromWindow ->
+                                            val correctedString = resultFromWindow.replace(Regex("(\\d)\\sA"), "$1A")
+                                            consumer.let {
+                                                it.protectionDevice = correctedString
+                                                it.protectionPoles = state.selectedPoles ?: ""
+                                                saveNow()
+                                            }
+                                            showRcboThirdWindow = false
+                                            breakerDialogConsumerIndex = null
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (showAddDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showAddDialog = false },
+                                title = { Text("Количество новых потребителей") },
+                                text = {
+                                    OutlinedTextField(
+                                        value = addCountStr,
+                                        onValueChange = { addCountStr = it.filter { ch -> ch.isDigit() } },
+                                        singleLine = true
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        val count = addCountStr.toIntOrNull() ?: 0
+                                        val target = selectedColumns.singleOrNull()
+                                        if (count > 0 && target != null) {
+                                            var insertPos = target + 1
+                                            val newlyInserted = mutableListOf<Int>()
+                                            repeat(count) {
+                                                // Создание пустого потребителя
+                                                val newConsumer = ConsumerModel(
+                                                    name = "", voltage = "", cosPhi = "", powerKw = "", modes = "",
+                                                    cableLine = "", currentA = "", phaseNumber = "", lineName = "",
+                                                    breakerNumber = "", protectionDevice = "", protectionPoles = "",
+                                                    cableType = "", voltageDropV = ""
+                                                )
+                                                if (insertPos <= data.consumers.size) {
+                                                    data.consumers.add(insertPos, newConsumer)
+                                                    newlyInserted.add(insertPos)
+                                                    insertPos++
+                                                }
+                                            }
+                                            // Выделяем новые столбцы
+                                            selectedColumns.clear()
+                                            selectedColumns.addAll(newlyInserted)
+                                            saveNow()
+                                        }
+                                        showAddDialog = false
+                                    }) { Text("OK") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showAddDialog = false }) { Text("Отмена") }
+                                }
+                            )
+                        }
+
+                        // --- Окно 2 для УЗО (выбор серии/параметров) ---
+                        if (showRcdSecondWindow) {
+                            val idx = breakerDialogConsumerIndex
+                            val consumer = idx?.let { data.consumers.getOrNull(it) }
+                            val st = idx?.let { rcdDialogState[it] }
+
+                            RcdSecondWindow(
+                                initialManufacturer = st?.manufacturer ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
+                                initialSeries = st?.series,
+                                initialSelectedPoles = st?.selectedPoles,
+                                initialSelectedResidualCurrent = st?.selectedResidualCurrent,
+                                consumerVoltageStr = consumer?.voltage,
+                                onBack = {
+                                    // Возврат к выбору автомата (3-е окно)
+                                    showRcdSecondWindow = false
+                                    showBreakerThirdWindow = true
+                                },
+                                onDismiss = {
+                                    showRcdSecondWindow = false
+                                    tempBreakerResult = null
+                                    breakerDialogConsumerIndex = null
+                                },
+                                onConfirm = { result ->
+                                    idx?.let {
+                                        rcdDialogState[it] = RcdDialogState(
+                                            manufacturer = st?.manufacturer ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
+                                            series = result.series,
+                                            selectedPoles = result.selectedPoles,
+                                            selectedResidualCurrent = result.selectedResidualCurrent
+                                        )
+                                    }
+                                    showRcdSecondWindow = false
+                                    showRcdThirdWindow = true
+                                }
+                            )
+                        }
+
+                        // --- Окно 3 для УЗО (выбор номинала) ---
+                        if (showRcdThirdWindow) {
+                            val idx = breakerDialogConsumerIndex
+                            if (idx != null) {
+                                val consumer = data.consumers.getOrNull(idx)
+                                val state = rcdDialogState[idx] ?: RcdDialogState()
+
+                                if (consumer != null) {
+                                    RcdThirdWindow(
+                                        consumerCurrentAStr = consumer.currentA,
+                                        consumerVoltageStr = consumer.voltage,
+                                        selectedSeries = state.series,
+                                        selectedPoles = state.selectedPoles,
+                                        selectedResidualCurrent = state.selectedResidualCurrent,
+                                        onBack = {
+                                            showRcdThirdWindow = false
+                                            showRcdSecondWindow = true
+                                        },
+                                        onDismiss = {
+                                            showRcdThirdWindow = false
+                                            tempBreakerResult = null
+                                            breakerDialogConsumerIndex = null
+                                        },
+                                        onChoose = { rcdResultFromWindow ->
+                                            val correctedRcdString = rcdResultFromWindow.replace(Regex("(\\d)\\sA"), "$1A")
+
+                                            val breakerPart = tempBreakerResult ?: ""
+
+                                            val combinedResult = "$breakerPart\n\n$correctedRcdString"
+
+                                            consumer.let {
+                                                it.protectionDevice = combinedResult
+                                                it.protectionPoles = state.selectedPoles ?: ""
+                                                saveNow()
+                                            }
+
+                                            showRcdThirdWindow = false
+                                            breakerDialogConsumerIndex = null
+                                            tempBreakerResult = null
+                                            isComboMode = false
+                                        }
+
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

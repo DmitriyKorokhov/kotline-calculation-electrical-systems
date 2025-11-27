@@ -9,6 +9,7 @@ import java.util.prefs.Preferences
 class ShieldData(
     val consumers: MutableList<ConsumerModel> = mutableStateListOf()
 ) {
+    var inputInfo by mutableStateOf("") // Информации о Вводе
     var shieldName by mutableStateOf("")
     var maxShortCircuitCurrent by mutableStateOf("")
     var protectionStandard by mutableStateOf("")

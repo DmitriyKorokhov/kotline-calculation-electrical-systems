@@ -18,7 +18,6 @@ object DatabaseFactory {
         val db = Database.connect("jdbc:sqlite:${dbFile.absolutePath}", "org.sqlite.JDBC")
 
         transaction(db) {
-            // Create tables if they don't exist
             SchemaUtils.create(
                 BreakerModels, BreakerVariants,
                 RcdModels, RcdVariants,
@@ -27,7 +26,6 @@ object DatabaseFactory {
             )
         }
 
-        // If this is the first launch, seed the database with initial data.
         if (isFirstLaunch) {
             DbSeeder.seedInitialData()
         }

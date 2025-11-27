@@ -1,9 +1,12 @@
-package ui.screens.shieldeditor
+package ui.screens.shieldeditor.exporter
 
-import java.io.File
-import java.nio.charset.StandardCharsets
+import ui.screens.shieldeditor.ShieldData
 import ui.screens.shieldeditor.protection.ProtectionType
 import ui.screens.shieldeditor.protection.protectionTypeFromString
+import java.awt.FileDialog
+import java.io.File
+import java.nio.charset.StandardCharsets
+import javax.swing.JFrame
 
 /**
  * Экспорт в CSV для AutoCAD.
@@ -58,7 +61,7 @@ class CsvExporter {
         val protected = shieldData.consumers.withIndex()
             .filter { it.value.protectionDevice.isNotBlank() }
 
-        protected.forEachIndexed { idx, (consIndex, c) ->
+        protected.forEachIndexed { idx, (_, c) ->
             val prefix = typePrefixForProtection(c.protectionDevice)
             val polesFromModel =
                 c.protectionPoles.takeIf { it.isNotBlank() } ?: extractPolesFromText(c.protectionDevice)
@@ -261,9 +264,9 @@ class CsvExporter {
     }
 
     fun chooseSavePath(defaultName: String): String? {
-        val frame = javax.swing.JFrame()
+        val frame = JFrame()
         frame.isAlwaysOnTop = true
-        val dialog = java.awt.FileDialog(frame, "Экспорт схемы в AutoCAD (CSV)", java.awt.FileDialog.SAVE).apply {
+        val dialog = FileDialog(frame, "Экспорт схемы в AutoCAD (CSV)", FileDialog.SAVE).apply {
             file = defaultName
             isVisible = true
         }

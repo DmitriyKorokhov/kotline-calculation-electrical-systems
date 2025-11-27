@@ -10,6 +10,14 @@ import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import data.database.RcboModels
+import data.database.RcboVariants
+import data.database.DbRcboModel
+import data.database.DbRcboVariant
+import data.database.RcdModels
+import data.database.RcdVariants
+import data.database.DbRcdModel
+import data.database.DbRcdVariant
 
 suspend fun getDistinctSeries(): List<String> = withContext(Dispatchers.IO) {
     transaction {
@@ -75,19 +83,114 @@ fun parseExtrasFromAdditions(additionsField: String?): List<String> {
         .filter { it.isNotEmpty() }
 }
 
-/**
- * Парсер polesText -> список отдельных вариантов полюсов.
- * Пример: "1P, 1P+N, 2P" -> ["1P","1P+N","2P"]
- */
-fun parsePolesTextToList(polesText: String?): List<String> {
-    if (polesText.isNullOrBlank()) return emptyList()
-    return polesText.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-}
-
 suspend fun getDistinctSeriesByManufacturer(manufacturer: String): List<String> = withContext(Dispatchers.IO) {
     transaction {
         BreakerModels.select { BreakerModels.manufacturer eq manufacturer }
             .map { it[BreakerModels.series] }
             .distinct()
+    }
+}
+
+suspend fun getDistinctRcboSeries(): List<String> = withContext(Dispatchers.IO) {
+    transaction {
+        RcboModels.selectAll()
+            .map { it[RcboModels.series] }
+            .distinct()
+    }
+}
+
+/**
+ * Получить список уникальных серий АВДТ по производителю.
+ */
+suspend fun getDistinctRcboSeriesByManufacturer(manufacturer: String): List<String> = withContext(Dispatchers.IO) {
+    transaction {
+        RcboModels.select { RcboModels.manufacturer eq manufacturer }
+            .map { it[RcboModels.series] }
+            .distinct()
+    }
+}
+
+/**
+ * Возвращает пары (model, variant) для заданной серии АВДТ.
+ */
+suspend fun getRcboVariantsBySeries(series: String): List<Pair<DbRcboModel, DbRcboVariant>> = withContext(Dispatchers.IO) {
+    transaction {
+        val joined = RcboModels.join(
+            RcboVariants,
+            JoinType.INNER,
+            onColumn = RcboModels.id,
+            otherColumn = RcboVariants.modelId
+        )
+
+        joined.select { RcboModels.series eq series }.map { row ->
+            val model = DbRcboModel(
+                id = row[RcboModels.id],
+                manufacturer = row[RcboModels.manufacturer],
+                series = row[RcboModels.series],
+                model = row[RcboModels.model],
+                breakingCapacity = row[RcboModels.breakingCapacity]
+            )
+
+            val variant = DbRcboVariant(
+                id = row[RcboVariants.id],
+                modelId = row[RcboVariants.modelId],
+                ratedCurrent = row[RcboVariants.ratedCurrent],
+                ratedResidualCurrent = row[RcboVariants.ratedResidualCurrent],
+                poles = row[RcboVariants.poles],
+                additions = row[RcboVariants.additions],
+                serviceBreakingCapacity = row[RcboVariants.serviceBreakingCapacity]
+            )
+
+            model to variant
+        }
+    }
+}
+
+// --- Функции для УЗО (RCD) ---
+
+suspend fun getDistinctRcdSeries(): List<String> = withContext(Dispatchers.IO) {
+    transaction {
+        RcdModels.selectAll()
+            .map { it[RcdModels.series] }
+            .distinct()
+    }
+}
+
+suspend fun getDistinctRcdSeriesByManufacturer(manufacturer: String): List<String> = withContext(Dispatchers.IO) {
+    transaction {
+        RcdModels.select { RcdModels.manufacturer eq manufacturer }
+            .map { it[RcdModels.series] }
+            .distinct()
+    }
+}
+
+suspend fun getRcdVariantsBySeries(series: String): List<Pair<DbRcdModel, DbRcdVariant>> = withContext(Dispatchers.IO) {
+    transaction {
+        val joined = RcdModels.join(
+            RcdVariants,
+            JoinType.INNER,
+            onColumn = RcdModels.id,
+            otherColumn = RcdVariants.modelId
+        )
+
+        joined.select { RcdModels.series eq series }.map { row ->
+            val model = DbRcdModel(
+                id = row[RcdModels.id],
+                manufacturer = row[RcdModels.manufacturer],
+                series = row[RcdModels.series],
+                model = row[RcdModels.model]
+            )
+
+            val variant = DbRcdVariant(
+                id = row[RcdVariants.id],
+                modelId = row[RcdVariants.modelId],
+                ratedCurrent = row[RcdVariants.ratedCurrent],
+                ratedResidualCurrent = row[RcdVariants.ratedResidualCurrent],
+                // Обратите внимание: если у вас в базе poles это Int, используйте row[RcdVariants.poles].toString()
+                poles = row[RcdVariants.poles] // Предполагаем String по вашему запросу исправления БД
+            )
+
+            model to variant
+        }
     }
 }

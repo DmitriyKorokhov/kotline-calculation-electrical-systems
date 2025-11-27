@@ -46,7 +46,7 @@ object RcdVariants : Table() {
     val modelId = integer("model_id").references(RcdModels.id)
     val ratedCurrent = float("rated_current")
     val ratedResidualCurrent = varchar("rated_residual_current", 64)
-    val poles = integer("poles")
+    val poles = varchar("poles", 64)
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -70,7 +70,7 @@ object RcboVariants : Table() {
     val modelId = integer("model_id").references(RcboModels.id)
     val ratedCurrent = float("rated_current")
     val ratedResidualCurrent = varchar("rated_residual_current", 64)
-    val poles = integer("poles")
+    val poles = varchar("poles", 64)
     val additions = varchar("additions", 256)
     val serviceBreakingCapacity = varchar("service_breaking_capacity", 64)
     override val primaryKey = PrimaryKey(id)

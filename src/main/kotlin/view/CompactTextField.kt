@@ -39,6 +39,7 @@ fun CompactOutlinedTextField(
     minLines: Int = 1,
     maxLines: Int = Int.MAX_VALUE,
     imeAction: ImeAction = ImeAction.Done,
+    trailingIcon: @Composable (() -> Unit)? = null
 ) {
     val focusRequester = remember { FocusRequester() }
     val interaction = remember { MutableInteractionSource() }
@@ -76,6 +77,7 @@ fun CompactOutlinedTextField(
                         style = TextStyle(fontSize = (fontSizeSp - 2).sp)
                     )
                 },
+                trailingIcon = trailingIcon,
                 colors = TextFieldDefaults.outlinedTextFieldColors(
                     textColor = textColor,
                     focusedBorderColor = focusedBorderColor,

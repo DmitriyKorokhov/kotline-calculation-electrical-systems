@@ -41,7 +41,7 @@ data class DbRcdVariant(
     val modelId: Int,
     val ratedCurrent: Float,
     val ratedResidualCurrent: String,
-    val poles: Int
+    val poles: String
 )
 
 /**
@@ -63,7 +63,7 @@ data class DbRcboVariant(
     val modelId: Int,
     val ratedCurrent: Float,
     val ratedResidualCurrent: String,
-    val poles: Int,
+    val poles: String,
     val additions: String,
     val serviceBreakingCapacity: String
 )

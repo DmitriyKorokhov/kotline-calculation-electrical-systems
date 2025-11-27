@@ -12,7 +12,10 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import data.repository.getDistinctSeries
@@ -137,17 +140,45 @@ fun BreakerSecondWindow(
                 // Серия (dropdown)
                 Text("Серия", style = MaterialTheme.typography.subtitle2)
                 Spacer(Modifier.height(6.dp))
+
                 var expanded by remember { mutableStateOf(false) }
-                OutlinedTextField(
-                    value = selectedSeries,
-                    onValueChange = {},
-                    readOnly = true,
-                    modifier = Modifier.fillMaxWidth().clickable { expanded = true },
-                    trailingIcon = { IconButton(onClick = { expanded = !expanded }) { Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать") } }
-                )
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, properties = PopupProperties(focusable = true)) {
-                    seriesList.forEach { s ->
-                        DropdownMenuItem(onClick = { selectedSeries = s; expanded = false }) { Text(s) }
+                var textFieldSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+
+                Box {
+                    OutlinedTextField(
+                        value = selectedSeries,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onGloballyPositioned { coordinates ->
+                                // Сохраняем размер поля
+                                textFieldSize = coordinates.size.toSize()
+                            }
+                            .clickable { expanded = true },
+                        trailingIcon = {
+                            IconButton(onClick = { expanded = !expanded }) {
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
+                            }
+                        }
+                    )
+
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        // Применяем ширину поля к меню
+                        modifier = Modifier
+                            .width(with(LocalDensity.current) { textFieldSize.width.toDp() }),
+                        properties = PopupProperties(focusable = true)
+                    ) {
+                        seriesList.forEach { s ->
+                            DropdownMenuItem(onClick = {
+                                selectedSeries = s
+                                expanded = false
+                            }) {
+                                Text(s)
+                            }
+                        }
                     }
                 }
 

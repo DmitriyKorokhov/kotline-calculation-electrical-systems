@@ -1,5 +1,6 @@
-package ui.screens.shieldeditor
+package ui.screens.shieldeditor.exporter
 
+import ui.screens.shieldeditor.ShieldData
 import java.io.File
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
