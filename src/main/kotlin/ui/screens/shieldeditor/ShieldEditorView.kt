@@ -149,9 +149,18 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     var showRcboSecondWindow by remember { mutableStateOf(false) }
     var showRcboThirdWindow by remember { mutableStateOf(false) }
 
-    var showMoreMenu by remember { mutableStateOf(false) } // Состояние для видимости меню
+    var showMoreMenu by remember { mutableStateOf(false) }
 
-    // состояние выбора второго окна для каждого потребителя (ключ — индекс колонки)
+    var showAtsSecondWindow by remember { mutableStateOf(false) }
+    var showAtsThirdWindow by remember { mutableStateOf(false) }
+
+    data class AtsDialogState(
+        val manufacturer: String? = null,
+        val series: String? = null,
+        val selectedPoles: String? = null
+    )
+    val atsState = remember { mutableStateOf(AtsDialogState()) }
+
     data class BreakerDialogState(
         val manufacturer: String? = null,
         val series: String? = null,
@@ -682,11 +691,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                     }
                 }
 
-                //Spacer(Modifier.height(12.dp))
-
-                // --- ЛОГИКА ОКОН ДЛЯ ВВОДА ---
-
-                // 1. Окно выбора типа ввода
                 if (showInputTypeDialog) {
                     InputTypePopup(
                         onDismissRequest = { showInputTypeDialog = false },
@@ -695,14 +699,16 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             showInputTypeDialog = false
 
                             if (type.needsBreakerConfig) {
-                                // Если нужен автомат (Вариант 4) -> запускаем цепочку окон
-                                // Сбрасываем состояние (или можно сохранять, если нужно)
                                 inputBreakerState.value = BreakerDialogState(
                                     manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
                                 )
                                 showInputBreakerSecond = true
+                            } else if (type == InputType.ATS_BLOCK_TWO_INPUTS) {
+                                atsState.value = AtsDialogState(
+                                    manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
+                                )
+                                showAtsSecondWindow = true
                             } else {
-                                // Для остальных вариантов - просто пишем название (заглушка)
                                 data.inputInfo = type.title
                                 saveNow()
                             }
@@ -1632,6 +1638,54 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                 }
                             )
                         }
+                        // --- Окна АВР ---
+                        if (showAtsSecondWindow) {
+                            val st = atsState.value
+                            AtsSecondWindow(
+                                initialManufacturer = st.manufacturer,
+                                initialSeries = st.series,
+                                initialSelectedPoles = st.selectedPoles,
+                                consumerVoltageStr = "400", // АВР обычно на 3 фазы
+                                onBack = {
+                                    showAtsSecondWindow = false
+                                    showInputTypeDialog = true
+                                },
+                                onDismiss = { showAtsSecondWindow = false },
+                                onConfirm = { res ->
+                                    atsState.value = st.copy(
+                                        series = res.series,
+                                        selectedPoles = res.selectedPoles
+                                    )
+                                    showAtsSecondWindow = false
+                                    showAtsThirdWindow = true
+                                }
+                            )
+                        }
+
+                        if (showAtsThirdWindow) {
+                            val st = atsState.value
+                            AtsThirdWindow(
+                                maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
+                                consumerCurrentAStr = data.totalCurrent,
+                                selectedSeries = st.series,
+                                selectedPoles = st.selectedPoles,
+                                onBack = {
+                                    showAtsThirdWindow = false
+                                    showAtsSecondWindow = true
+                                },
+                                onDismiss = { showAtsThirdWindow = false },
+                                onChoose = { resultStr ->
+                                    // Сохраняем результат в ячейку
+                                    val header = selectedInputType?.title ?: "АВР"
+                                    val separator = "---------------------------------"
+                                    val fullText = "$header\n$separator\n$resultStr"
+                                    data.inputInfo = fullText
+                                    saveNow()
+                                    showAtsThirdWindow = false
+                                }
+                            )
+                        }
+
                     }
                 }
             }

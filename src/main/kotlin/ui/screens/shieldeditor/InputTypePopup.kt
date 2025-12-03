@@ -19,19 +19,10 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 
 enum class InputType(val title: String, val needsBreakerConfig: Boolean) {
-    // 1) Два ввода на общую шину с АВР на автоматических выключателях с моторприводом
     TWO_INPUTS_ATS_BREAKERS("Два ввода на общую шину с АВР на автоматических выключателях с моторприводом", false),
-
-    // 2) Два ввода на общую шину с АВР на контакторах с моторприводом
     TWO_INPUTS_ATS_CONTACTORS("Два ввода на общую шину с АВР на контакторах с моторприводом", false),
-
-    // 3) Один ввод с выключателем нагрузки
     ONE_INPUT_SWITCH("Один ввод с выключателем нагрузки", false),
-
-    // 4) Один ввод с автоматическим выключателем (нужна настройка автомата - true)
     ONE_INPUT_BREAKER("Один ввод с автоматическим выключателем", true),
-
-    // 5) Блок АВР на два ввода на общую шину
     ATS_BLOCK_TWO_INPUTS("Блок АВР на два ввода на общую шину", false);
 }
 

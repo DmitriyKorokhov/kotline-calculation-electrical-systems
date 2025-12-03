@@ -84,3 +84,26 @@ object Cables : Table() {
     val type = varchar("type", 128) // Марка кабеля
     override val primaryKey = PrimaryKey(id)
 }
+
+/**
+ * Object defining the schema for the AtsModels table (АВР).
+ */
+object AtsModels : Table() {
+    val id = integer("id").autoIncrement()
+    val manufacturer = varchar("manufacturer", 128)
+    val series = varchar("series", 128)
+    val model = varchar("model", 128)
+    val breakingCapacity = varchar("breaking_capacity", 64)
+    override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * Object defining the schema for the AtsVariants table (АВР).
+ */
+object AtsVariants : Table() {
+    val id = integer("id").autoIncrement()
+    val modelId = integer("model_id").references(AtsModels.id)
+    val ratedCurrent = float("rated_current")
+    val poles = varchar("poles", 64)
+    override val primaryKey = PrimaryKey(id)
+}

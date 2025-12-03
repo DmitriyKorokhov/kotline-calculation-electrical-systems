@@ -6,12 +6,12 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 
 object DatabaseFactory {
-
     fun init() {
         val appDataDir = File(System.getProperty("user.home"), ".ElectricEditorAppData")
         if (!appDataDir.exists()) {
             appDataDir.mkdirs()
         }
+
         val dbFile = File(appDataDir, "equipment.db")
         val isFirstLaunch = !dbFile.exists()
 
@@ -22,11 +22,14 @@ object DatabaseFactory {
                 BreakerModels, BreakerVariants,
                 RcdModels, RcdVariants,
                 RcboModels, RcboVariants,
-                Cables
+                Cables,
+                AtsModels, AtsVariants
             )
         }
 
         if (isFirstLaunch) {
+            DbSeeder.seedInitialData()
+        } else {
             DbSeeder.seedInitialData()
         }
     }

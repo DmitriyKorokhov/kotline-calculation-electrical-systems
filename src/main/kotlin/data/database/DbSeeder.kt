@@ -2,6 +2,9 @@ package data.database
 
 import org.jetbrains.exposed.sql.batchInsert
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.batchInsert
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.selectAll
 
 object DbSeeder {
 
@@ -11,11 +14,11 @@ object DbSeeder {
             seedRcds()
             seedRcbos()
             seedCables()
+            seedAts()
         }
     }
 
     private fun seedBreakers() {
-        // Data from "АВ.xlsx - БазаАВ.csv"
         val breakerData = """
             1,Nader,NDB1,NDB1-63,6,6,"B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","1P, 1P+N, 2P, 3P, 3P+N, 4P","OF1, SD1, MX+OF1, GQ1A, FF1, FS1"
             2,Nader,NDB1,NDB1T-63,6,6,"B, C, D","1, 2, 3, 4, 5, 6, 10, 16, 20, 25, 32, 40, 50, 63","1P, 1P+N, 2P, 3P, 3P+N, 4P","OF1, SD1, MX+OF1, GQ1A, FF1, FS1"
@@ -89,7 +92,6 @@ object DbSeeder {
     }
 
     private fun seedRcds() {
-        // Data from "УЗО.xlsx - БазаАВ.csv"
         val rcdData = """
             1,Nader,NDB6,NDL6M-125,"16, 25, 40, 63, 80, 100",4P," 30, 100, 300"
             2,Nader,NDB6,NDL6M-125,"16, 25, 40, 63, 80, 100",2P," 30, 100, 300"
@@ -235,6 +237,66 @@ object DbSeeder {
 
         Cables.batchInsert(cables) { cable ->
             this[Cables.type] = cable.type
+        }
+    }
+
+    private fun seedAts() {
+        val atsData = """
+            Nader,NDQ1,NDQ1-225,"100, 125, 160, 180, 200, 225","3P, 4P",50
+            Nader,NDQ2A,NDQ2A-63,"16, 20, 25, 32, 40, 50, 63, 80, 100, 125","3P, 4P",6
+            Nader,NDQ2A,NDQ2A-125,"10, 16, 20, 25, 32, 40, 50, 63","3P, 4P",6
+            Nader,NDQ3H,NDQ3-125,"16, 20, 25, 32, 40, 50, 63","3P, 4P",10
+            Nader,NDQ3,NDQ3-125,"16, 20, 25, 32, 40, 50, 63, 80, 100, 125","3P, 4P",10
+            Nader,NDQ3,NDQ3-250,"160, 180, 200, 225, 250","3P, 4P",10
+        """.trimIndent().lines()
+
+        if (AtsModels.selectAll().count() > 0) return
+
+        atsData.forEach { line ->
+            val parts = line.split(",(?=([^\\\"]*\\\"[^\\\"]*\\\")*[^\\\"]*$)".toRegex()).map { it.replace("\"", "").trim() }
+            if (parts.size < 6) return@forEach
+
+            val manufacturer = parts[0]
+            val series = parts[1]
+            val modelName = parts[2]
+            val currentsStr = parts[3]
+            val polesStr = parts[4]
+            val breakingCapacity = "${parts[5]} кА"
+
+            val model = DbAtsModel(
+                manufacturer = manufacturer,
+                series = series,
+                model = modelName,
+                breakingCapacity = breakingCapacity
+            )
+
+            val modelId = AtsModels.batchInsert(listOf(model)) { m ->
+                this[AtsModels.manufacturer] = m.manufacturer
+                this[AtsModels.series] = m.series
+                this[AtsModels.model] = m.model
+                this[AtsModels.breakingCapacity] = m.breakingCapacity
+            }.first()[AtsModels.id]
+            val currents = parseStringToFloatList(currentsStr)
+            val polesList = parseStringToList(polesStr)
+
+            val variants = mutableListOf<DbAtsVariant>()
+
+            currents.forEach { current ->
+                polesList.forEach { pole ->
+                    variants.add(
+                        DbAtsVariant(
+                            modelId = modelId,
+                            ratedCurrent = current,
+                            poles = pole
+                        )
+                    )
+                }
+            }
+            AtsVariants.batchInsert(variants) { v ->
+                this[AtsVariants.modelId] = v.modelId
+                this[AtsVariants.ratedCurrent] = v.ratedCurrent
+                this[AtsVariants.poles] = v.poles
+            }
         }
     }
 

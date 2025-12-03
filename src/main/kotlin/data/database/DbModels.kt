@@ -76,3 +76,24 @@ data class DbCable(
     val type: String,
 )
 
+/**
+ * Data class representing a record in the AtsModels table (АВР).
+ */
+data class DbAtsModel(
+    val id: Int = 0,
+    val manufacturer: String,
+    val series: String,
+    val model: String,
+    val breakingCapacity: String
+)
+
+/**
+ * Data class representing a record in the AtsVariants table (АВР).
+ */
+data class DbAtsVariant(
+    val id: Int = 0,
+    val modelId: Int,
+    val ratedCurrent: Float,
+    val poles: String
+)
+
