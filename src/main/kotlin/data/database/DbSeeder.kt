@@ -10,6 +10,7 @@ object DbSeeder {
             seedBreakers()
             seedRcds()
             seedRcbos()
+            seedCables()
         }
     }
 
@@ -205,6 +206,35 @@ object DbSeeder {
                 this[RcboVariants.additions] = v.additions
                 this[RcboVariants.serviceBreakingCapacity] = v.serviceBreakingCapacity
             }
+        }
+    }
+
+    private fun seedCables() {
+        val cableData = """
+            ВВГнг(А)
+            ВВГнг(А)-LS
+            ВВГнг(А)-FRLS
+            ПвПГнг(А)
+            ПвПГнг(А)-HF
+            ПвПГнг(А)-FRHF
+            ППГнг(А)
+            ППГнг(А)-HF
+            ППГнг(А)-FRHF
+            KГВВнг(А)
+            KГВВнг(А)-LS
+            KГВВнг(А)-FRLS
+            КГППнг(А)
+            КГППнг(А)-HF
+            КГППнг(А)-FRHF
+        """.trimIndent().lines()
+
+        val cables = cableData
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { DbCable(type = it) }
+
+        Cables.batchInsert(cables) { cable ->
+            this[Cables.type] = cable.type
         }
     }
 

@@ -81,8 +81,6 @@ object RcboVariants : Table() {
  */
 object Cables : Table() {
     val id = integer("id").autoIncrement()
-    val type = varchar("type", 128)
-    val crossSection = float("cross_section")
-    val continuousCurrent = float("continuous_current")
+    val type = varchar("type", 128) // Марка кабеля
     override val primaryKey = PrimaryKey(id)
 }

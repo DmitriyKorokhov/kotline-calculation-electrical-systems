@@ -33,6 +33,10 @@ import view.CompactOutlinedTextField
 import java.io.File
 import javax.swing.JFrame
 import kotlin.concurrent.thread
+import data.database.Cables
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
+import androidx.compose.foundation.layout.heightIn
 
 // Параметры размеров
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
@@ -62,6 +66,39 @@ private fun BlockPanel(
             .border(1.dp, BLOCK_BORDER, RoundedCornerShape(6.dp))
             .padding(8.dp)
     ) { content() }
+}
+
+@Composable
+fun CableTypePopup(
+    onDismissRequest: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var cableTypes by remember { mutableStateOf(emptyList<String>()) }
+
+    // Загружаем типы кабелей из БД при открытии
+    LaunchedEffect(Unit) {
+        transaction {
+            cableTypes = Cables.selectAll().map { it[Cables.type] }
+        }
+    }
+
+    DropdownMenu(
+        expanded = true,
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier.width(200.dp).heightIn(max = 300.dp) // Ограничиваем высоту и ширину
+    ) {
+        if (cableTypes.isEmpty()) {
+            DropdownMenuItem(onClick = { }) {
+                Text("Нет данных в БД")
+            }
+        } else {
+            cableTypes.forEach { type ->
+                DropdownMenuItem(onClick = { onConfirm(type) }) {
+                    Text(type)
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalAnimationApi::class)
@@ -174,6 +211,10 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
     // Временное хранилище параметров автомата ввода
     val inputBreakerState = remember { mutableStateOf(BreakerDialogState()) }
+
+    // Состояние для выбора кабеля
+    var showCableTypeDialog by remember { mutableStateOf(false) }
+    var cableDialogConsumerIndex by remember { mutableStateOf<Int?>(null) }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // Top bar (Back only left)
@@ -1115,7 +1156,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                             modifier = Modifier
                                                                 .align(Alignment.CenterEnd)   // по вертикали по центру ячейки
                                                                 .padding(end = 4.dp)          // небольшой отступ от рамки
-                                                                .size(18.dp)                  // компактный размер иконки
+                                                                .size(24.dp)                  // компактный размер иконки
                                                                 .clickable {
                                                                     protectionDialogForIndex = colIndex
                                                                 }
@@ -1127,22 +1168,40 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
                                                 BlockPanel(BLOCK_WHITE) {
                                                     // Марка кабеля (начало Блока)
-                                                    CompactOutlinedTextField(
-                                                        label = "Марка кабеля",
-                                                        value = consumer.cableLine,
-                                                        onValueChange = { consumer.cableLine = it; saveNow() },
-                                                        contentPadding = FIELD_CONTENT_PADDING,
-                                                        fontSizeSp = FIELD_FONT,
-                                                        textColor = textColor,
-                                                        focusedBorderColor = borderColor,
-                                                        unfocusedBorderColor = Color.LightGray,
-                                                        singleLine = false,
-                                                        minLines = 1,
-                                                        maxLines = 3,
-                                                        modifier = Modifier.fillMaxWidth()
-                                                    )
-
+                                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                                        CompactOutlinedTextField(
+                                                            label = "Марка кабеля",
+                                                            value = consumer.cableType,
+                                                            onValueChange = {
+                                                                consumer.cableType = it
+                                                                saveNow()
+                                                            },
+                                                            contentPadding = FIELD_CONTENT_PADDING,
+                                                            fontSizeSp = FIELD_FONT,
+                                                            textColor = textColor,
+                                                            focusedBorderColor = borderColor,
+                                                            unfocusedBorderColor = Color.LightGray,
+                                                            singleLine = false,
+                                                            minLines = 1,
+                                                            maxLines = 3,
+                                                            modifier = Modifier.fillMaxWidth()
+                                                        )
+                                                        // Иконка раскрывающегося списка
+                                                        Icon(
+                                                            imageVector = Icons.Default.ArrowDropDown,
+                                                            contentDescription = "Выбрать марку",
+                                                            modifier = Modifier
+                                                                .align(Alignment.CenterEnd)
+                                                                .padding(end = 4.dp)
+                                                                .size(24.dp)
+                                                                .clickable {
+                                                                    cableDialogConsumerIndex = colIndex
+                                                                    showCableTypeDialog = true
+                                                                }
+                                                        )
+                                                    }
                                                     Spacer(Modifier.height(FIELD_VSPACE))
+
 
                                                     CompactOutlinedTextField(
                                                         label = "Способ прокладки",
@@ -1163,8 +1222,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
                                                     CompactOutlinedTextField(
                                                         label = "Число жил, сечение",
-                                                        value = consumer.cableType,
-                                                        onValueChange = { consumer.cableType = it; saveNow() },
+                                                        value = consumer.cableLine,
+                                                        onValueChange = { consumer.cableLine = it; saveNow() },
                                                         contentPadding = FIELD_CONTENT_PADDING,
                                                         fontSizeSp = FIELD_FONT,
                                                         textColor = textColor,
@@ -1550,6 +1609,28 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                     )
                                 }
                             }
+                        }
+
+                        // Окно выбора марки кабеля
+                        if (showCableTypeDialog) {
+                            CableTypePopup(
+                                onDismissRequest = {
+                                    showCableTypeDialog = false
+                                    cableDialogConsumerIndex = null
+                                },
+                                onConfirm = { selectedType ->
+                                    val idx = cableDialogConsumerIndex
+                                    if (idx != null) {
+                                        val consumer = data.consumers.getOrNull(idx)
+                                        consumer?.let {
+                                            it.cableType = selectedType
+                                            saveNow()
+                                        }
+                                    }
+                                    showCableTypeDialog = false
+                                    cableDialogConsumerIndex = null
+                                }
+                            )
                         }
                     }
                 }

@@ -74,7 +74,5 @@ data class DbRcboVariant(
 data class DbCable(
     val id: Int = 0,
     val type: String,
-    val crossSection: Float,
-    val continuousCurrent: Float
 )
 

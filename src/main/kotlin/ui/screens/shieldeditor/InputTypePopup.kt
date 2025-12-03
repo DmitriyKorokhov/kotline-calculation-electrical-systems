@@ -19,10 +19,20 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 
 enum class InputType(val title: String, val needsBreakerConfig: Boolean) {
-    TWO_INPUTS_AVR("Два ввода на общую шину с АВР", false),
-    TWO_INPUTS_VR("Два ввода на общую шину с ВР", false),
-    ONE_INPUT_SWITCH("Один ввод на общую шину с рубильником", false),
-    ONE_INPUT_AUTO("Один ввод на общую шину с автоматом", true)
+    // 1) Два ввода на общую шину с АВР на автоматических выключателях с моторприводом
+    TWO_INPUTS_ATS_BREAKERS("Два ввода на общую шину с АВР на автоматических выключателях с моторприводом", false),
+
+    // 2) Два ввода на общую шину с АВР на контакторах с моторприводом
+    TWO_INPUTS_ATS_CONTACTORS("Два ввода на общую шину с АВР на контакторах с моторприводом", false),
+
+    // 3) Один ввод с выключателем нагрузки
+    ONE_INPUT_SWITCH("Один ввод с выключателем нагрузки", false),
+
+    // 4) Один ввод с автоматическим выключателем (нужна настройка автомата - true)
+    ONE_INPUT_BREAKER("Один ввод с автоматическим выключателем", true),
+
+    // 5) Блок АВР на два ввода на общую шину
+    ATS_BLOCK_TWO_INPUTS("Блок АВР на два ввода на общую шину", false);
 }
 
 @Composable
@@ -37,10 +47,10 @@ fun InputTypePopup(
     ) {
         Box(
             modifier = Modifier
-                .width(600.dp)
+                .width(700.dp) // Увеличили ширину для длинных названий
                 .background(Color.White, RoundedCornerShape(8.dp))
                 .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
             Column {
                 Text(
@@ -51,28 +61,17 @@ fun InputTypePopup(
 
                 val options = InputType.values()
 
-                // Простая сетка 2x2
-                Column {
-                    options.toList().chunked(2).forEach { rowItems ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            rowItems.forEach { type ->
-                                InputTypeCard(
-                                    type = type,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(100.dp)
-                                        .clickable { onConfirm(type) }
-                                )
-                            }
-                            // Если нечетное количество, добавляем пустой вес
-                            if (rowItems.size < 2) {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
+                // Вертикальный список для лучшей читаемости длинных названий
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    options.forEach { type ->
+                        InputTypeCard(
+                            type = type,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onConfirm(type) }
+                        )
                     }
                 }
             }
@@ -89,16 +88,14 @@ private fun InputTypeCard(
         modifier = modifier
             .border(1.dp, Color.Gray, RoundedCornerShape(6.dp))
             .background(Color(0xFFF5F5F5), RoundedCornerShape(6.dp))
-            .padding(12.dp),
-        contentAlignment = Alignment.Center
+            .padding(16.dp), // Чуть больше padding
+        contentAlignment = Alignment.CenterStart // Выравнивание по левому краю
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = type.title,
-                textAlign = TextAlign.Center,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
+        Text(
+            text = type.title,
+            textAlign = TextAlign.Start,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
