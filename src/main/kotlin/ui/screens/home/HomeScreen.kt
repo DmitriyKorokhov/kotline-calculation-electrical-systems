@@ -7,24 +7,32 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import storage.ProjectStorage
+import data.ProjectRepository
 
 /**
  * Экран 1: Начальное окно.
  * @param onCreateProject Лямбда-функция для перехода на экран проекта.
  */
 @Composable
-fun HomeScreen(onCreateProject: () -> Unit) {
+fun HomeScreen(onNewProject: () -> Unit, onOpenProject: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Button(onClick = onCreateProject) {
+        Button(onClick = onNewProject) { // ИСПРАВЛЕНО: было onCreateProject
             Text("Создать")
         }
+
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { /* TODO */ }, enabled = false) {
-            Text("Открыть...")
+
+        Button(onClick = {
+            if (ProjectStorage.loadProject(ProjectRepository.canvasState)) {
+                onOpenProject()
+            }
+        }) {
+            Text("Открыть проект")
         }
     }
 }

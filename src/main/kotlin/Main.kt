@@ -48,8 +48,11 @@ fun main() = application {
                 when (val screen = currentScreen) {
                     is Screen.Home -> {
                         HomeScreen(
-                            onCreateProject = {
+                            onNewProject = {
                                 ProjectRepository.createNewProject()
+                                currentScreen = Screen.ProjectEditor
+                            },
+                            onOpenProject = {
                                 currentScreen = Screen.ProjectEditor
                             }
                         )

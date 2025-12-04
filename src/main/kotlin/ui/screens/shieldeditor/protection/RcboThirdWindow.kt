@@ -18,7 +18,6 @@ import data.repository.parseCurveFromAdditions
 import data.repository.parseExtrasFromAdditions
 import kotlin.math.abs
 
-// Модель для UI списка АВДТ
 data class RcboUiItem(
     val modelId: Int,
     val variantId: Int,
