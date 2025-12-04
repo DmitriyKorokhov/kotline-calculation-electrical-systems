@@ -32,7 +32,7 @@ fun HomeScreen(onNewProject: () -> Unit, onOpenProject: () -> Unit) {
                 onOpenProject()
             }
         }) {
-            Text("Открыть проект")
+            Text("Открыть..")
         }
     }
 }
