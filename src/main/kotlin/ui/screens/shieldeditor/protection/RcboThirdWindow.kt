@@ -26,7 +26,7 @@ data class RcboUiItem(
     val modelName: String,
     val ratedCurrentA: Float,
     val polesText: String,
-    val ratedResidualCurrent: String, // Новое поле для остаточного тока
+    val ratedResidualCurrent: String,
     val additionsRaw: String,
     val serviceBreakingCapacityKa: Float?,
     val breakingCapacityKa: Float?,
@@ -43,7 +43,7 @@ fun RcboThirdWindow(
     selectedPoles: String?,
     selectedAdditions: List<String>,
     selectedCurve: String?,
-    selectedResidualCurrent: String?, // Выбранный остаточный ток для фильтрации
+    selectedResidualCurrent: String?,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onChoose: (String) -> Unit
@@ -56,20 +56,17 @@ fun RcboThirdWindow(
     val maxKA = parseKa(maxShortCircuitCurrentStr) ?: 0f
     val consumerA = parseAmps(consumerCurrentAStr) ?: 0f
 
-    // Загрузка данных при старте
     LaunchedEffect(selectedSeries) {
         loading = true
         errorMsg = null
         items = emptyList()
+
         try {
             if (selectedSeries.isNullOrBlank()) {
                 loading = false
                 return@LaunchedEffect
             }
-
-            // Запрос к репозиторию АВДТ
             val pairs = getRcboVariantsBySeries(selectedSeries)
-
             items = pairs.map { (model, variant) ->
                 RcboUiItem(
                     modelId = model.id,
@@ -92,65 +89,65 @@ fun RcboThirdWindow(
         }
     }
 
-    // Фильтрация элементов
     fun passesAll(item: RcboUiItem): Boolean {
         val passKZ = if (standard.contains("60898", ignoreCase = true)) {
             (item.breakingCapacityKa ?: 0f) >= maxKA
         } else {
             (item.serviceBreakingCapacityKa ?: 0f) >= maxKA
         }
-
         if (!passKZ) return false
         if (item.ratedCurrentA < consumerA) return false
-
-        // Фильтр по полюсам
         if (!selectedPoles.isNullOrBlank()) {
-            // Проверяем, содержится ли выбранный полюс в списке полюсов варианта (через запятую)
             if (item.polesText.split(",").map { it.trim() }.none { it == selectedPoles }) return false
         }
-
-        // Фильтр по кривой
         if (!selectedCurve.isNullOrBlank()) {
             val itemCurve = item.curve ?: ""
             if (itemCurve.isBlank() || itemCurve != selectedCurve) return false
         }
-
-        // Фильтр по остаточному току (утечке)
         if (!selectedResidualCurrent.isNullOrBlank()) {
-            // Сравниваем строки (например "30 мА")
             if (item.ratedResidualCurrent.trim() != selectedResidualCurrent.trim()) return false
         }
-
-        // Фильтр по дополнениям
         if (selectedAdditions.isNotEmpty()) {
             val itemExtras = parseExtrasFromAdditions(item.additionsRaw).map { it.trim() }
             if (!selectedAdditions.all { it in itemExtras }) return false
         }
-
         return true
     }
 
-    // Вычисляем список подходящих вариантов
     val passing = remember(items, maxKA, consumerA, selectedPoles, selectedCurve, selectedResidualCurrent, selectedAdditions) {
         items.filter { passesAll(it) }
     }
 
-    // Находим минимальный подходящий номинал тока
-    val nearestRated = remember(passing, consumerA) {
-        passing.map { it.ratedCurrentA }.filter { it >= consumerA }.minOrNull()
-    }
+    val finalList = remember(passing, consumerA) {
+        val grouped = passing.groupBy { it.modelName }
+        val result = mutableListOf<RcboUiItem>()
 
-    // Итоговый список для отображения (только с оптимальным номиналом)
-    val finalList = remember(passing, nearestRated) {
-        if (nearestRated == null) emptyList()
-        else passing.filter { kotlin.math.abs(it.ratedCurrentA - nearestRated) < 0.0001f }
-            .sortedBy { it.ratedCurrentA }
+        for ((_, variants) in grouped) {
+            val bestCurrent = variants.map { it.ratedCurrentA }.minOrNull()
+            if (bestCurrent != null) {
+                val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
+
+                // --- ИСПРАВЛЕНИЕ: Фильтрация дубликатов по ВСЕМ визуальным полям ---
+                val uniqueVisuals = bestVariants.distinctBy {
+                    // Создаем уникальный ключ из всех параметров, которые видит пользователь
+                    dataClassKey(
+                        it.ratedCurrentA,
+                        it.ratedResidualCurrent,
+                        it.breakingCapacityKa,
+                        it.curve,
+                        it.polesText
+                    )
+                }
+                result.addAll(uniqueVisuals)
+            }
+        }
+        result.sortedWith(compareBy<RcboUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
 
     Popup(alignment = Alignment.Center, properties = PopupProperties(focusable = false)) {
         Card(
             modifier = Modifier
-                .widthIn(min = 500.dp, max = 1000.dp) // Чуть шире из-за доп. колонки
+                .widthIn(min = 500.dp, max = 1000.dp)
                 .heightIn(min = 240.dp, max = 600.dp)
                 .padding(12.dp),
             elevation = 8.dp,
@@ -160,7 +157,6 @@ fun RcboThirdWindow(
                 Text("Подбор АВДТ — подходящие варианты", style = MaterialTheme.typography.h6)
                 Spacer(Modifier.height(8.dp))
 
-                // Инфо-панель
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Серия: ${selectedSeries ?: "—"}")
                     Spacer(Modifier.width(12.dp))
@@ -170,6 +166,7 @@ fun RcboThirdWindow(
                     Spacer(Modifier.weight(1f))
                     Text("U: ${consumerVoltageStr ?: "—"}")
                 }
+
                 Spacer(Modifier.height(8.dp))
 
                 if (loading) {
@@ -182,21 +179,20 @@ fun RcboThirdWindow(
                     if (finalList.isEmpty()) {
                         Text("Нет подходящих АВДТ (по всем параметрам).", color = MaterialTheme.colors.onSurface)
                     } else {
-                        // Заголовки таблицы
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                             Text("Производитель", modifier = Modifier.weight(1f))
                             Text("Модель", modifier = Modifier.weight(1f))
                             Text(if (standard.contains("60898", ignoreCase = true)) "Icn" else "Ics", modifier = Modifier.weight(0.6f))
                             if (!selectedCurve.isNullOrBlank()) Text("Кривая", modifier = Modifier.weight(0.6f))
                             Text("In, A", modifier = Modifier.weight(0.6f))
-                            Text("Утечка", modifier = Modifier.weight(0.8f)) // Новая колонка
+                            Text("Утечка", modifier = Modifier.weight(0.8f))
                             Text("Полюса", modifier = Modifier.weight(0.8f))
                             if (selectedAdditions.isNotEmpty()) Text("Дополн.", modifier = Modifier.weight(1f))
                         }
                         Divider()
 
                         LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
-                            items(finalList) { item ->
+                            items(finalList, key = { it.variantId }) { item ->
                                 val isSelected = item.variantId == selectedVariantId
                                 val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
                                 val borderModifier = if (isSelected) Modifier.border(2.dp, MaterialTheme.colors.primary, RoundedCornerShape(6.dp)) else Modifier
@@ -213,19 +209,15 @@ fun RcboThirdWindow(
                                     Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
                                         Text(item.manufacturer, modifier = Modifier.weight(1f))
                                         Text(item.modelName, modifier = Modifier.weight(1f))
-
                                         val capVal = if (standard.contains("60898", ignoreCase = true))
                                             item.breakingCapacityKa?.toString() ?: "-"
                                         else
                                             item.serviceBreakingCapacityKa?.toString() ?: "-"
                                         Text(capVal, modifier = Modifier.weight(0.6f))
-
                                         if (!selectedCurve.isNullOrBlank()) Text(selectedCurve ?: "-", modifier = Modifier.weight(0.6f))
-
                                         Text("${formatRated(item.ratedCurrentA)}", modifier = Modifier.weight(0.6f))
-                                        Text(item.ratedResidualCurrent, modifier = Modifier.weight(0.8f)) // Значение утечки
+                                        Text(item.ratedResidualCurrent, modifier = Modifier.weight(0.8f))
                                         Text(item.polesText, modifier = Modifier.weight(0.8f))
-
                                         if (selectedAdditions.isNotEmpty()) {
                                             val itemExtras = parseExtrasFromAdditions(item.additionsRaw).map { it.trim() }
                                             val shown = selectedAdditions.filter { it in itemExtras }
@@ -239,6 +231,7 @@ fun RcboThirdWindow(
                 }
 
                 Spacer(Modifier.height(12.dp))
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = { onBack() }) { Text("Назад") }
                     Spacer(Modifier.width(8.dp))
@@ -247,20 +240,14 @@ fun RcboThirdWindow(
                     Button(onClick = {
                         val chosen = finalList.firstOrNull { it.variantId == selectedVariantId }
                         if (chosen == null) return@Button
-
-                        // Формирование строки результата
                         val curveText = selectedCurve ?: chosen.curve ?: ""
                         val ratedText = "${formatRated(chosen.ratedCurrentA)} A"
-                        val residualText = chosen.ratedResidualCurrent // Добавляем ток утечки в описание
-
+                        val residualText = chosen.ratedResidualCurrent
                         val line1 = chosen.modelName
-                        // Например: "C 16 A, 30 мА"
                         val line2 = if (curveText.isNotBlank()) "$curveText $ratedText, $residualText" else "$ratedText, $residualText"
-
                         val itemExtras = parseExtrasFromAdditions(chosen.additionsRaw).map { it.trim() }
                         val shownAdd = selectedAdditions.filter { it in itemExtras }
                         val line3 = if (shownAdd.isNotEmpty()) shownAdd.joinToString(", ") else ""
-
                         val resultString = listOf(line1, line2, line3).filter { it.isNotBlank() }.joinToString("\n")
                         onChoose(resultString)
                     }) { Text("Выбрать") }
@@ -270,7 +257,7 @@ fun RcboThirdWindow(
     }
 }
 
-// Вспомогательные функции парсинга (можно вынести в utils, но для краткости здесь)
+// Вспомогательные функции
 private fun parseKa(s: String?): Float? {
     if (s.isNullOrBlank()) return null
     val cleaned = s.replace("кА", "", true).replace("kA", "", true).replace(" ", "").replace(",", ".").trim()
@@ -288,3 +275,11 @@ private fun formatRated(v: Float): String {
     return if (abs(v - i) < 0.001f) "$i" else String.format("%.1f", v)
 }
 
+// Вспомогательный класс для ключа уникальности (можно использовать Triple/Pair, но data class надежнее)
+private data class dataClassKey(
+    val current: Float,
+    val residual: String,
+    val cap: Float?,
+    val curve: String?,
+    val poles: String
+)

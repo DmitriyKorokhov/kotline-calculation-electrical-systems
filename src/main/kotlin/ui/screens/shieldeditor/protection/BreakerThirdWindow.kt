@@ -10,7 +10,6 @@ import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -49,7 +48,6 @@ fun BreakerThirdWindow(
     var loading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var items by remember { mutableStateOf<List<BreakerUiItem>>(emptyList()) }
-
     var selectedVariantId by remember { mutableStateOf<Int?>(null) }
 
     val maxKA = parseKa(maxShortCircuitCurrentStr) ?: 0f
@@ -64,6 +62,7 @@ fun BreakerThirdWindow(
                 loading = false
                 return@LaunchedEffect
             }
+
             val pairs = getVariantsBySeries(selectedSeries)
             items = pairs.map { (model, variant) ->
                 BreakerUiItem(
@@ -86,7 +85,7 @@ fun BreakerThirdWindow(
         }
     }
 
-    // filter items by all conditions (KZ vs standard, In >= Iрасч, poles match, curve match, additions include selectedAdditions)
+    // Фильтрация по всем условиям
     fun passesAll(item: BreakerUiItem): Boolean {
         val passKZ = if (standard.contains("60898", ignoreCase = true)) {
             (item.breakingCapacityKa ?: 0f) >= maxKA
@@ -109,29 +108,42 @@ fun BreakerThirdWindow(
         return true
     }
 
-    // compute only those that passAll
+    // Подходящие варианты
     val passing = remember(items, maxKA, consumerA, selectedPoles, selectedCurve, selectedAdditions) {
         items.filter { passesAll(it) }
     }
 
-    // among passing, find minimal ratedCurrent >= consumerA
-    val nearestRated = remember(passing, consumerA) {
-        passing.map { it.ratedCurrentA }.filter { it >= consumerA }.minOrNull()
-    }
+    // --- НОВАЯ ЛОГИКА: Группируем по названию модели ---
+    val finalList = remember(passing, consumerA) {
+        val groupedByModel = passing.groupBy { it.modelName }
+        val result = mutableListOf<BreakerUiItem>()
 
-    // final list = passing items whose ratedCurrent == nearestRated
-    val finalList = remember(passing, nearestRated) {
-        if (nearestRated == null) emptyList()
-        else passing.filter { kotlin.math.abs(it.ratedCurrentA - nearestRated) < 0.0001f }
-            .sortedBy { it.ratedCurrentA }
+        for ((_, variants) in groupedByModel) {
+            // Для каждой модели находим минимальный подходящий ток
+            val bestCurrent = variants.map { it.ratedCurrentA }.minOrNull()
+            if (bestCurrent != null) {
+                val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
+                // Убираем дубликаты по breakingCapacity (если вдруг несколько одинаковых записей)
+                result.addAll(bestVariants.distinctBy { it.breakingCapacityKa })
+            }
+        }
+
+        // Сортируем результат: сначала по току, потом по названию модели
+        result.sortedWith(compareBy<BreakerUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
 
     Popup(alignment = Alignment.Center, properties = PopupProperties(focusable = false)) {
-        Card(modifier = Modifier.widthIn(min = 420.dp, max = 900.dp).heightIn(min = 240.dp, max = 560.dp).padding(12.dp), elevation = 8.dp, shape = RoundedCornerShape(8.dp)) {
+        Card(
+            modifier = Modifier
+                .widthIn(min = 420.dp, max = 900.dp)
+                .heightIn(min = 240.dp, max = 560.dp)
+                .padding(12.dp),
+            elevation = 8.dp,
+            shape = RoundedCornerShape(8.dp)
+        ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text("Подбор автоматов — подходящие варианты", style = MaterialTheme.typography.h6)
                 Spacer(Modifier.height(8.dp))
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Серия: ${selectedSeries ?: "—"}")
                     Spacer(Modifier.width(12.dp))
@@ -145,40 +157,59 @@ fun BreakerThirdWindow(
                 Spacer(Modifier.height(8.dp))
 
                 if (loading) {
-                    Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
                 } else if (errorMsg != null) {
                     Text("Ошибка: $errorMsg", color = MaterialTheme.colors.error)
                 } else {
                     if (finalList.isEmpty()) {
                         Text("Нет подходящих автоматов (по всем параметрам).", color = MaterialTheme.colors.onSurface)
                     } else {
-                        // header
+                        // Заголовки таблицы
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                             Text("Производитель", modifier = Modifier.weight(1f))
                             Text("Модель", modifier = Modifier.weight(1f))
                             Text("U (В)", modifier = Modifier.weight(0.7f))
-                            Text(if (standard.contains("60898", ignoreCase = true)) "Icn, кА" else "Ics, кА", modifier = Modifier.weight(0.9f))
+                            Text(
+                                if (standard.contains("60898", ignoreCase = true)) "Icn, кА" else "Ics, кА",
+                                modifier = Modifier.weight(0.9f)
+                            )
                             if (!selectedCurve.isNullOrBlank()) Text("Кривая", modifier = Modifier.weight(0.7f))
                             Text("In, A", modifier = Modifier.weight(0.7f))
                             Text("Полюса", modifier = Modifier.weight(0.8f))
                             if (selectedAdditions.isNotEmpty()) Text("Дополн.", modifier = Modifier.weight(1f))
                         }
-
                         Divider()
 
                         LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
-                            items(finalList) { item ->
+                            items(finalList, key = { it.variantId }) { item ->
                                 val isSelected = item.variantId == selectedVariantId
                                 val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
-                                val borderModifier = if (isSelected) Modifier.border(2.dp, MaterialTheme.colors.primary, RoundedCornerShape(6.dp)) else Modifier
-                                Card(elevation = 2.dp, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).then(borderModifier).clickable { selectedVariantId = item.variantId }, backgroundColor = bg) {
+                                val borderModifier = if (isSelected)
+                                    Modifier.border(2.dp, MaterialTheme.colors.primary, RoundedCornerShape(6.dp))
+                                else
+                                    Modifier
+
+                                Card(
+                                    elevation = 2.dp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .then(borderModifier)
+                                        .clickable { selectedVariantId = item.variantId },
+                                    backgroundColor = bg
+                                ) {
                                     Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
                                         Text(item.manufacturer, modifier = Modifier.weight(1f))
                                         Text(item.modelName, modifier = Modifier.weight(1f))
                                         Text(consumerVoltageStr ?: "-", modifier = Modifier.weight(0.7f))
-                                        val capVal = if (standard.contains("60898", ignoreCase = true)) item.breakingCapacityKa?.toString() ?: "-" else item.serviceBreakingCapacityKa?.toString() ?: "-"
+                                        val capVal = if (standard.contains("60898", ignoreCase = true))
+                                            item.breakingCapacityKa?.toString() ?: "-"
+                                        else
+                                            item.serviceBreakingCapacityKa?.toString() ?: "-"
                                         Text(capVal, modifier = Modifier.weight(0.9f))
-                                        if (!selectedCurve.isNullOrBlank()) Text(selectedCurve ?: "-", modifier = Modifier.weight(0.7f))
+                                        if (!selectedCurve.isNullOrBlank()) Text(selectedCurve, modifier = Modifier.weight(0.7f))
                                         Text("${formatRated(item.ratedCurrentA)}", modifier = Modifier.weight(0.7f))
                                         Text(item.polesText, modifier = Modifier.weight(0.8f))
                                         if (selectedAdditions.isNotEmpty()) {
@@ -203,6 +234,7 @@ fun BreakerThirdWindow(
                     Button(onClick = {
                         val chosen = finalList.firstOrNull { it.variantId == selectedVariantId }
                         if (chosen == null) return@Button
+
                         val curveText = selectedCurve ?: chosen.curve ?: ""
                         val ratedText = "${formatRated(chosen.ratedCurrentA)} A"
                         val line1 = chosen.modelName
@@ -210,6 +242,7 @@ fun BreakerThirdWindow(
                         val itemExtras = parseExtrasFromAdditions(chosen.additionsRaw).map { it.trim() }
                         val shownAdd = selectedAdditions.filter { it in itemExtras }
                         val line3 = if (shownAdd.isNotEmpty()) shownAdd.joinToString(", ") else ""
+
                         val resultString = listOf(line1, line2, line3).filter { it.isNotBlank() }.joinToString("\n")
                         onChoose(resultString)
                     }) { Text("Выбрать") }
@@ -224,11 +257,13 @@ private fun parseKa(s: String?): Float? {
     val cleaned = s.replace("кА", "", true).replace("kA", "", true).replace(" ", "").replace(",", ".").trim()
     return cleaned.toFloatOrNull()
 }
+
 private fun parseAmps(s: String?): Float? {
     if (s.isNullOrBlank()) return null
     val cleaned = s.replace("[^0-9.,]".toRegex(), "").replace(",", ".")
     return cleaned.toFloatOrNull()
 }
+
 private fun formatRated(v: Float): String {
     val i = v.toInt()
     return if (abs(v - i) < 0.001f) "$i" else String.format("%.1f", v)

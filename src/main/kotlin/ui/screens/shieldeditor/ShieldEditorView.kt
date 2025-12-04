@@ -37,6 +37,8 @@ import data.database.Cables
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import androidx.compose.foundation.layout.heightIn
+import ui.screens.shieldeditor.input.InputType
+import ui.screens.shieldeditor.input.InputTypePopup
 
 // Параметры размеров
 private val LEFT_PANEL_WIDTH: Dp = 300.dp

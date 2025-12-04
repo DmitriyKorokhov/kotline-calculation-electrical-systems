@@ -55,10 +55,8 @@ fun RcdThirdWindow(
                 loading = false
                 return@LaunchedEffect
             }
-
             // Запрос к репозиторию УЗО
             val pairs = getRcdVariantsBySeries(selectedSeries)
-
             items = pairs.map { (model, variant) ->
                 RcdUiItem(
                     modelId = model.id,
@@ -66,7 +64,7 @@ fun RcdThirdWindow(
                     manufacturer = model.manufacturer,
                     modelName = model.model,
                     ratedCurrentA = variant.ratedCurrent,
-                    polesText = variant.poles.toString(), // Приводим к строке, если в БД int, или оставляем String
+                    polesText = variant.poles.toString(),
                     ratedResidualCurrent = variant.ratedResidualCurrent
                 )
             }
@@ -79,21 +77,13 @@ fun RcdThirdWindow(
 
     // Фильтрация элементов
     fun passesAll(item: RcdUiItem): Boolean {
-        // Проверка по току нагрузки (УЗО должно быть больше или равно току нагрузки,
-        // а по правилам часто даже на ступень выше автомата, но здесь формально In >= Iload)
         if (item.ratedCurrentA < consumerA) return false
-
-        // Фильтр по полюсам
         if (!selectedPoles.isNullOrBlank()) {
-            // Точное совпадение, так как у УЗО обычно одно значение (2P или 4P)
             if (item.polesText.trim() != selectedPoles.trim()) return false
         }
-
-        // Фильтр по остаточному току
         if (!selectedResidualCurrent.isNullOrBlank()) {
             if (item.ratedResidualCurrent.trim() != selectedResidualCurrent.trim()) return false
         }
-
         return true
     }
 
@@ -102,16 +92,22 @@ fun RcdThirdWindow(
         items.filter { passesAll(it) }
     }
 
-    // Находим минимальный подходящий номинал тока
-    val nearestRated = remember(passing, consumerA) {
-        passing.map { it.ratedCurrentA }.filter { it >= consumerA }.minOrNull()
-    }
+    // --- НОВАЯ ЛОГИКА ГРУППИРОВКИ (по modelName) ---
+    val finalList = remember(passing, consumerA) {
+        val grouped = passing.groupBy { it.modelName }
+        val result = mutableListOf<RcdUiItem>()
 
-    // Итоговый список для отображения (только с оптимальным номиналом)
-    val finalList = remember(passing, nearestRated) {
-        if (nearestRated == null) emptyList()
-        else passing.filter { kotlin.math.abs(it.ratedCurrentA - nearestRated) < 0.0001f }
-            .sortedBy { it.ratedCurrentA }
+        for ((_, variants) in grouped) {
+            // Для каждой модели находим минимальный подходящий номинал тока
+            val minCurrent = variants.map { it.ratedCurrentA }.minOrNull()
+            if (minCurrent != null) {
+                val bestVariants = variants.filter { abs(it.ratedCurrentA - minCurrent) < 0.001f }
+                // Убираем дубликаты (если вдруг в базе несколько одинаковых записей)
+                result.addAll(bestVariants.distinctBy { it.ratedResidualCurrent }) // distinct по утечке или полному совпадению
+            }
+        }
+        // Сортируем результат: сначала по току, потом по названию модели
+        result.sortedWith(compareBy<RcdUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
 
     Popup(alignment = Alignment.Center, properties = PopupProperties(focusable = false)) {
@@ -135,6 +131,7 @@ fun RcdThirdWindow(
                     Spacer(Modifier.width(12.dp))
                     Text("U: ${consumerVoltageStr ?: "—"}")
                 }
+
                 Spacer(Modifier.height(8.dp))
 
                 if (loading) {
@@ -158,7 +155,7 @@ fun RcdThirdWindow(
                         Divider()
 
                         LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
-                            items(finalList) { item ->
+                            items(finalList, key = { it.variantId }) { item ->
                                 val isSelected = item.variantId == selectedVariantId
                                 val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
                                 val borderModifier = if (isSelected) Modifier.border(2.dp, MaterialTheme.colors.primary, RoundedCornerShape(6.dp)) else Modifier
@@ -186,6 +183,7 @@ fun RcdThirdWindow(
                 }
 
                 Spacer(Modifier.height(12.dp))
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = { onBack() }) { Text("Назад") }
                     Spacer(Modifier.width(8.dp))
@@ -198,10 +196,8 @@ fun RcdThirdWindow(
                         // Формирование строки результата
                         val ratedText = "${formatRated(chosen.ratedCurrentA)} A"
                         val residualText = chosen.ratedResidualCurrent
-
                         val line1 = chosen.modelName
                         val line2 = "$ratedText, $residualText"
-
                         val resultString = listOf(line1, line2).filter { it.isNotBlank() }.joinToString("\n")
                         onChoose(resultString)
                     }) { Text("Выбрать") }
@@ -222,5 +218,3 @@ private fun formatRated(v: Float): String {
     val i = v.toInt()
     return if (abs(v - i) < 0.001f) "$i" else String.format("%.1f", v)
 }
-
-

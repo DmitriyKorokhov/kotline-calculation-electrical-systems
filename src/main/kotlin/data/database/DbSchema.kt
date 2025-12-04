@@ -58,7 +58,7 @@ object RcboModels : Table() {
     val manufacturer = varchar("manufacturer", 128)
     val series = varchar("series", 128)
     val model = varchar("model", 128)
-    val breakingCapacity = varchar("breaking_capacity", 64) // Наибольшая отключающая способность
+    val breakingCapacity = varchar("breaking_capacity", 64)
     override val primaryKey = PrimaryKey(id)
 }
 
