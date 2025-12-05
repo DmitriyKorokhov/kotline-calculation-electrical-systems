@@ -8,7 +8,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import data.ProjectRepository
-import data.database.DatabaseFactory // <-- НОВЫЙ ИМПОРТ
+import data.database.DatabaseFactory
 import kotlinx.coroutines.runBlocking
 import ui.screens.home.HomeScreen
 import ui.screens.projecteditor.ProjectView
@@ -22,20 +22,16 @@ sealed class Screen {
 }
 
 fun main() = application {
-    // --- ИНИЦИАЛИЗАЦИЯ БД (runBlocking покрывает suspend init) ---
     runBlocking {
         try {
             DatabaseFactory.init()
         } catch (ex: Exception) {
-            // Логирование/обработка ошибки и продолжение — по вашему сценарию
             println("Ошибка инициализации БД: ${ex.message}")
         }
     }
 
     Window(
         onCloseRequest = {
-            // Здесь можно корректно закрыть БД, если у вас есть метод close()
-            // DatabaseFactory.close()
             exitApplication()
         },
         title = "Редактор электрических систем",
@@ -61,7 +57,6 @@ fun main() = application {
                         ProjectView(
                             state = ProjectRepository.canvasState,
                             onOpenShield = { shieldId ->
-                                // Открываем редактор щита с ID
                                 currentScreen = Screen.ShieldEditor(shieldId)
                             }
                         )
@@ -70,7 +65,6 @@ fun main() = application {
                         ShieldEditorView(
                             shieldId = screen.shieldId,
                             onBack = {
-                                // при возврате — сохраняем/обновляем состояние проекта, если нужно
                                 currentScreen = Screen.ProjectEditor
                             }
                         )

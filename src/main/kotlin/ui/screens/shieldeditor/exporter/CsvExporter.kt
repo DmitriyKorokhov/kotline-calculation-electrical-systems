@@ -35,7 +35,7 @@ class CsvExporter {
             val attrEscaped = entry.attributeText
                 .replace("\r\n", "\n")
                 .replace("\r", "\n")
-                .replace("\n", "\\n")
+                .replace("\n", "\\P")
 
             listOf(blockName, entry.x.toString(), entry.y.toString(), attrEscaped)
                 .joinToString(";")
@@ -56,6 +56,52 @@ class CsvExporter {
         y: Int = 0
     ) {
         val entries = mutableListOf<ExportEntry>()
+
+        if (shieldData.inputInfo.contains("Два ввода", ignoreCase = true) &&
+            shieldData.inputInfo.contains("АВР", ignoreCase = true) &&
+            !shieldData.inputInfo.contains("Блок АВР", ignoreCase = true)) {
+
+            val lines = shieldData.inputInfo.split("\n")
+            val sepIndex = lines.indexOfFirst { it.contains("-") }
+            val deviceLines = if (sepIndex >= 0 && sepIndex + 1 < lines.size) {
+                lines.subList(sepIndex + 1, lines.size)
+            } else {
+                lines.drop(1)
+            }
+            val deviceText = deviceLines
+                .filter { it.isNotBlank() }
+                .joinToString("\\P")
+            val is4P = deviceText.contains("4P", ignoreCase = true) || deviceText.contains("3P+N", ignoreCase = true)
+            val blockName = if (is4P) "AVR_AV_4P" else "AVR_AV_3P"
+
+            entries += ExportEntry(
+                blockTypePrefix = "",
+                polesText = null,
+                x = 32,
+                y = 40,
+                attributeText = deviceText,
+                explicitBlockName = blockName
+            )
+        }
+
+
+        if (shieldData.inputInfo.contains("Блок АВР", ignoreCase = true)) {
+            val lines = shieldData.inputInfo.split("\n")
+            val deviceLine = lines.lastOrNull {
+                it.isNotBlank() && !it.contains("---") && !it.contains("Блок АВР")
+            } ?: ""
+            val is4P = deviceLine.contains("4P", ignoreCase = true) || deviceLine.contains("3P+N", ignoreCase = true)
+            val blockName = if (is4P) "B_AVR_4P" else "B_AVR_3P"
+
+            entries += ExportEntry(
+                blockTypePrefix = "",
+                polesText = null,
+                x = 53,
+                y = 40,
+                attributeText = deviceLine,
+                explicitBlockName = blockName
+            )
+        }
 
         // 1) Устройства защиты и коммутации (как раньше)
         val protected = shieldData.consumers.withIndex()
@@ -85,7 +131,7 @@ class CsvExporter {
             val hasAnyCableData = listOf(cableBrand, cableType, laying, drop).any { it.isNotBlank() }
 
             if (hasAnyCableData) {
-                val line1 = listOf(cableBrand, cableType)
+                val line1 = listOf(cableType, cableBrand)
                     .filter { it.isNotBlank() }
                     .joinToString(" ")                  // "Марка кабеля Число жил, сечение"
 
@@ -114,7 +160,7 @@ class CsvExporter {
                 "GROUP=${c.lineName}"
             ).joinToString("|")
 
-            val tableY = y - 104    //
+            val tableY = y - 104
 
             entries += ExportEntry(
                 blockTypePrefix = "",
@@ -128,7 +174,7 @@ class CsvExporter {
 
         // 2) Линия (startLine, middleLine, endLine)
         if (protected.isNotEmpty()) {
-            val lineY = y + 40          // 40.62 округляем до 41
+            val lineY = y + 40
             val firstX = baseX
 
             // startLine один раз
@@ -192,8 +238,8 @@ class CsvExporter {
         entries += ExportEntry(
             blockTypePrefix = "",
             polesText = null,
-            x = 30,
-            y = 60,
+            x = 0,
+            y = 120,
             attributeText = shieldCapAttr,
             explicitBlockName = "shield_cap"
         )
@@ -246,11 +292,13 @@ class CsvExporter {
 
     private fun normalizePoles(raw: String?): String {
         if (raw.isNullOrBlank()) return "1P"
-        val s = raw.trim()
-        val rPlus = "(\\dP\\+N)".toRegex(RegexOption.IGNORE_CASE).find(s)?.groupValues?.getOrNull(1)
-        if (!rPlus.isNullOrBlank()) return rPlus.uppercase()
-        val rSimple = "(\\dP)".toRegex(RegexOption.IGNORE_CASE).find(s)?.groupValues?.getOrNull(1)
-        if (!rSimple.isNullOrBlank()) return rSimple.uppercase()
+        val s = raw.trim().uppercase()
+        if (s.contains("1P+N")) return "2P"
+        if (s.contains("3P+N")) return "4P"
+        if (s.contains("1P")) return "1P"
+        if (s.contains("2P")) return "2P"
+        if (s.contains("3P")) return "3P"
+        if (s.contains("4P")) return "4P"
         return "1P"
     }
 

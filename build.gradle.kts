@@ -38,11 +38,15 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "MainKt"
-
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe)
             packageName = "kotline-calculation-electrical-systems"
             packageVersion = "1.0.0"
+            modules("java.instrument", "java.prefs", "java.sql", "jdk.unsupported")
+
+            windows {
+                iconFile.set(project.file("src/main/resources/icon.ico"))
+            }
         }
     }
 }

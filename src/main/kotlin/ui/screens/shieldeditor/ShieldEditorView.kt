@@ -37,10 +37,10 @@ import data.database.Cables
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import androidx.compose.foundation.layout.heightIn
+import ui.screens.shieldeditor.input.InputParamsWindow
 import ui.screens.shieldeditor.input.InputType
 import ui.screens.shieldeditor.input.InputTypePopup
 
-// Параметры размеров
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
 private val COLUMN_WIDTH: Dp = 220.dp
 private val COLUMN_OUTER_PADDING: Dp = 4.dp
@@ -226,6 +226,9 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     // Состояние для выбора кабеля
     var showCableTypeDialog by remember { mutableStateOf(false) }
     var cableDialogConsumerIndex by remember { mutableStateOf<Int?>(null) }
+
+    var showInputParamsWindow by remember { mutableStateOf(false) }
+    var inputParamsResult by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         // Top bar (Back only left)
@@ -700,12 +703,21 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             selectedInputType = type
                             showInputTypeDialog = false
 
-                            if (type.needsBreakerConfig) {
+                            if (type == InputType.ONE_INPUT_BREAKER) {
+                                showInputParamsWindow = true
+                            } else if (type == InputType.TWO_INPUTS_ATS_BREAKERS) {
+                                inputBreakerState.value = BreakerDialogState(
+                                    manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
+                                )
+                                showInputBreakerSecond = true
+                            } else if (type.needsBreakerConfig) {
+                                // ... старая логика ...
                                 inputBreakerState.value = BreakerDialogState(
                                     manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
                                 )
                                 showInputBreakerSecond = true
                             } else if (type == InputType.ATS_BLOCK_TWO_INPUTS) {
+                                // ... логика АВР ...
                                 atsState.value = AtsDialogState(
                                     manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
                                 )
@@ -727,8 +739,14 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         initialSelectedAdditions = st.selectedAdditions,
                         initialSelectedPoles = st.selectedPoles,
                         initialSelectedCurve = st.selectedCurve,
-                        consumerVoltageStr = "400", // Для ввода обычно 3 фазы, или можно брать из параметров щита
-                        onBack = { showInputBreakerSecond = false; showInputTypeDialog = true },
+                        consumerVoltageStr = "400",
+                        onBack = { showInputBreakerSecond = false;
+                            if (selectedInputType == InputType.ONE_INPUT_BREAKER) {
+                                showInputParamsWindow = true
+                            } else {
+                                showInputTypeDialog = true
+                            }
+                        },
                         onDismiss = { showInputBreakerSecond = false },
                         onConfirm = { result ->
                             inputBreakerState.value = BreakerDialogState(
@@ -759,46 +777,38 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         onBack = { showInputBreakerThird = false; showInputBreakerSecond = true },
                         onDismiss = { showInputBreakerThird = false },
                         onChoose = { resultFromWindow ->
-                            // resultFromWindow приходит в формате: Модель \n Кривая Ток \n Дополнения
-
-                            // Исправляем пробел в токе (как делали ранее)
                             val correctedDeviceStr = resultFromWindow.replace(Regex("(\\d)\\sA"), "$1A")
-
-                            // Формируем итоговую строку для ячейки ввода
                             val header = selectedInputType?.title ?: "Ввод"
+                            var paramsInfo = ""
+                            if (selectedInputType == InputType.ONE_INPUT_BREAKER && inputParamsResult != null) {
+                                val (cnt, bypass) = inputParamsResult!!
+                                paramsInfo = "\nВводов: $cnt" + if (bypass) ", Байпас: Да" else ""
+                            }
                             val separator = "---------------------------------"
-
-                            val fullText = "$header\n$separator\n$correctedDeviceStr"
-
+                            val fullText = "$header$paramsInfo\n$separator\n$correctedDeviceStr"
                             data.inputInfo = fullText
                             saveNow()
-
                             showInputBreakerThird = false
                         }
                     )
                 }
 
                 // ====== CENTER: таблица ======
-                // Занимает всё оставшееся вертикальное пространство — высота адаптируется к размеру окна
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .padding(4.dp)
                 ) {
-                    // Column, где верхний блок (table area) растянется по высоте,
-                    // а scrollbar разместится внизу.
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Контейнер таблицы — занимает всё доступное пространство (weight = 1)
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
-                                .padding(horizontal = 6.dp) // Внешний отступ для таблицы
+                                .padding(horizontal = 6.dp)
                                 .border(1.dp, Color.Gray, RoundedCornerShape(6.dp))
-                                .padding(6.dp) // Внутренний отступ
+                                .padding(6.dp)
                         ) {
-                            // Внешняя вертикальная прокрутка для всей таблицы целиком
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -1688,6 +1698,24 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             )
                         }
 
+                        if (showInputParamsWindow) {
+                            InputParamsWindow(
+                                onBack = {
+                                    showInputParamsWindow = false
+                                    showInputTypeDialog = true // Возврат к выбору типа устройства
+                                },
+                                onDismiss = { showInputParamsWindow = false },
+                                onNext = { count, bypass ->
+                                    inputParamsResult = count to bypass
+
+                                    inputBreakerState.value = BreakerDialogState(
+                                        manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
+                                    )
+                                    showInputParamsWindow = false
+                                    showInputBreakerSecond = true
+                                }
+                            )
+                        }
                     }
                 }
             }
