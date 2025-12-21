@@ -350,7 +350,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 }
             }
 
-
             Spacer(Modifier.width(12.dp))
             Text("Щит ID: ${shieldId ?: "-"}", fontSize = 14.sp, color = textColor)
         }

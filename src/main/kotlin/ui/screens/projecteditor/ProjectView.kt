@@ -2,12 +2,10 @@ package ui.screens.projecteditor
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,7 +28,6 @@ import data.ShieldNode
 import data.TransformerNode
 import ui.screens.shieldeditor.ShieldStorage
 import storage.ProjectStorage
-import androidx.compose.ui.graphics.Color
 
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
@@ -56,6 +53,7 @@ fun ProjectView(
     var dragTarget by remember { mutableStateOf<Any?>(null) }
     var nodeDragStartOffset by remember { mutableStateOf(Offset.Zero) }
     var showFileMenu by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -399,78 +397,160 @@ private fun PaletteItem(
 
 @Composable
 private fun NodeNameText(name: String, screenPos: Offset, nodeWidth: Float, nodeHeight: Float) {
+    val density = LocalDensity.current
+
+    // Конвертируем пиксели в Dp
+    val offsetX = with(density) { (screenPos.x - nodeWidth / 2f).toDp() }
+    val offsetY = with(density) { (screenPos.y - nodeHeight / 2f).toDp() }
+    val widthDp = with(density) { nodeWidth.toDp() }
+    val heightDp = with(density) { nodeHeight.toDp() }
+
     Box(
         modifier = Modifier
-            .offset((screenPos.x - nodeWidth / 2f).dp, (screenPos.y - nodeHeight / 2f).dp)
-            .size(width = nodeWidth.dp, height = nodeHeight.dp),
+            .offset(offsetX, offsetY)
+            .size(width = widthDp, height = heightDp),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = name, color = MaterialTheme.colors.onSurface, fontSize = (14 * LocalDensity.current.fontScale).sp, textAlign = TextAlign.Center, softWrap = true)
+        Text(
+            text = name,
+            color = MaterialTheme.colors.onSurface,
+            // fontScale уже учитывается в sp, но для точности можно оставить как есть
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+            softWrap = true
+        )
     }
 }
 
 @Composable
 private fun PowerSourceNameText(name: String, screenPos: Offset, nodeWidth: Float, nodeHeight: Float, scale: Float) {
+    val density = LocalDensity.current
+
+    val offsetX = with(density) { (screenPos.x - nodeWidth / 2f).toDp() }
+    val offsetY = with(density) { (screenPos.y - nodeHeight / 2f - (25 * scale)).toDp() }
+
     Text(
         text = name,
-        modifier = Modifier.offset((screenPos.x - nodeWidth / 2f).dp, (screenPos.y - nodeHeight / 2f - (25 * scale)).dp),
+        modifier = Modifier.offset(offsetX, offsetY),
         color = MaterialTheme.colors.onSurface,
-        fontSize = (14 * LocalDensity.current.fontScale).sp
+        fontSize = 14.sp
     )
 }
 
 @Composable
 private fun TransformerNameText(name: String, screenCenter: Offset, radiusScreen: Float) {
+    val density = LocalDensity.current
+
     val x = screenCenter.x + radiusScreen + 10f
     val y = screenCenter.y - 8f
+
+    // Используем toDp()
+    val offsetX = with(density) { x.toDp() }
+    val offsetY = with(density) { y.toDp() }
+
     Text(
         text = name,
-        modifier = Modifier.offset(x.dp, y.dp),
+        modifier = Modifier.offset(offsetX, offsetY),
         color = MaterialTheme.colors.onSurface,
-        fontSize = (14 * LocalDensity.current.fontScale).sp
+        fontSize = 14.sp
     )
 }
 
 @Composable
 private fun GeneratorNameText(name: String, screenCenter: Offset, radiusScreen: Float) {
+    val density = LocalDensity.current
+
     val x = screenCenter.x + radiusScreen + 10f
     val y = screenCenter.y - 8f
+
+    val offsetX = with(density) { x.toDp() }
+    val offsetY = with(density) { y.toDp() }
+
     Text(
         text = name,
-        modifier = Modifier.offset(x.dp, y.dp),
+        modifier = Modifier.offset(offsetX, offsetY),
         color = MaterialTheme.colors.onSurface,
-        fontSize = (14 * LocalDensity.current.fontScale).sp
+        fontSize = 14.sp
     )
 }
 
-
 @Composable
 private fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (shieldId: Int) -> Unit) {
+    // Получаем текущую плотность экрана для конвертации
+    val density = LocalDensity.current
+
+    // Вычисляем смещение в dp. Конвертируем пиксели (state.contextMenuPosition) в dp.
+    val menuOffset = with(density) {
+        DpOffset(
+            x = state.contextMenuPosition.x.toDp(),
+            y = state.contextMenuPosition.y.toDp()
+        )
+    }
+
     DropdownMenu(
         expanded = state.showNodeContextMenu,
         onDismissRequest = { state.showNodeContextMenu = false },
-        offset = DpOffset(state.contextMenuPosition.x.dp, state.contextMenuPosition.y.dp)
+        offset = menuOffset // Передаем корректное смещение
     ) {
-        DropdownMenuItem(onClick = { state.showRenameDialog = true; state.showNodeContextMenu = false }) { Text("Изменить название") }
-        if (state.selectedNode is ShieldNode) {
-            DropdownMenuItem(onClick = { state.selectedNode?.let { onOpenShield(it.id) }; state.showNodeContextMenu = false }) { Text("Открыть") }
+        DropdownMenuItem(onClick = {
+            state.showRenameDialog = true
+            state.showNodeContextMenu = false
+        }) {
+            Text("Изменить название")
         }
-        DropdownMenuItem(onClick = { state.startConnecting(); state.showNodeContextMenu = false }) { Text("Соединить") }
-        DropdownMenuItem(onClick = { state.deleteSelectedNode(); state.showNodeContextMenu = false }) { Text("Удалить") }
+
+        if (state.selectedNode is ShieldNode) {
+            DropdownMenuItem(onClick = {
+                state.selectedNode?.let { onOpenShield(it.id) }
+                state.showNodeContextMenu = false
+            }) {
+                Text("Открыть")
+            }
+        }
+
+        DropdownMenuItem(onClick = {
+            state.startConnecting()
+            state.showNodeContextMenu = false
+        }) {
+            Text("Соединить")
+        }
+
+        DropdownMenuItem(onClick = {
+            state.deleteSelectedNode()
+            state.showNodeContextMenu = false
+        }) {
+            Text("Удалить")
+        }
     }
 }
 
 @Composable
 private fun CanvasContextMenu(state: ProjectCanvasState) {
+    val density = LocalDensity.current
+
+    // То же самое для меню холста
+    val menuOffset = with(density) {
+        DpOffset(
+            x = state.contextMenuPosition.x.toDp(),
+            y = state.contextMenuPosition.y.toDp()
+        )
+    }
+
     DropdownMenu(
         expanded = state.showCanvasContextMenu,
         onDismissRequest = { state.showCanvasContextMenu = false },
-        offset = DpOffset(state.contextMenuPosition.x.dp, state.contextMenuPosition.y.dp)
+        offset = menuOffset
     ) {
         val worldPos = state.screenToWorld(state.contextMenuPosition)
-        DropdownMenuItem(onClick = { state.addLevelLine(worldPos); state.showCanvasContextMenu = false }) { Text("Добавить уровень") }
+        DropdownMenuItem(onClick = {
+            state.addLevelLine(worldPos)
+            state.showCanvasContextMenu = false
+        }) {
+            Text("Добавить уровень")
+        }
     }
 }
+
 
 @Composable
 private fun RenameNodeDialog(state: ProjectCanvasState) {
