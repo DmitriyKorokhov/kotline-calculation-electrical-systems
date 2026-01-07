@@ -30,6 +30,7 @@ data class AtsSelectionResult(
     val selectedPoles: String?
 )
 
+// АВР
 @Composable
 fun AtsSecondWindow(
     initialManufacturer: String? = null,

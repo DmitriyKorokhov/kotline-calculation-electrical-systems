@@ -33,7 +33,10 @@ fun RcdThirdWindow(
     consumerVoltageStr: String?,
     selectedSeries: String?,
     selectedPoles: String?,
-    selectedResidualCurrent: String?, // Выбранный остаточный ток для фильтрации
+    selectedResidualCurrent: String?,
+    protectionThreshold: Float,
+    protectionFactorLow: Float,
+    protectionFactorHigh: Float,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onChoose: (String) -> Unit
@@ -55,7 +58,7 @@ fun RcdThirdWindow(
                 loading = false
                 return@LaunchedEffect
             }
-            // Запрос к репозиторию УЗО
+            // Загружаем все варианты данного производителя
             val pairs = getRcdVariantsBySeries(selectedSeries)
             items = pairs.map { (model, variant) ->
                 RcdUiItem(
@@ -64,7 +67,7 @@ fun RcdThirdWindow(
                     manufacturer = model.manufacturer,
                     modelName = model.model,
                     ratedCurrentA = variant.ratedCurrent,
-                    polesText = variant.poles.toString(),
+                    polesText = variant.poles,
                     ratedResidualCurrent = variant.ratedResidualCurrent
                 )
             }
@@ -93,20 +96,51 @@ fun RcdThirdWindow(
     }
 
     // --- НОВАЯ ЛОГИКА ГРУППИРОВКИ (по modelName) ---
-    val finalList = remember(passing, consumerA) {
+    val finalList = remember(passing, consumerA, protectionThreshold, protectionFactorLow, protectionFactorHigh) {
         val grouped = passing.groupBy { it.modelName }
         val result = mutableListOf<RcdUiItem>()
 
         for ((_, variants) in grouped) {
-            // Для каждой модели находим минимальный подходящий номинал тока
-            val minCurrent = variants.map { it.ratedCurrentA }.minOrNull()
-            if (minCurrent != null) {
-                val bestVariants = variants.filter { abs(it.ratedCurrentA - minCurrent) < 0.001f }
-                // Убираем дубликаты (если вдруг в базе несколько одинаковых записей)
-                result.addAll(bestVariants.distinctBy { it.ratedResidualCurrent }) // distinct по утечке или полному совпадению
+            // 1. Уникальные доступные номиналы
+            val candidates = variants
+                .map { it.ratedCurrentA }
+                .distinct()
+                .sorted()
+
+            if (candidates.isNotEmpty()) {
+                val firstNominal = candidates[0]
+                var bestCurrent = firstNominal
+
+                if (firstNominal > 0) {
+                    val a = consumerA / firstNominal
+
+                    // Выбираем пороговый коэффициент
+                    val targetK = if (consumerA < protectionThreshold) {
+                        protectionFactorLow
+                    } else {
+                        protectionFactorHigh
+                    }
+
+                    // Если запас мал, берем следующий номинал
+                    if (a >= targetK) {
+                        if (candidates.size > 1) {
+                            bestCurrent = candidates[1]
+                        }
+                    }
+                }
+
+                // 2. Отбираем варианты с лучшим током
+                val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
+
+                // Убираем дубликаты (по току утечки и полюсам, так как Icu тут нет)
+                val unique = bestVariants.distinctBy {
+                    "${it.ratedResidualCurrent}|${it.polesText}"
+                }
+                result.addAll(unique)
             }
         }
-        // Сортируем результат: сначала по току, потом по названию модели
+
+        // Сортировка: ток, затем модель
         result.sortedWith(compareBy<RcdUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
 
@@ -172,7 +206,7 @@ fun RcdThirdWindow(
                                     Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
                                         Text(item.manufacturer, modifier = Modifier.weight(1f))
                                         Text(item.modelName, modifier = Modifier.weight(1f))
-                                        Text("${formatRated(item.ratedCurrentA)}", modifier = Modifier.weight(0.6f))
+                                        Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.6f))
                                         Text(item.ratedResidualCurrent, modifier = Modifier.weight(0.8f))
                                         Text(item.polesText, modifier = Modifier.weight(0.6f))
                                     }

@@ -1,4 +1,4 @@
-package ui.screens.shieldeditor
+package view
 
 object NumberUtils {
     /**

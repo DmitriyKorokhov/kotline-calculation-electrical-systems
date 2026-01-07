@@ -31,6 +31,7 @@ data class AtsUiItem(
     val breakingCapacityVal: Float // числовое значение для сортировки
 )
 
+// АВР
 @Composable
 fun AtsThirdWindow(
     maxShortCircuitCurrentStr: String,
@@ -106,8 +107,6 @@ fun AtsThirdWindow(
                         }
                     }
                 }
-
-                // --- НОВАЯ ЛОГИКА ФИЛЬТРАЦИИ ---
 
                 // 1. Группируем по НАЗВАНИЮ МОДЕЛИ (modelName)
                 val groupedByModel = results.groupBy { it.modelName }

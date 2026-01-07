@@ -53,13 +53,13 @@ fun ProjectView(
     var dragTarget by remember { mutableStateOf<Any?>(null) }
     var nodeDragStartOffset by remember { mutableStateOf(Offset.Zero) }
     var showFileMenu by remember { mutableStateOf(false) }
-    val density = LocalDensity.current
+    LocalDensity.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp) // или 30.dp
+                .height(40.dp)
                 .background(MaterialTheme.colors.surface),
             verticalAlignment = Alignment.CenterVertically
         ) {

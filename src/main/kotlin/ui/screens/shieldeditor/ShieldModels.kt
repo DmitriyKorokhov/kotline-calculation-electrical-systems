@@ -1,4 +1,3 @@
-// ShieldModels.kt
 package ui.screens.shieldeditor
 
 import androidx.compose.runtime.getValue

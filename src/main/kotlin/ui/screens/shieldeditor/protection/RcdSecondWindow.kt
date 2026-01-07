@@ -179,7 +179,7 @@ fun RcdSecondWindow(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // --- Полюса ---
+                // Полюса
                 Text("Количество полюсов", style = MaterialTheme.typography.subtitle2)
                 Spacer(Modifier.height(4.dp))
                 if (polesOptions.isEmpty()) {
@@ -199,7 +199,7 @@ fun RcdSecondWindow(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // --- Остаточный ток ---
+                // Остаточный ток
                 Text("Остаточный ток (Утечка)", style = MaterialTheme.typography.subtitle2)
                 Spacer(Modifier.height(4.dp))
                 if (residualCurrentOptions.isEmpty()) {
@@ -219,7 +219,7 @@ fun RcdSecondWindow(
                 }
                 Spacer(Modifier.height(24.dp))
 
-                // --- Кнопки ---
+                // Кнопки
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onBack) { Text("Назад") }
                     Spacer(Modifier.width(8.dp))

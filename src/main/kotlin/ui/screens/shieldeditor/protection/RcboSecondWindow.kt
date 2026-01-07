@@ -30,7 +30,7 @@ data class RcboSelectionResult(
     val selectedAdditions: List<String>,
     val selectedPoles: String,
     val selectedCurve: String?,
-    val selectedResidualCurrent: String // Новое поле для остаточного тока
+    val selectedResidualCurrent: String // поле для остаточного тока
 )
 
 /**
@@ -210,7 +210,7 @@ fun RcboSecondWindow(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // --- Остаточный ток (Horizontal Radio) ---
+                // Остаточный ток
                 Text("Остаточный ток (Утечка)", style = MaterialTheme.typography.subtitle2)
                 Spacer(Modifier.height(4.dp))
                 if (residualCurrentOptions.isEmpty()) {
@@ -235,7 +235,7 @@ fun RcboSecondWindow(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // --- Полюса (Horizontal Radio) ---
+                // Полюса
                 Text("Количество полюсов", style = MaterialTheme.typography.subtitle2)
                 Spacer(Modifier.height(4.dp))
                 if (polesOptions.isEmpty()) {
@@ -255,7 +255,7 @@ fun RcboSecondWindow(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // --- Кривая (Horizontal Radio) ---
+                // Кривая
                 Text("Кривая отключения", style = MaterialTheme.typography.subtitle2)
                 Spacer(Modifier.height(4.dp))
                 if (curvesOptions.isEmpty()) {
@@ -275,7 +275,7 @@ fun RcboSecondWindow(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // --- Дополнения (Checkboxes) ---
+                // Дополнения
                 Text("Дополнения", style = MaterialTheme.typography.subtitle2)
                 Spacer(Modifier.height(4.dp))
                 if (additionsOptions.isEmpty()) {
@@ -304,7 +304,7 @@ fun RcboSecondWindow(
                 }
                 Spacer(Modifier.height(16.dp))
 
-                // --- Кнопки ---
+                // Кнопки
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onBack) { Text("Назад") }
                     Spacer(Modifier.width(8.dp))

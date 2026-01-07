@@ -43,6 +43,9 @@ fun RcboThirdWindow(
     selectedAdditions: List<String>,
     selectedCurve: String?,
     selectedResidualCurrent: String?,
+    protectionThreshold: Float,
+    protectionFactorLow: Float,
+    protectionFactorHigh: Float,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onChoose: (String) -> Unit
@@ -117,18 +120,46 @@ fun RcboThirdWindow(
         items.filter { passesAll(it) }
     }
 
-    val finalList = remember(passing, consumerA) {
+    // --- НОВАЯ ЛОГИКА СОРТИРОВКИ ---
+    val finalList = remember(passing, consumerA, protectionThreshold, protectionFactorLow, protectionFactorHigh) {
         val grouped = passing.groupBy { it.modelName }
         val result = mutableListOf<RcboUiItem>()
 
         for ((_, variants) in grouped) {
-            val bestCurrent = variants.map { it.ratedCurrentA }.minOrNull()
-            if (bestCurrent != null) {
+            // 1. Собираем список уникальных номиналов токов для данной модели
+            // (уже отфильтрованных, так что все они >= consumerA)
+            val candidates = variants
+                .map { it.ratedCurrentA }
+                .distinct()
+                .sorted()
+
+            if (candidates.isNotEmpty()) {
+                val firstNominal = candidates[0]
+                var bestCurrent = firstNominal
+
+                if (firstNominal > 0) {
+                    val a = consumerA / firstNominal
+
+                    // Выбираем пороговый коэффициент
+                    val targetK = if (consumerA < protectionThreshold) {
+                        protectionFactorLow
+                    } else {
+                        protectionFactorHigh
+                    }
+
+                    // Если "a" больше или равно targetK (запас мал), пробуем взять следующий номинал
+                    if (a >= targetK) {
+                        if (candidates.size > 1) {
+                            bestCurrent = candidates[1]
+                        }
+                    }
+                }
+
+                // 2. Выбираем варианты с найденным лучшим током
                 val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
 
-                // --- ИСПРАВЛЕНИЕ: Фильтрация дубликатов по ВСЕМ визуальным полям ---
+                // Фильтрация дубликатов по визуальным полям
                 val uniqueVisuals = bestVariants.distinctBy {
-                    // Создаем уникальный ключ из всех параметров, которые видит пользователь
                     dataClassKey(
                         it.ratedCurrentA,
                         it.ratedResidualCurrent,
@@ -140,6 +171,8 @@ fun RcboThirdWindow(
                 result.addAll(uniqueVisuals)
             }
         }
+
+        // Сортировка результата: сначала по току, затем по модели
         result.sortedWith(compareBy<RcboUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
 
@@ -213,8 +246,8 @@ fun RcboThirdWindow(
                                         else
                                             item.serviceBreakingCapacityKa?.toString() ?: "-"
                                         Text(capVal, modifier = Modifier.weight(0.6f))
-                                        if (!selectedCurve.isNullOrBlank()) Text(selectedCurve ?: "-", modifier = Modifier.weight(0.6f))
-                                        Text("${formatRated(item.ratedCurrentA)}", modifier = Modifier.weight(0.6f))
+                                        if (!selectedCurve.isNullOrBlank()) Text(selectedCurve, modifier = Modifier.weight(0.6f))
+                                        Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.6f))
                                         Text(item.ratedResidualCurrent, modifier = Modifier.weight(0.8f))
                                         Text(item.polesText, modifier = Modifier.weight(0.8f))
                                         if (selectedAdditions.isNotEmpty()) {

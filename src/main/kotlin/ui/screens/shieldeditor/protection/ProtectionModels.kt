@@ -10,7 +10,7 @@ enum class ProtectionType {
 }
 
 /**
- * Отображаемое имя (русское) для каждого типа.
+ * Отображаемое имя для каждого типа.
  */
 fun ProtectionType.displayName(): String = when (this) {
     ProtectionType.CIRCUIT_BREAKER -> "Автоматический выключатель"

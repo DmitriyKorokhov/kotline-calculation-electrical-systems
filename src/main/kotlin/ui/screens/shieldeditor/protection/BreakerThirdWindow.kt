@@ -41,6 +41,9 @@ fun BreakerThirdWindow(
     selectedPoles: String?,
     selectedAdditions: List<String>,
     selectedCurve: String?,
+    protectionThreshold: Float,   // Порог тока
+    protectionFactorLow: Float,   // Коэфф. если I < Порога
+    protectionFactorHigh: Float,  // Коэфф. если I >= Порога
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onChoose: (String) -> Unit
@@ -113,17 +116,50 @@ fun BreakerThirdWindow(
         items.filter { passesAll(it) }
     }
 
-    // --- НОВАЯ ЛОГИКА: Группируем по названию модели ---
-    val finalList = remember(passing, consumerA) {
+    // Группируем по названию модели ---
+    val finalList = remember(passing, consumerA, protectionThreshold, protectionFactorLow, protectionFactorHigh) {
         val groupedByModel = passing.groupBy { it.modelName }
         val result = mutableListOf<BreakerUiItem>()
 
         for ((_, variants) in groupedByModel) {
-            // Для каждой модели находим минимальный подходящий ток
-            val bestCurrent = variants.map { it.ratedCurrentA }.minOrNull()
-            if (bestCurrent != null) {
+            // 1. Собираем все доступные номиналы для этой модели (уже отфильтрованные >= consumerA)
+            //    Сортируем их по возрастанию.
+            val candidates = variants
+                .map { it.ratedCurrentA }
+                .distinct()
+                .sorted()
+
+            if (candidates.isNotEmpty()) {
+                val firstNominal = candidates[0]
+                var bestCurrent = firstNominal
+
+                // Проверяем условие "Коэффициент запаса" только если номинал не 0
+                if (firstNominal > 0) {
+                    val a = consumerA / firstNominal
+
+                    // Выбираем пороговый коэффициент
+                    val targetK = if (consumerA < protectionThreshold) {
+                        protectionFactorLow
+                    } else {
+                        protectionFactorHigh
+                    }
+
+                    // Если "a" слишком большой (близко к пределу), берем следующий номинал
+                    if (a >= targetK) {
+                        // Пытаемся взять второй по счету номинал
+                        if (candidates.size > 1) {
+                            bestCurrent = candidates[1]
+                        }
+                        // Если второго нет, bestCurrent остается firstNominal
+                    } else {
+                        // Иначе берем первый (уже присвоено)
+                        bestCurrent = firstNominal
+                    }
+                }
+
+                // Теперь отбираем все варианты этой модели, соответствующие найденному bestCurrent
                 val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
-                // Убираем дубликаты по breakingCapacity (если вдруг несколько одинаковых записей)
+                // Убираем полные дубликаты
                 result.addAll(bestVariants.distinctBy { it.breakingCapacityKa })
             }
         }
@@ -210,7 +246,7 @@ fun BreakerThirdWindow(
                                             item.serviceBreakingCapacityKa?.toString() ?: "-"
                                         Text(capVal, modifier = Modifier.weight(0.9f))
                                         if (!selectedCurve.isNullOrBlank()) Text(selectedCurve, modifier = Modifier.weight(0.7f))
-                                        Text("${formatRated(item.ratedCurrentA)}", modifier = Modifier.weight(0.7f))
+                                        Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.7f))
                                         Text(item.polesText, modifier = Modifier.weight(0.8f))
                                         if (selectedAdditions.isNotEmpty()) {
                                             val itemExtras = parseExtrasFromAdditions(item.additionsRaw).map { it.trim() }

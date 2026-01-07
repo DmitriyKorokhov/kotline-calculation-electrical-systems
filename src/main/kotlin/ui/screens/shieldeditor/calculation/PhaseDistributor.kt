@@ -1,5 +1,8 @@
-package ui.screens.shieldeditor
+package ui.screens.shieldeditor.calculation
 
+import ui.screens.shieldeditor.ConsumerModel
+import ui.screens.shieldeditor.ShieldData
+import view.NumberUtils
 import kotlin.math.abs
 
 /**

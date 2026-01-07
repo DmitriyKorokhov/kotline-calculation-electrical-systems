@@ -33,12 +33,6 @@ data class BreakerSelectionResult(
 
 /**
  * Второе окно — выбор параметров Автоматического выключателя.
- *
- * Новые параметры:
- * - initialManufacturer: если задано, подгрузим только серии этого производителя;
- * - initialSelectedAdditions / initialSelectedPoles / initialSelectedCurve — начальный выбор, чтобы при возврате он сохранялся.
- *
- * @param consumerVoltageStr напряжение потребителя ("230" или "400" или "230V" и т.п.)
  */
 @Composable
 fun BreakerSecondWindow(

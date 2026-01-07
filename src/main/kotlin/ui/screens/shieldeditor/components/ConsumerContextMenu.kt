@@ -1,4 +1,4 @@
-package ui.screens.shieldeditor
+package ui.screens.shieldeditor.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*

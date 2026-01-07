@@ -31,6 +31,15 @@ class ShieldData(
     var totalCurrent by mutableStateOf("0.0")        // Ток
     var shieldDemandFactor by mutableStateOf("0.0")  // Коэф.спросащита
 
+    // Новое поле для чекбокса "Наличие защиты от перегрузки"
+    var hasOverloadProtection by mutableStateOf(false)
+
+    // Порог расчетного тока (по умолчанию 40)
+    var protectionCurrentThreshold by mutableStateOf("40")
+    // Коэффициент для тока < 40А (по умолчанию 0.87)
+    var protectionFactorLow by mutableStateOf("0.87")
+    // Коэффициент для тока >= 40А (по умолчанию 0.93)
+    var protectionFactorHigh by mutableStateOf("0.93")
 }
 
 object ShieldStorage {
