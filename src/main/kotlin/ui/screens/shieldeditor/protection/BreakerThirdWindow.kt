@@ -11,8 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import data.repository.getVariantsBySeries
 import data.repository.parseCurveFromAdditions
 import data.repository.parseExtrasFromAdditions
@@ -31,6 +29,10 @@ data class BreakerUiItem(
     val curve: String?
 )
 
+/**
+ * Список подходящих автоматов (Шаг 2).
+ * Адаптировано для встраивания в ProtectionSelectionWindow.
+ */
 @Composable
 fun BreakerThirdWindow(
     maxShortCircuitCurrentStr: String,
@@ -41,9 +43,9 @@ fun BreakerThirdWindow(
     selectedPoles: String?,
     selectedAdditions: List<String>,
     selectedCurve: String?,
-    protectionThreshold: Float,   // Порог тока
-    protectionFactorLow: Float,   // Коэфф. если I < Порога
-    protectionFactorHigh: Float,  // Коэфф. если I >= Порога
+    protectionThreshold: Float,
+    protectionFactorLow: Float,
+    protectionFactorHigh: Float,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
     onChoose: (String) -> Unit
@@ -88,7 +90,7 @@ fun BreakerThirdWindow(
         }
     }
 
-    // Фильтрация по всем условиям
+    // Логика фильтрации и сортировки (полностью сохранена)
     fun passesAll(item: BreakerUiItem): Boolean {
         val passKZ = if (standard.contains("60898", ignoreCase = true)) {
             (item.breakingCapacityKa ?: 0f) >= maxKA
@@ -97,6 +99,7 @@ fun BreakerThirdWindow(
         }
         if (!passKZ) return false
         if (item.ratedCurrentA < consumerA) return false
+
         if (!selectedPoles.isNullOrBlank()) {
             if (item.polesText.split(",").map { it.trim() }.none { it == selectedPoles }) return false
         }
@@ -111,179 +114,127 @@ fun BreakerThirdWindow(
         return true
     }
 
-    // Подходящие варианты
     val passing = remember(items, maxKA, consumerA, selectedPoles, selectedCurve, selectedAdditions) {
         items.filter { passesAll(it) }
     }
 
-    // Группируем по названию модели ---
     val finalList = remember(passing, consumerA, protectionThreshold, protectionFactorLow, protectionFactorHigh) {
         val groupedByModel = passing.groupBy { it.modelName }
         val result = mutableListOf<BreakerUiItem>()
 
         for ((_, variants) in groupedByModel) {
-            // 1. Собираем все доступные номиналы для этой модели (уже отфильтрованные >= consumerA)
-            //    Сортируем их по возрастанию.
-            val candidates = variants
-                .map { it.ratedCurrentA }
-                .distinct()
-                .sorted()
-
+            val candidates = variants.map { it.ratedCurrentA }.distinct().sorted()
             if (candidates.isNotEmpty()) {
                 val firstNominal = candidates[0]
                 var bestCurrent = firstNominal
-
-                // Проверяем условие "Коэффициент запаса" только если номинал не 0
                 if (firstNominal > 0) {
                     val a = consumerA / firstNominal
-
-                    // Выбираем пороговый коэффициент
-                    val targetK = if (consumerA < protectionThreshold) {
-                        protectionFactorLow
-                    } else {
-                        protectionFactorHigh
-                    }
-
-                    // Если "a" слишком большой (близко к пределу), берем следующий номинал
+                    val targetK = if (consumerA < protectionThreshold) protectionFactorLow else protectionFactorHigh
                     if (a >= targetK) {
-                        // Пытаемся взять второй по счету номинал
                         if (candidates.size > 1) {
                             bestCurrent = candidates[1]
+                        } else {
+                            bestCurrent = firstNominal
                         }
-                        // Если второго нет, bestCurrent остается firstNominal
-                    } else {
-                        // Иначе берем первый (уже присвоено)
-                        bestCurrent = firstNominal
                     }
                 }
-
-                // Теперь отбираем все варианты этой модели, соответствующие найденному bestCurrent
                 val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
-                // Убираем полные дубликаты
                 result.addAll(bestVariants.distinctBy { it.breakingCapacityKa })
             }
         }
-
-        // Сортируем результат: сначала по току, потом по названию модели
         result.sortedWith(compareBy<BreakerUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
 
-    Popup(alignment = Alignment.Center, properties = PopupProperties(focusable = false)) {
-        Card(
-            modifier = Modifier
-                .widthIn(min = 420.dp, max = 900.dp)
-                .heightIn(min = 240.dp, max = 560.dp)
-                .padding(12.dp),
-            elevation = 8.dp,
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("Подбор автоматов — подходящие варианты", style = MaterialTheme.typography.h6)
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Серия: ${selectedSeries ?: "—"}")
-                    Spacer(Modifier.width(12.dp))
-                    Text("Макс. ток КЗ: ${maxShortCircuitCurrentStr.ifBlank { "—" }} кА")
-                    Spacer(Modifier.width(12.dp))
-                    Text("Iрасч: ${consumerCurrentAStr.ifBlank { "—" }} A")
-                    Spacer(Modifier.weight(1f))
-                    Text("U: ${consumerVoltageStr ?: "—"}")
+    // UI Content
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        Text("Подбор автоматов — подходящие варианты", style = MaterialTheme.typography.h6)
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Серия: ${selectedSeries ?: "—"}")
+            Spacer(Modifier.width(12.dp))
+            Text("Iрасч: ${consumerCurrentAStr.ifBlank { "—" }} A")
+            Spacer(Modifier.weight(1f))
+            Text("U: ${consumerVoltageStr ?: "—"}")
+        }
+        Spacer(Modifier.height(8.dp))
+
+        if (loading) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (errorMsg != null) {
+            Text("Ошибка: $errorMsg", color = MaterialTheme.colors.error)
+        } else {
+            if (finalList.isEmpty()) {
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Text("Нет подходящих автоматов (по всем параметрам).", color = MaterialTheme.colors.onSurface)
                 }
+            } else {
+                // Заголовки таблицы
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Text("Производитель", modifier = Modifier.weight(1f))
+                    Text("Модель", modifier = Modifier.weight(1f))
+                    Text("U (В)", modifier = Modifier.weight(0.7f))
+                    Text(if (standard.contains("60898", ignoreCase = true)) "Icn, кА" else "Ics, кА", modifier = Modifier.weight(0.9f))
+                    if (!selectedCurve.isNullOrBlank()) Text("Кривая", modifier = Modifier.weight(0.7f))
+                    Text("In, A", modifier = Modifier.weight(0.7f))
+                    Text("Полюса", modifier = Modifier.weight(0.8f))
+                }
+                Divider()
 
-                Spacer(Modifier.height(8.dp))
+                LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    items(finalList, key = { it.variantId }) { item ->
+                        val isSelected = item.variantId == selectedVariantId
+                        val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
+                        val borderModifier = if (isSelected)
+                            Modifier.border(2.dp, MaterialTheme.colors.primary, RoundedCornerShape(6.dp))
+                        else Modifier
 
-                if (loading) {
-                    Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (errorMsg != null) {
-                    Text("Ошибка: $errorMsg", color = MaterialTheme.colors.error)
-                } else {
-                    if (finalList.isEmpty()) {
-                        Text("Нет подходящих автоматов (по всем параметрам).", color = MaterialTheme.colors.onSurface)
-                    } else {
-                        // Заголовки таблицы
-                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                            Text("Производитель", modifier = Modifier.weight(1f))
-                            Text("Модель", modifier = Modifier.weight(1f))
-                            Text("U (В)", modifier = Modifier.weight(0.7f))
-                            Text(
-                                if (standard.contains("60898", ignoreCase = true)) "Icn, кА" else "Ics, кА",
-                                modifier = Modifier.weight(0.9f)
-                            )
-                            if (!selectedCurve.isNullOrBlank()) Text("Кривая", modifier = Modifier.weight(0.7f))
-                            Text("In, A", modifier = Modifier.weight(0.7f))
-                            Text("Полюса", modifier = Modifier.weight(0.8f))
-                            if (selectedAdditions.isNotEmpty()) Text("Дополн.", modifier = Modifier.weight(1f))
-                        }
-                        Divider()
-
-                        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
-                            items(finalList, key = { it.variantId }) { item ->
-                                val isSelected = item.variantId == selectedVariantId
-                                val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
-                                val borderModifier = if (isSelected)
-                                    Modifier.border(2.dp, MaterialTheme.colors.primary, RoundedCornerShape(6.dp))
-                                else
-                                    Modifier
-
-                                Card(
-                                    elevation = 2.dp,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .then(borderModifier)
-                                        .clickable { selectedVariantId = item.variantId },
-                                    backgroundColor = bg
-                                ) {
-                                    Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                                        Text(item.manufacturer, modifier = Modifier.weight(1f))
-                                        Text(item.modelName, modifier = Modifier.weight(1f))
-                                        Text(consumerVoltageStr ?: "-", modifier = Modifier.weight(0.7f))
-                                        val capVal = if (standard.contains("60898", ignoreCase = true))
-                                            item.breakingCapacityKa?.toString() ?: "-"
-                                        else
-                                            item.serviceBreakingCapacityKa?.toString() ?: "-"
-                                        Text(capVal, modifier = Modifier.weight(0.9f))
-                                        if (!selectedCurve.isNullOrBlank()) Text(selectedCurve, modifier = Modifier.weight(0.7f))
-                                        Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.7f))
-                                        Text(item.polesText, modifier = Modifier.weight(0.8f))
-                                        if (selectedAdditions.isNotEmpty()) {
-                                            val itemExtras = parseExtrasFromAdditions(item.additionsRaw).map { it.trim() }
-                                            val shown = selectedAdditions.filter { it in itemExtras }
-                                            Text(shown.joinToString(", "), modifier = Modifier.weight(1f))
-                                        }
-                                    }
-                                }
+                        Card(
+                            elevation = 2.dp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .then(borderModifier)
+                                .clickable { selectedVariantId = item.variantId },
+                            backgroundColor = bg
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                                Text(item.manufacturer, modifier = Modifier.weight(1f))
+                                Text(item.modelName, modifier = Modifier.weight(1f))
+                                Text(consumerVoltageStr ?: "-", modifier = Modifier.weight(0.7f))
+                                val capVal = if (standard.contains("60898", ignoreCase = true))
+                                    item.breakingCapacityKa?.toString() ?: "-"
+                                else item.serviceBreakingCapacityKa?.toString() ?: "-"
+                                Text(capVal, modifier = Modifier.weight(0.9f))
+                                if (!selectedCurve.isNullOrBlank()) Text(selectedCurve, modifier = Modifier.weight(0.7f))
+                                Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.7f))
+                                Text(item.polesText, modifier = Modifier.weight(0.8f))
                             }
                         }
                     }
                 }
-
-                Spacer(Modifier.height(12.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { onBack() }) { Text("Назад") }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { onDismiss() }) { Text("Отмена") }
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = {
-                        val chosen = finalList.firstOrNull { it.variantId == selectedVariantId }
-                        if (chosen == null) return@Button
-
-                        val curveText = selectedCurve ?: chosen.curve ?: ""
-                        val ratedText = "${formatRated(chosen.ratedCurrentA)} A"
-                        val line1 = chosen.modelName
-                        val line2 = if (curveText.isNotBlank()) "$curveText $ratedText" else ratedText
-                        val itemExtras = parseExtrasFromAdditions(chosen.additionsRaw).map { it.trim() }
-                        val shownAdd = selectedAdditions.filter { it in itemExtras }
-                        val line3 = if (shownAdd.isNotEmpty()) shownAdd.joinToString(", ") else ""
-
-                        val resultString = listOf(line1, line2, line3).filter { it.isNotBlank() }.joinToString("\n")
-                        onChoose(resultString)
-                    }) { Text("Выбрать") }
-                }
             }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = { onBack() }) { Text("Назад к параметрам") }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = {
+                val chosen = finalList.firstOrNull { it.variantId == selectedVariantId }
+                if (chosen != null) {
+                    val curveText = selectedCurve ?: chosen.curve ?: ""
+                    val ratedText = "${formatRated(chosen.ratedCurrentA)} A"
+                    val line1 = chosen.modelName
+                    val line2 = if (curveText.isNotBlank()) "$curveText $ratedText" else ratedText
+                    val itemExtras = parseExtrasFromAdditions(chosen.additionsRaw).map { it.trim() }
+                    val shownAdd = selectedAdditions.filter { it in itemExtras }
+                    val line3 = if (shownAdd.isNotEmpty()) shownAdd.joinToString(", ") else ""
+                    val resultString = listOf(line1, line2, line3).filter { it.isNotBlank() }.joinToString("\n")
+                    onChoose(resultString)
+                }
+            }) { Text("Выбрать") }
         }
     }
 }

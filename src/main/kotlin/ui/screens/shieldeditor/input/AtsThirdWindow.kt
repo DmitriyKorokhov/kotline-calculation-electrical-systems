@@ -1,4 +1,4 @@
-package ui.screens.shieldeditor.protection
+package ui.screens.shieldeditor.input
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +18,7 @@ import data.database.AtsVariants
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
+import kotlin.collections.iterator
 import kotlin.math.abs
 
 data class AtsUiItem(

@@ -22,6 +22,8 @@ import ui.screens.shieldeditor.components.topbar.CalculationWindow
 import ui.screens.shieldeditor.dialogs.AddConsumerDialog
 import ui.screens.shieldeditor.dialogs.AtsDialogState
 import ui.screens.shieldeditor.exporter.ExportEditor
+import ui.screens.shieldeditor.input.AtsSecondWindow
+import ui.screens.shieldeditor.input.AtsThirdWindow
 import ui.screens.shieldeditor.input.InputParamsWindow
 import ui.screens.shieldeditor.input.InputType
 import ui.screens.shieldeditor.input.InputTypePopup
@@ -62,12 +64,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
     // Когда пользователь кликает по ячейке -> показываем первый popup (там у вас protectionDialogForIndex)
     var protectionDialogForIndex by remember { mutableStateOf<Int?>(null) }
-    var showBreakerSecondWindow by remember { mutableStateOf(false) }
-    var showBreakerThirdWindow by remember { mutableStateOf(false) }
-    var breakerDialogConsumerIndex by remember { mutableStateOf<Int?>(null) }
-
-    var showRcboSecondWindow by remember { mutableStateOf(false) }
-    var showRcboThirdWindow by remember { mutableStateOf(false) }
 
     var showAtsSecondWindow by remember { mutableStateOf(false) }
     var showAtsThirdWindow by remember { mutableStateOf(false) }
@@ -83,35 +79,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
         val selectedPoles: String? = null,
         val selectedCurve: String? = null
     )
-
-    data class RcboDialogState(
-        val manufacturer: String? = null,
-        val series: String? = null,
-        val selectedAdditions: List<String> = emptyList(),
-        val selectedPoles: String? = null,
-        val selectedCurve: String? = null,
-        val selectedResidualCurrent: String? = null
-    )
-
-    data class RcdDialogState(
-        val manufacturer: String? = null,
-        val series: String? = null,
-        val selectedPoles: String? = null,
-        val selectedResidualCurrent: String? = null
-    )
-    var isComboMode by remember { mutableStateOf(false) }
-
-    val rcdDialogState = remember { mutableStateMapOf<Int, RcdDialogState>() }
-
-    var showRcdSecondWindow by remember { mutableStateOf(false) }
-    var showRcdThirdWindow by remember { mutableStateOf(false) }
-
-    var tempBreakerResult by remember { mutableStateOf<String?>(null) }
-
-    val rcboDialogState = remember { mutableStateMapOf<Int, RcboDialogState>() }
-
-    // map: индекс потребителя -> состояние выбора (если null — параметров ещё не задавали)
-    val breakerDialogState = remember { mutableStateMapOf<Int, BreakerDialogState>() }
 
     // Буфер для копирования выбранных потребителей
     val copiedConsumers = remember { mutableStateListOf<ConsumerModel>() }
@@ -385,231 +352,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             )
                         }
 
-                        // Если protectionDialogForIndex != null, показываем окно выбора
-                        if (protectionDialogForIndex != null) {
-                            val idx = protectionDialogForIndex!!
-                            val consumer = data.consumers.getOrNull(idx)
-
-                            val initial = protectionTypeFromString(consumer?.protectionDevice)
-
-                            ProtectionChooserPopup(
-                                initial = initial,
-                                onDismissRequest = { protectionDialogForIndex = null },
-                                onConfirm = { selected ->
-                                    protectionDialogForIndex = null
-                                    breakerDialogConsumerIndex = idx
-
-                                    val manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
-                                    val prev = breakerDialogState[idx]
-                                    if (prev == null) {
-                                        breakerDialogState[idx] = BreakerDialogState(manufacturer = manufacturer)
-                                    } else {
-                                        breakerDialogState[idx] =
-                                            prev.copy(manufacturer = manufacturer ?: prev.manufacturer)
-                                    }
-
-                                    when (selected) {
-                                        ProtectionType.CIRCUIT_BREAKER -> {
-                                            isComboMode = false
-                                            showBreakerSecondWindow = true
-                                        }
-
-                                        ProtectionType.DIFF_CURRENT_BREAKER -> {
-                                            isComboMode = false // Сбрасываем флаг
-                                            showRcboSecondWindow = true
-                                        }
-
-                                        ProtectionType.CIRCUIT_BREAKER_AND_RCD -> {
-                                            isComboMode = true
-                                            tempBreakerResult = null
-                                            showBreakerSecondWindow = true
-                                        }
-                                    }
-                                }
-                            )
-                        }
-
-                        if (showBreakerSecondWindow) {
-                            val idx = breakerDialogConsumerIndex
-                            val consumer = idx?.let { data.consumers.getOrNull(it) }
-                            val st = idx?.let { breakerDialogState[it] }
-
-                            BreakerSecondWindow(
-                                initialManufacturer = st?.manufacturer
-                                    ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
-                                initialSeries = st?.series,
-                                initialSelectedAdditions = st?.selectedAdditions ?: emptyList(),
-                                initialSelectedPoles = st?.selectedPoles,
-                                initialSelectedCurve = st?.selectedCurve,
-                                consumerVoltageStr = consumer?.voltage,
-                                onBack = {
-                                    showBreakerSecondWindow = false
-                                    protectionDialogForIndex = idx
-                                },
-                                onDismiss = {
-                                    showBreakerSecondWindow = false
-                                    breakerDialogConsumerIndex = null
-                                },
-                                onConfirm = { result ->
-                                    idx?.let {
-                                        breakerDialogState[it] = BreakerDialogState(
-                                            manufacturer = st?.manufacturer
-                                                ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
-                                            series = result.series,
-                                            selectedAdditions = result.selectedAdditions,
-                                            selectedPoles = result.selectedPoles,
-                                            selectedCurve = result.selectedCurve
-                                        )
-                                    }
-
-                                    // переходим в 3-е окно
-                                    showBreakerSecondWindow = false
-                                    showBreakerThirdWindow = true
-                                }
-                            )
-                        }
-
-                        if (showRcboSecondWindow) {
-                            val idx = breakerDialogConsumerIndex
-                            val consumer = idx?.let { data.consumers.getOrNull(it) }
-                            val st = idx?.let { rcboDialogState[it] }
-                            RcboSecondWindow(
-                                initialManufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() },
-                                consumerVoltageStr = consumer?.voltage,
-                                onBack = {
-                                    showRcboSecondWindow = false
-                                    protectionDialogForIndex = idx // Вернуться к выбору типа
-                                },
-                                onDismiss = {
-                                    showRcboSecondWindow = false
-                                    breakerDialogConsumerIndex = null
-                                },
-                                onConfirm = { result ->
-                                    idx?.let {
-                                        rcboDialogState[it] = RcboDialogState(
-                                            manufacturer = st?.manufacturer
-                                                ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
-                                            series = result.series,
-                                            selectedAdditions = result.selectedAdditions,
-                                            selectedPoles = result.selectedPoles,
-                                            selectedCurve = result.selectedCurve,
-                                            selectedResidualCurrent = result.selectedResidualCurrent
-                                        )
-                                    }
-                                    showRcboSecondWindow = false
-                                    showRcboThirdWindow = true
-                                }
-                            )
-                        }
-
-                        if (showBreakerThirdWindow) {
-                            val idx = breakerDialogConsumerIndex
-                            if (idx != null) {
-                                val consumer = data.consumers.getOrNull(idx)
-                                val state = breakerDialogState[idx] ?: BreakerDialogState()
-
-                                if (consumer != null) {
-                                    BreakerThirdWindow(
-                                        maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
-                                        standard = data.protectionStandard,
-                                        consumerCurrentAStr = consumer.currentA,
-                                        consumerVoltageStr = consumer.voltage,
-                                        selectedSeries = state.series,
-                                        selectedPoles = state.selectedPoles,
-                                        selectedAdditions = state.selectedAdditions, // Список строк-дополнений
-                                        selectedCurve = state.selectedCurve,
-                                        protectionThreshold = data.protectionCurrentThreshold.toFloatOrNull() ?: 40f,
-                                        protectionFactorLow = data.protectionFactorLow.toFloatOrNull() ?: 0.87f,
-                                        protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
-                                        onBack = {
-                                            showBreakerThirdWindow = false
-                                            showBreakerSecondWindow = true
-                                        },
-                                        onDismiss = {
-                                            showBreakerThirdWindow = false
-                                            breakerDialogConsumerIndex = null
-                                        },
-                                        onChoose = { resultFromWindow ->
-                                            val correctedString =
-                                                resultFromWindow.replace(Regex("(\\d)\\sA"), "$1A")
-
-                                            if (isComboMode) {
-                                                tempBreakerResult = correctedString
-
-                                                val manufacturer =
-                                                    data.protectionManufacturer.takeIf { it.isNotBlank() }
-                                                val prevRcd = rcdDialogState[idx]
-                                                if (prevRcd == null) {
-                                                    rcdDialogState[idx] =
-                                                        RcdDialogState(manufacturer = manufacturer)
-                                                } else {
-                                                    rcdDialogState[idx] = prevRcd.copy(
-                                                        manufacturer = manufacturer ?: prevRcd.manufacturer
-                                                    )
-                                                }
-
-                                                showBreakerThirdWindow = false
-                                                showRcdSecondWindow = true
-                                            } else {
-
-                                                consumer.let {
-                                                    it.protectionDevice = correctedString
-                                                    it.protectionPoles = state.selectedPoles ?: ""
-                                                    saveNow()
-                                                }
-                                                showBreakerThirdWindow = false
-                                                breakerDialogConsumerIndex = null
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showRcboThirdWindow) {
-                            val idx = breakerDialogConsumerIndex
-                            if (idx != null) {
-                                val consumer = data.consumers.getOrNull(idx)
-                                val state = rcboDialogState[idx] ?: RcboDialogState()
-
-                                if (consumer != null) {
-                                    RcboThirdWindow(
-                                        maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
-                                        standard = data.protectionStandard,
-                                        consumerCurrentAStr = consumer.currentA,
-                                        consumerVoltageStr = consumer.voltage,
-                                        selectedSeries = state.series,
-                                        selectedPoles = state.selectedPoles,
-                                        selectedAdditions = state.selectedAdditions,
-                                        selectedCurve = state.selectedCurve,
-                                        selectedResidualCurrent = state.selectedResidualCurrent,
-                                        protectionThreshold = data.protectionCurrentThreshold.toFloatOrNull() ?: 40f,
-                                        protectionFactorLow = data.protectionFactorLow.toFloatOrNull() ?: 0.87f,
-                                        protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
-                                        onBack = {
-                                            showRcboThirdWindow = false
-                                            showRcboSecondWindow = true
-                                        },
-                                        onDismiss = {
-                                            showRcboThirdWindow = false
-                                            breakerDialogConsumerIndex = null
-                                        },
-                                        onChoose = { resultFromWindow ->
-                                            val correctedString =
-                                                resultFromWindow.replace(Regex("(\\d)\\sA"), "$1A")
-                                            consumer.let {
-                                                it.protectionDevice = correctedString
-                                                it.protectionPoles = state.selectedPoles ?: ""
-                                                saveNow()
-                                            }
-                                            showRcboThirdWindow = false
-                                            breakerDialogConsumerIndex = null
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
                         if (showAddDialog) {
                             AddConsumerDialog(
                                 onDismiss = { showAddDialog = false },
@@ -637,95 +379,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             )
                         }
 
-                        // --- Окно 2 для УЗО (выбор серии/параметров) ---
-                        if (showRcdSecondWindow) {
-                            val idx = breakerDialogConsumerIndex
-                            val consumer = idx?.let { data.consumers.getOrNull(it) }
-                            val st = idx?.let { rcdDialogState[it] }
-
-                            RcdSecondWindow(
-                                initialManufacturer = st?.manufacturer
-                                    ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
-                                initialSeries = st?.series,
-                                initialSelectedPoles = st?.selectedPoles,
-                                initialSelectedResidualCurrent = st?.selectedResidualCurrent,
-                                consumerVoltageStr = consumer?.voltage,
-                                onBack = {
-                                    // Возврат к выбору автомата (3-е окно)
-                                    showRcdSecondWindow = false
-                                    showBreakerThirdWindow = true
-                                },
-                                onDismiss = {
-                                    showRcdSecondWindow = false
-                                    tempBreakerResult = null
-                                    breakerDialogConsumerIndex = null
-                                },
-                                onConfirm = { result ->
-                                    idx?.let {
-                                        rcdDialogState[it] = RcdDialogState(
-                                            manufacturer = st?.manufacturer
-                                                ?: data.protectionManufacturer.takeIf { it.isNotBlank() },
-                                            series = result.series,
-                                            selectedPoles = result.selectedPoles,
-                                            selectedResidualCurrent = result.selectedResidualCurrent
-                                        )
-                                    }
-                                    showRcdSecondWindow = false
-                                    showRcdThirdWindow = true
-                                }
-                            )
-                        }
-
-                        // --- Окно 3 для УЗО (выбор номинала) ---
-                        if (showRcdThirdWindow) {
-                            val idx = breakerDialogConsumerIndex
-                            if (idx != null) {
-                                val consumer = data.consumers.getOrNull(idx)
-                                val state = rcdDialogState[idx] ?: RcdDialogState()
-
-                                if (consumer != null) {
-                                    RcdThirdWindow(
-                                        consumerCurrentAStr = consumer.currentA,
-                                        consumerVoltageStr = consumer.voltage,
-                                        selectedSeries = state.series,
-                                        selectedPoles = state.selectedPoles,
-                                        selectedResidualCurrent = state.selectedResidualCurrent,
-                                        protectionThreshold = data.protectionCurrentThreshold.toFloatOrNull() ?: 40f,
-                                        protectionFactorLow = data.protectionFactorLow.toFloatOrNull() ?: 0.87f,
-                                        protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
-                                        onBack = {
-                                            showRcdThirdWindow = false
-                                            showRcdSecondWindow = true
-                                        },
-                                        onDismiss = {
-                                            showRcdThirdWindow = false
-                                            tempBreakerResult = null
-                                            breakerDialogConsumerIndex = null
-                                        },
-                                        onChoose = { rcdResultFromWindow ->
-                                            val correctedRcdString =
-                                                rcdResultFromWindow.replace(Regex("(\\d)\\sA"), "$1A")
-
-                                            val breakerPart = tempBreakerResult ?: ""
-
-                                            val combinedResult = "$breakerPart\n\n$correctedRcdString"
-
-                                            consumer.let {
-                                                it.protectionDevice = combinedResult
-                                                it.protectionPoles = state.selectedPoles ?: ""
-                                                saveNow()
-                                            }
-
-                                            showRcdThirdWindow = false
-                                            breakerDialogConsumerIndex = null
-                                            tempBreakerResult = null
-                                            isComboMode = false
-                                        }
-
-                                    )
-                                }
-                            }
-                        }
 
                         // --- Окна АВР ---
                         if (showAtsSecondWindow) {
@@ -804,6 +457,37 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 onSave = { saveNow() },
                 onDismiss = { showCalculationWindow = false }
             )
+        }
+
+        if (protectionDialogForIndex != null) {
+            val idx = protectionDialogForIndex!!
+            val consumer = data.consumers.getOrNull(idx)
+
+            if (consumer != null) {
+                // Определяем начальный тип (если уже выбрано, пытаемся распарсить)
+                val initialType = protectionTypeFromString(consumer.protectionDevice)
+
+                ProtectionSelectionWindow(
+                    data = data,
+                    initialType = initialType,
+                    consumerCurrentAStr = consumer.currentA,
+                    consumerVoltageStr = consumer.voltage,
+                    maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
+                    onDismiss = { protectionDialogForIndex = null },
+                    onSelect = { resultString, poles ->
+                        // Сохраняем результат
+                        val correctedString = resultString.replace(Regex("(\\d)\\sA"), "$1A")
+                        consumer.protectionDevice = correctedString
+                        consumer.protectionPoles = poles
+
+                        // Сброс и сохранение
+                        protectionDialogForIndex = null
+                        saveNow()
+                    }
+                )
+            } else {
+                protectionDialogForIndex = null
+            }
         }
     }
 

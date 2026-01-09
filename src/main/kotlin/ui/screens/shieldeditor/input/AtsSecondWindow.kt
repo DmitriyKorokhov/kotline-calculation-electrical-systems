@@ -1,4 +1,4 @@
-package ui.screens.shieldeditor.protection
+package ui.screens.shieldeditor.input
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -210,7 +211,7 @@ private fun AtsDropdownField(
     enabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var textFieldSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    var textFieldSize by remember { mutableStateOf(Size.Zero) }
 
     Box {
         OutlinedTextField(
