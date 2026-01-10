@@ -146,7 +146,10 @@ fun CalculationWindow(
                 ) {
                     when (selectedTab) {
                         CalculationTab.PROTECTION -> ProtectionSettingsTab(data, onSave)
-                        CalculationTab.CABLES -> CableSettingsTab()
+                        CalculationTab.CABLES -> CableSettingsTab(
+                            data = data,
+                            onSave
+                        )
                     }
                 }
             }

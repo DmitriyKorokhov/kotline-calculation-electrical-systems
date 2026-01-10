@@ -40,6 +40,24 @@ class ShieldData(
     var protectionFactorLow by mutableStateOf("0.87")
     // Коэффициент для тока >= 40А (по умолчанию 0.93)
     var protectionFactorHigh by mutableStateOf("0.93")
+
+    // --- Настройки кабеля ---
+    // Материал проводника: "Copper" или "Aluminum"
+    var cableMaterial by mutableStateOf("Copper")
+
+    // Изоляция: "PVC" (В), "XLPE" (Пв), "Polymer" (П)
+    var cableInsulation by mutableStateOf("PVC")
+
+    // Формирование длины
+    var cableReservePercent by mutableStateOf("25") // Запас %
+    var cableDescentPercent by mutableStateOf("6")  // Опуск %
+    var cableTerminationMeters by mutableStateOf("6") // Разделка, м
+
+    // Падение напряжения
+    var maxVoltageDropPercent by mutableStateOf("5") // Допустимое падение %
+
+    // Температура (будет обновляться автоматически при выборе изоляции, но можно редактировать)
+    var cableTemperature by mutableStateOf("70")
 }
 
 object ShieldStorage {

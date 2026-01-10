@@ -129,6 +129,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         PhaseDistributor.distributePhases(data)
                                         data.consumers.forEach { consumer ->
                                             CableCalculator.calculateCable(consumer, data)
+                                            CableCalculator.calculateVoltageDrop(consumer, data)
                                         }
                                         saveNow()
                                     },

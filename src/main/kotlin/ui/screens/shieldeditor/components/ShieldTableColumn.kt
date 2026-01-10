@@ -416,10 +416,7 @@ fun ShieldTableColumn(
                     CompactOutlinedTextField(
                         label = "Длина, м",
                         value = consumer.cableLength,
-                        onValueChange = {
-                            consumer.cableLength = it
-                            onDataChanged() // Просто сохраняем, длина пока не влияет на сечение (влияет на падение U)
-                        },
+                        onValueChange = { consumer.cableLength = it; onCalculationRequired() },
                         contentPadding = FIELDCONTENTPADDING,
                         fontSizeSp = FIELDFONT,
                         textColor = textColor,
@@ -450,11 +447,11 @@ fun ShieldTableColumn(
                 // Падение напряжения
                 CompactOutlinedTextField(
                     label = "Падение напряжения, В",
-                    value = consumer.voltageDropV,
-                    onValueChange = { consumer.voltageDropV = it; onDataChanged() },
+                    value = consumer.voltageDropV, // Поле результата
+                    onValueChange = {}, // Read-only, так как это результат расчета
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
-                    textColor = textColor,
+                    textColor = textColor, // Можно выделить красным, если есть warning (реализуйте логику цвета выше)
                     focusedBorderColor = borderColor,
                     unfocusedBorderColor = Color.LightGray,
                     modifier = Modifier.fillMaxWidth()
