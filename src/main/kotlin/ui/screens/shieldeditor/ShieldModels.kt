@@ -21,7 +21,8 @@ class ConsumerModel(
     protectionPoles: String = "",
     cableType: String = "",
     layingMethod: String = "",
-    voltageDropV: String = ""
+    voltageDropV: String = "",
+    cableLength: String = ""
 ) {
     var name by mutableStateOf(name)
     var roomNumber by mutableStateOf(roomNumber)
@@ -40,6 +41,7 @@ class ConsumerModel(
     var protectionPoles by mutableStateOf(protectionPoles)
     var cableType by mutableStateOf(cableType)
     var voltageDropV by mutableStateOf(voltageDropV)
+    var cableLength by mutableStateOf(cableLength)
 
     fun deepCopy(): ConsumerModel {
         return ConsumerModel(
@@ -59,7 +61,8 @@ class ConsumerModel(
             protectionPoles = protectionPoles,
             cableType = cableType,
             layingMethod = layingMethod,
-            voltageDropV = voltageDropV
+            voltageDropV = voltageDropV,
+            cableLength = cableLength
         )
     }
 }

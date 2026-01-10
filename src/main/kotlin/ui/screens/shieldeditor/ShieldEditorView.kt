@@ -15,19 +15,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import ui.screens.shieldeditor.calculation.CableCalculator
 import ui.screens.shieldeditor.calculation.CalculationEngine
 import ui.screens.shieldeditor.calculation.PhaseDistributor
 import ui.screens.shieldeditor.components.*
 import ui.screens.shieldeditor.components.topbar.CalculationWindow
 import ui.screens.shieldeditor.dialogs.AddConsumerDialog
-import ui.screens.shieldeditor.dialogs.AtsDialogState
 import ui.screens.shieldeditor.exporter.ExportEditor
-import ui.screens.shieldeditor.input.AtsSecondWindow
-import ui.screens.shieldeditor.input.AtsThirdWindow
-import ui.screens.shieldeditor.input.InputParamsWindow
-import ui.screens.shieldeditor.input.InputType
 import ui.screens.shieldeditor.input.InputTypePopup
-import ui.screens.shieldeditor.protection.*
+import ui.screens.shieldeditor.protection.ProtectionSelectionWindow
+import ui.screens.shieldeditor.protection.protectionTypeFromString
 
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
 private val SCROLLBAR_HEIGHT: Dp = 22.dp
@@ -65,20 +62,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     // Когда пользователь кликает по ячейке -> показываем первый popup (там у вас protectionDialogForIndex)
     var protectionDialogForIndex by remember { mutableStateOf<Int?>(null) }
 
-    var showAtsSecondWindow by remember { mutableStateOf(false) }
-    var showAtsThirdWindow by remember { mutableStateOf(false) }
-
-    val atsState = remember { mutableStateOf(AtsDialogState()) }
-
     var currentSidebarTab by remember { mutableStateOf(SidebarTab.PROJECT) }
-
-    data class BreakerDialogState(
-        val manufacturer: String? = null,
-        val series: String? = null,
-        val selectedAdditions: List<String> = emptyList(),
-        val selectedPoles: String? = null,
-        val selectedCurve: String? = null
-    )
 
     // Буфер для копирования выбранных потребителей
     val copiedConsumers = remember { mutableStateListOf<ConsumerModel>() }
@@ -87,17 +71,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     var showAddDialog by remember { mutableStateOf(false) }
 
     var showInputTypeDialog by remember { mutableStateOf(false) }
-    var selectedInputType by remember { mutableStateOf<InputType?>(null) }
-
-    // Состояния для окон автомата (используем те же переменные для данных, но флаги видимости свои)
-    var showInputBreakerSecond by remember { mutableStateOf(false) }
-    var showInputBreakerThird by remember { mutableStateOf(false) }
-
-    // Временное хранилище параметров автомата ввода
-    val inputBreakerState = remember { mutableStateOf(BreakerDialogState()) }
-
-    var showInputParamsWindow by remember { mutableStateOf(false) }
-    var inputParamsResult by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
 
     var showCalculationWindow by remember { mutableStateOf(false) }
 
@@ -154,6 +127,9 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                     onCalculate = {
                                         CalculationEngine.calculateAll(data)
                                         PhaseDistributor.distributePhases(data)
+                                        data.consumers.forEach { consumer ->
+                                            CableCalculator.calculateCable(consumer, data)
+                                        }
                                         saveNow()
                                     },
                                     onOpenInputTypeDialog = { showInputTypeDialog = true }
@@ -235,7 +211,11 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                     else selectedColumns.add(colIndex)
                                                 },
                                                 onDataChanged = { saveNow() },
-                                                onCalculationRequired = { CalculationEngine.calculateAll(data); saveNow() },
+                                                onCalculationRequired = { CalculationEngine.calculateAll(data)
+                                                    data.consumers.forEach { consumer ->
+                                                        CableCalculator.calculateCable(consumer, data)
+                                                    }
+                                                    saveNow() },
                                                 onOpenProtectionDialog = { protectionDialogForIndex = colIndex }
                                             )
                                         }
@@ -250,105 +230,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                     .fillMaxWidth()
                                     .height(SCROLLBAR_HEIGHT)
                                     .padding(vertical = 6.dp)
-                            )
-
-                            if (showInputTypeDialog) {
-                                InputTypePopup(
-                                    onDismissRequest = { showInputTypeDialog = false },
-                                    onConfirm = { type ->
-                                        selectedInputType = type
-                                        showInputTypeDialog = false
-
-                                        if (type == InputType.ONE_INPUT_BREAKER) {
-                                            showInputParamsWindow = true
-                                        } else if (type == InputType.TWO_INPUTS_ATS_BREAKERS) {
-                                            inputBreakerState.value = BreakerDialogState(
-                                                manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
-                                            )
-                                            showInputBreakerSecond = true
-                                        } else if (type.needsBreakerConfig) {
-                                            inputBreakerState.value = BreakerDialogState(
-                                                manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
-                                            )
-                                            showInputBreakerSecond = true
-                                        } else if (type == InputType.ATS_BLOCK_TWO_INPUTS) {
-                                            atsState.value = AtsDialogState(
-                                                manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
-                                            )
-                                            showAtsSecondWindow = true
-                                        } else {
-                                            data.inputInfo = type.title
-                                            saveNow()
-                                        }
-                                    }
-                                )
-                            }
-
-                            // 2. Второе окно (Серия, Кривая) - ТОЛЬКО для Варианта 4
-                            if (showInputBreakerSecond) {
-                                val st = inputBreakerState.value
-                                BreakerSecondWindow(
-                                    initialManufacturer = st.manufacturer,
-                                    initialSeries = st.series,
-                                    initialSelectedAdditions = st.selectedAdditions,
-                                    initialSelectedPoles = st.selectedPoles,
-                                    initialSelectedCurve = st.selectedCurve,
-                                    consumerVoltageStr = "400",
-                                    onBack = {
-                                        showInputBreakerSecond = false
-                                        if (selectedInputType == InputType.ONE_INPUT_BREAKER) {
-                                            showInputParamsWindow = true
-                                        } else {
-                                            showInputTypeDialog = true
-                                        }
-                                    },
-                                    onDismiss = { showInputBreakerSecond = false },
-                                    onConfirm = { result ->
-                                        inputBreakerState.value = BreakerDialogState(
-                                            manufacturer = data.protectionManufacturer,
-                                            series = result.series,
-                                            selectedAdditions = result.selectedAdditions,
-                                            selectedPoles = result.selectedPoles,
-                                            selectedCurve = result.selectedCurve
-                                        )
-                                        showInputBreakerSecond = false
-                                        showInputBreakerThird = true
-                                    }
-                                )
-                            }
-                        }
-
-                        // 3. Третье окно (Номинал тока) - ТОЛЬКО для Варианта 4
-                        if (showInputBreakerThird) {
-                            val st = inputBreakerState.value
-                            BreakerThirdWindow(
-                                maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
-                                standard = data.protectionStandard,
-                                consumerCurrentAStr = data.totalCurrent, // Ток щита для подбора
-                                consumerVoltageStr = "400",
-                                selectedSeries = st.series,
-                                selectedPoles = st.selectedPoles,
-                                selectedAdditions = st.selectedAdditions,
-                                selectedCurve = st.selectedCurve,
-                                protectionThreshold = data.protectionCurrentThreshold.toFloatOrNull() ?: 40f,
-                                protectionFactorLow = data.protectionFactorLow.toFloatOrNull() ?: 0.87f,
-                                protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
-                                onBack = { showInputBreakerThird = false; showInputBreakerSecond = true },
-                                onDismiss = { showInputBreakerThird = false },
-                                onChoose = { resultFromWindow ->
-                                    val correctedDeviceStr = resultFromWindow.replace(Regex("(\\d)\\sA"), "$1A")
-                                    val header = selectedInputType?.title ?: "Ввод"
-                                    var paramsInfo = ""
-                                    if (selectedInputType == InputType.ONE_INPUT_BREAKER && inputParamsResult != null) {
-                                        val (cnt, bypass) = inputParamsResult!!
-                                        paramsInfo = "\nВводов: $cnt" + if (bypass) ", Байпас: Да" else ""
-                                    }
-                                    val separator = "---------------------------------"
-                                    val fullText = "$header$paramsInfo\n$separator\n$correctedDeviceStr"
-                                    data.inputInfo = fullText
-                                    saveNow()
-                                    showInputBreakerThird = false
-                                }
                             )
                         }
 
@@ -372,77 +253,12 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         selectedColumns.addAll(newIndices)
 
                                         CalculationEngine.calculateAll(data)
+                                        data.consumers.forEach { consumer ->
+                                            CableCalculator.calculateCable(consumer, data)
+                                        }
                                         saveNow()
                                     }
                                     showAddDialog = false
-                                }
-                            )
-                        }
-
-
-                        // --- Окна АВР ---
-                        if (showAtsSecondWindow) {
-                            val st = atsState.value
-                            AtsSecondWindow(
-                                initialManufacturer = st.manufacturer,
-                                initialSeries = st.series,
-                                initialSelectedPoles = st.selectedPoles,
-                                consumerVoltageStr = "400", // АВР обычно на 3 фазы
-                                onBack = {
-                                    showAtsSecondWindow = false
-                                    showInputTypeDialog = true
-                                },
-                                onDismiss = { showAtsSecondWindow = false },
-                                onConfirm = { res ->
-                                    atsState.value = st.copy(
-                                        series = res.series,
-                                        selectedPoles = res.selectedPoles
-                                    )
-                                    showAtsSecondWindow = false
-                                    showAtsThirdWindow = true
-                                }
-                            )
-                        }
-
-                        if (showAtsThirdWindow) {
-                            val st = atsState.value
-                            AtsThirdWindow(
-                                maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
-                                consumerCurrentAStr = data.totalCurrent,
-                                selectedSeries = st.series,
-                                selectedPoles = st.selectedPoles,
-                                onBack = {
-                                    showAtsThirdWindow = false
-                                    showAtsSecondWindow = true
-                                },
-                                onDismiss = { showAtsThirdWindow = false },
-                                onChoose = { resultStr ->
-                                    // Сохраняем результат в ячейку
-                                    val header = selectedInputType?.title ?: "АВР"
-                                    val separator = "---------------------------------"
-                                    val fullText = "$header\n$separator\n$resultStr"
-                                    data.inputInfo = fullText
-                                    saveNow()
-                                    showAtsThirdWindow = false
-                                }
-                            )
-                        }
-
-                        if (showInputParamsWindow) {
-                            InputParamsWindow(
-                                onBack = {
-                                    showInputParamsWindow = false
-                                    showInputTypeDialog = true // Возврат к выбору типа устройства
-                                },
-                                onDismiss = { showInputParamsWindow = false },
-                                onNext = { count, bypass ->
-                                    inputParamsResult = count to bypass
-
-                                    inputBreakerState.value = BreakerDialogState(
-                                        manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
-                                    )
-                                    showInputParamsWindow = false
-                                    showInputBreakerSecond = true
                                 }
                             )
                         }
@@ -479,9 +295,10 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         val correctedString = resultString.replace(Regex("(\\d)\\sA"), "$1A")
                         consumer.protectionDevice = correctedString
                         consumer.protectionPoles = poles
-
                         // Сброс и сохранение
                         protectionDialogForIndex = null
+                        CalculationEngine.calculateAll(data) // Общий пересчет
+                        CableCalculator.calculateCable(consumer, data) // Принудительный пересчет кабеля для этого потребителя
                         saveNow()
                     }
                 )
@@ -489,12 +306,22 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 protectionDialogForIndex = null
             }
         }
-    }
 
+        if (showInputTypeDialog) {
+            InputTypePopup(
+                data = data,
+                onDismissRequest = { showInputTypeDialog = false },
+                onSave = { saveNow() }
+            )
+        }
+    }
 
     // Эффект для автоматического перерасчёта данных щита
     LaunchedEffect(data.consumers.toList(), data.demandFactor, data.simultaneityFactor) {
         CalculationEngine.calculateAll(data)
+        data.consumers.forEach { consumer ->
+            CableCalculator.calculateCable(consumer, data)
+        }
         saveNow()
     }
 }

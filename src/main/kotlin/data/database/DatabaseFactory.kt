@@ -23,7 +23,8 @@ object DatabaseFactory {
                 RcdModels, RcdVariants,
                 RcboModels, RcboVariants,
                 Cables,
-                AtsModels, AtsVariants
+                AtsModels, AtsVariants,
+                CableCurrentRatings
             )
         }
 

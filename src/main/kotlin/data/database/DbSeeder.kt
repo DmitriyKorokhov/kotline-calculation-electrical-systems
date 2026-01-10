@@ -1,10 +1,8 @@
 package data.database
 
 import org.jetbrains.exposed.sql.batchInsert
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.batchInsert
-import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 
 object DbSeeder {
 
@@ -14,6 +12,7 @@ object DbSeeder {
             seedRcds()
             seedRcbos()
             seedCables()
+            seedCableCurrentRatings()
             seedAts()
         }
     }
@@ -222,21 +221,19 @@ object DbSeeder {
             ППГнг(А)
             ППГнг(А)-HF
             ППГнг(А)-FRHF
-            KГВВнг(А)
-            KГВВнг(А)-LS
-            KГВВнг(А)-FRLS
-            КГППнг(А)
-            КГППнг(А)-HF
-            КГППнг(А)-FRHF
         """.trimIndent().lines()
 
         val cables = cableData
             .map { it.trim() }
             .filter { it.isNotEmpty() }
-            .map { DbCable(type = it) }
-
+            .map { typeName ->
+                // Если первая буква "А" (кириллическая), то это Алюминий, иначе Медь.
+                val mat = if (typeName.startsWith("А", ignoreCase = true)) "Al" else "Cu"
+                DbCable(type = typeName, material = mat)
+            }
         Cables.batchInsert(cables) { cable ->
             this[Cables.type] = cable.type
+            this[Cables.material] = cable.material
         }
     }
 
@@ -297,6 +294,57 @@ object DbSeeder {
                 this[AtsVariants.ratedCurrent] = v.ratedCurrent
                 this[AtsVariants.poles] = v.poles
             }
+        }
+    }
+
+    /**
+     * Таблица для кабелей.
+     */
+    private fun seedCableCurrentRatings() {
+        // Медь, Сшитый полиэтилен (Cu, XLPE)
+        val copperXlpeRatings = listOf(
+            DbCableCurrentRating(0, "Cu", "XLPE", 1.5f, 25f, 31f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 2.5f, 34f, 40f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 4.0f, 45f, 52f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 6.0f, 56f, 64f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 10.0f, 78f, 86f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 16.0f, 104f, 112f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 25.0f, 141f, 144f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 35.0f, 172f, 173f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 50.0f, 209f, 205f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 70.0f, 265f, 253f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 95.0f, 327f, 304f),
+            DbCableCurrentRating(0, "Cu", "XLPE", 120.0f, 381f, 347f)
+        )
+        // Медь, ПВХ (Cu, PVC)
+        val copperPvcRatings = listOf(
+            DbCableCurrentRating(0, "Cu", "PVC", 1.5f, 21f, 27f),
+            DbCableCurrentRating(0, "Cu", "PVC", 2.5f, 27f, 36f),
+            DbCableCurrentRating(0, "Cu", "PVC", 4.0f, 36f, 47f),
+            DbCableCurrentRating(0, "Cu", "PVC", 6.0f, 46f, 59f),
+            DbCableCurrentRating(0, "Cu", "PVC", 10.0f, 63f, 79f),
+            DbCableCurrentRating(0, "Cu", "PVC", 16.0f, 84f, 102f),
+            DbCableCurrentRating(0, "Cu", "PVC", 25.0f, 112f, 133f),
+            DbCableCurrentRating(0, "Cu", "PVC", 35.0f, 137f, 158f),
+            DbCableCurrentRating(0, "Cu", "PVC", 50.0f, 167f, 187f),
+            DbCableCurrentRating(0, "Cu", "PVC", 70.0f, 211f, 231f),
+            DbCableCurrentRating(0, "Cu", "PVC", 95.0f, 261f, 279f),
+            DbCableCurrentRating(0, "Cu", "PVC", 120.0f, 302f, 317f)
+        )
+
+        // Объединяем все таблицы
+        val allRatings = mutableListOf<DbCableCurrentRating>().apply {
+            addAll(copperXlpeRatings)
+            addAll(copperPvcRatings)
+        }
+
+        // Вставляем в БД
+        CableCurrentRatings.batchInsert(allRatings) { rating ->
+            this[CableCurrentRatings.material] = rating.material
+            this[CableCurrentRatings.insulation] = rating.insulation
+            this[CableCurrentRatings.crossSection] = rating.crossSection
+            this[CableCurrentRatings.currentInAir] = rating.currentInAir
+            this[CableCurrentRatings.currentInGround] = rating.currentInGround
         }
     }
 

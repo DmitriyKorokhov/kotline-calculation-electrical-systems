@@ -22,10 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
-import java.awt.Cursor
-import kotlin.math.max
-import kotlin.math.roundToInt
 import ui.screens.shieldeditor.ShieldData
+import java.awt.Cursor
+import kotlin.math.roundToInt
 
 @Composable
 fun ProtectionSelectionWindow(
@@ -120,7 +119,7 @@ fun ProtectionSelectionWindow(
                         color = MaterialTheme.colors.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
                     )
-                    ProtectionType.values().forEach { type ->
+                    ProtectionType.entries.forEach { type ->
                         SidebarItem(
                             title = type.displayName(),
                             isSelected = selectedType == type,

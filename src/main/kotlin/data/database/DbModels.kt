@@ -74,7 +74,9 @@ data class DbRcboVariant(
 data class DbCable(
     val id: Int = 0,
     val type: String,
+    val material: String // "Cu" (Медь) или "Al" (Алюминий)
 )
+
 
 /**
  * Data class representing a record in the AtsModels table (АВР).
@@ -95,5 +97,17 @@ data class DbAtsVariant(
     val modelId: Int,
     val ratedCurrent: Float,
     val poles: String
+)
+
+/**
+ * Data class representing a record in the CableCurrentRatings table.
+ */
+data class DbCableCurrentRating(
+    val id: Int = 0,
+    val material: String,      // "Cu" или "Al"
+    val insulation: String,    // "PVC", "HALOGEN_FREE" и т.д.
+    val crossSection: Float,   // Сечение в мм²
+    val currentInAir: Float,   // Ток в воздухе (А)
+    val currentInGround: Float // Ток в земле (А)
 )
 

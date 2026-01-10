@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -17,8 +16,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import data.database.AtsModels
 import data.database.AtsVariants
 import org.jetbrains.exposed.sql.and
@@ -26,21 +23,18 @@ import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
-data class AtsSelectionResult(
-    val series: String?,
-    val selectedPoles: String?
-)
-
-// АВР
+/**
+ * Панель выбора параметров АВР (Производитель, Серия, Полюса).
+ * Встраивается в правую часть InputTypePopup.
+ */
 @Composable
 fun AtsSecondWindow(
     initialManufacturer: String? = null,
     initialSeries: String? = null,
     initialSelectedPoles: String? = null,
     consumerVoltageStr: String? = null,
-    onBack: () -> Unit,
-    onDismiss: () -> Unit,
-    onConfirm: (AtsSelectionResult) -> Unit
+    // ИЗМЕНЕНИЕ: Добавлен аргумент manufacturer в callback
+    onParamsChanged: (manufacturer: String, series: String?, poles: String?) -> Unit
 ) {
     var manufacturer by remember { mutableStateOf(initialManufacturer ?: "") }
     var series by remember { mutableStateOf(initialSeries ?: "") }
@@ -49,6 +43,15 @@ fun AtsSecondWindow(
     var manufacturersList by remember { mutableStateOf(listOf<String>()) }
     var seriesList by remember { mutableStateOf(listOf<String>()) }
     var polesList by remember { mutableStateOf(listOf<String>()) }
+
+    // ИЗМЕНЕНИЕ: Отслеживаем manufacturer и отправляем его наверх
+    LaunchedEffect(manufacturer, series, selectedPoles) {
+        onParamsChanged(
+            manufacturer,
+            series.takeIf { it.isNotBlank() },
+            selectedPoles.takeIf { it.isNotBlank() }
+        )
+    }
 
     // 1. Загрузка производителей
     LaunchedEffect(Unit) {
@@ -71,7 +74,9 @@ fun AtsSecondWindow(
                     .map { it[AtsModels.series] }
                     .sorted()
             }
-            if (series !in seriesList) series = ""
+            if (series !in seriesList && series.isNotBlank()) {
+                series = ""
+            }
         } else {
             seriesList = emptyList()
             series = ""
@@ -97,9 +102,10 @@ fun AtsSecondWindow(
                 }
             }
 
-            if (selectedPoles !in polesList) selectedPoles = ""
+            if (selectedPoles !in polesList && selectedPoles.isNotBlank()) {
+                selectedPoles = ""
+            }
 
-            // Автовыбор полюсов
             if (selectedPoles.isBlank() && polesList.isNotEmpty()) {
                 val isThreePhase = consumerVoltageStr?.contains("380") == true || consumerVoltageStr?.contains("400") == true
                 if (isThreePhase) {
@@ -115,86 +121,55 @@ fun AtsSecondWindow(
         }
     }
 
-    val canProceed = manufacturer.isNotBlank() && series.isNotBlank() && selectedPoles.isNotBlank()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Параметры фильтрации", style = MaterialTheme.typography.subtitle2, color = Color.Gray)
+        Spacer(Modifier.height(8.dp))
 
-    Popup(
-        alignment = Alignment.Center,
-        onDismissRequest = onDismiss,
-        properties = PopupProperties(focusable = true)
-    ) {
-        Card(
-            modifier = Modifier
-                .width(520.dp)
-                .padding(12.dp),
-            elevation = 8.dp,
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Выбор АВР (Шаг 1: Параметры)", style = MaterialTheme.typography.h6)
-                Spacer(Modifier.height(20.dp))
+        // 1. Производитель (фиксированная ширина)
+        Box(modifier = Modifier.width(300.dp)) {
+            AtsDropdownField(
+                label = "Производитель",
+                value = manufacturer,
+                options = manufacturersList,
+                onValueChange = { manufacturer = it }
+            )
+        }
 
-                // Производитель
-                AtsDropdownField(
-                    label = "Производитель",
-                    value = manufacturer,
-                    options = manufacturersList,
-                    onValueChange = { manufacturer = it }
-                )
+        Spacer(Modifier.height(16.dp))
 
-                Spacer(Modifier.height(12.dp))
+        // 2. Серия (фиксированная ширина)
+        Box(modifier = Modifier.width(300.dp)) {
+            AtsDropdownField(
+                label = "Серия",
+                value = series,
+                options = seriesList,
+                onValueChange = { series = it },
+                enabled = manufacturer.isNotBlank()
+            )
+        }
 
-                // Серия
-                AtsDropdownField(
-                    label = "Серия",
-                    value = series,
-                    options = seriesList,
-                    onValueChange = { series = it },
-                    enabled = manufacturer.isNotBlank()
-                )
+        Spacer(Modifier.height(16.dp))
 
-                Spacer(Modifier.height(16.dp))
-
-                // Полюса
-                Text("Число полюсов:", style = MaterialTheme.typography.subtitle2)
-                Spacer(Modifier.height(8.dp))
-
-                if (polesList.isEmpty() && manufacturer.isNotBlank() && series.isNotBlank()) {
-                    Text("Нет данных", style = MaterialTheme.typography.body2, color = Color.Gray)
-                } else {
+        // 3. Полюса
+        if (manufacturer.isNotBlank() && series.isNotBlank()) {
+            Text("Число полюсов:", style = MaterialTheme.typography.caption)
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                polesList.forEach { pole ->
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { selectedPoles = pole }
                     ) {
-                        polesList.forEach { pole ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable { selectedPoles = pole }
-                            ) {
-                                RadioButton(
-                                    selected = (pole == selectedPoles),
-                                    onClick = { selectedPoles = pole }
-                                )
-                                Text(text = pole, style = MaterialTheme.typography.body1)
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(24.dp))
-
-                // Кнопки
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onBack) { Text("Назад") }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = onDismiss) { Text("Отмена") }
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = { onConfirm(AtsSelectionResult(series, selectedPoles)) },
-                        enabled = canProceed
-                    ) {
-                        Text("Далее")
+                        RadioButton(
+                            selected = (pole == selectedPoles),
+                            onClick = { selectedPoles = pole }
+                        )
+                        Text(text = pole, style = MaterialTheme.typography.body2)
                     }
                 }
             }

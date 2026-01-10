@@ -9,6 +9,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Divider
+import androidx.compose.material.DropdownMenu
+import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
@@ -300,7 +302,7 @@ fun ShieldTableColumn(
                     CompactOutlinedTextField(
                         label = "Устройство защиты",
                         value = consumer.protectionDevice,
-                        onValueChange = { consumer.protectionDevice = it; onDataChanged() },
+                        onValueChange = { consumer.protectionDevice = it; onCalculationRequired() },
                         contentPadding = FIELDCONTENTPADDING,
                         fontSizeSp = FIELDFONT,
                         textColor = textColor,
@@ -352,7 +354,7 @@ fun ShieldTableColumn(
                             onDismissRequest = { showCableMenu = false },
                             onConfirm = { selectedType ->
                                 consumer.cableType = selectedType
-                                onDataChanged() // Сохраняем
+                                onCalculationRequired()
                                 showCableMenu = false
                             }
                         )
@@ -361,34 +363,88 @@ fun ShieldTableColumn(
 
                 Spacer(Modifier.height(FIELDVSPACE))
 
-                // Способ прокладки
-                CompactOutlinedTextField(
-                    label = "Способ прокладки",
-                    value = consumer.layingMethod,
-                    onValueChange = { consumer.layingMethod = it; onDataChanged() },
-                    contentPadding = FIELDCONTENTPADDING,
-                    fontSizeSp = FIELDFONT,
-                    textColor = textColor,
-                    focusedBorderColor = borderColor,
-                    unfocusedBorderColor = Color.LightGray,
-                    singleLine = false, minLines = 1, maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // --- Ячейка 13: Способ прокладки и Длина ---
+                BlockPanel(color = BLOCKWHITE) { // Можно выделить отдельным цветом
+                    // 1. Выбор способа (Dropdown)
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        CompactOutlinedTextField(
+                            label = "Способ прокладки",
+                            value = consumer.layingMethod.ifBlank { "Воздух" }, // Значение по умолчанию
+                            onValueChange = {}, // ReadOnly, меняем через меню
+                            contentPadding = FIELDCONTENTPADDING,
+                            fontSizeSp = FIELDFONT,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            modifier = Modifier.fillMaxWidth()
+                                .clickable { /* logic for dropdown handled below */ }
+                        )
+
+                        // Меню выбора
+                        var methodMenuExpanded by remember { mutableStateOf(false) }
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Выбрать",
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 4.dp)
+                                .size(24.dp)
+                                .clickable { methodMenuExpanded = true }
+                        )
+
+                        DropdownMenu(
+                            expanded = methodMenuExpanded,
+                            onDismissRequest = { methodMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(onClick = {
+                                consumer.layingMethod = "Воздух"
+                                methodMenuExpanded = false
+                                onCalculationRequired() // Пересчитываем кабель
+                            }) { Text("Воздух") }
+
+                            DropdownMenuItem(onClick = {
+                                consumer.layingMethod = "Земля"
+                                methodMenuExpanded = false
+                                onCalculationRequired() // Пересчитываем кабель
+                            }) { Text("Земля") }
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    // 2. Ввод длины
+                    CompactOutlinedTextField(
+                        label = "Длина, м",
+                        value = consumer.cableLength,
+                        onValueChange = {
+                            consumer.cableLength = it
+                            onDataChanged() // Просто сохраняем, длина пока не влияет на сечение (влияет на падение U)
+                        },
+                        contentPadding = FIELDCONTENTPADDING,
+                        fontSizeSp = FIELDFONT,
+                        textColor = textColor,
+                        focusedBorderColor = borderColor,
+                        unfocusedBorderColor = Color.LightGray,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 Spacer(Modifier.height(FIELDVSPACE))
 
-                // Число жил, сечение
+                // --- Ячейка 14: Число жил, сечение (Авторасчет) ---
                 CompactOutlinedTextField(
                     label = "Число жил, сечение",
                     value = consumer.cableLine,
-                    onValueChange = { consumer.cableLine = it; onDataChanged() },
+                    onValueChange = {}, // ReadOnly, считает калькулятор
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
-                    textColor = textColor,
+                    textColor = textColor, // Можно сделать серым, чтобы показать readonly
                     focusedBorderColor = borderColor,
                     unfocusedBorderColor = Color.LightGray,
                     singleLine = false, minLines = 1, maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().background(Color.Gray.copy(alpha = 0.05f))
                 )
+
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Падение напряжения

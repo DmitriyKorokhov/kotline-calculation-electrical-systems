@@ -82,6 +82,7 @@ object RcboVariants : Table() {
 object Cables : Table() {
     val id = integer("id").autoIncrement()
     val type = varchar("type", 128) // Марка кабеля
+    val material = varchar("material", 32) // материал жилы
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -105,5 +106,20 @@ object AtsVariants : Table() {
     val modelId = integer("model_id").references(AtsModels.id)
     val ratedCurrent = float("rated_current")
     val poles = varchar("poles", 64)
+    override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * Object defining the schema for the CableCurrentRatings table.
+ * Хранит допустимые токовые нагрузки в зависимости от сечения и способа прокладки.
+ */
+object CableCurrentRatings : Table() {
+    val id = integer("id").autoIncrement()
+    val material = varchar("material", 32) // "Cu" или "Al"
+    val insulation = varchar("insulation", 128) // "PVC", "HALOGEN_FREE" и т.д.
+    val crossSection = float("cross_section")   // Сечение в мм²
+    val currentInAir = float("current_in_air")  // Допустимый ток в воздухе (А)
+    val currentInGround = float("current_in_ground") // Допустимый ток в земле (А)
+
     override val primaryKey = PrimaryKey(id)
 }

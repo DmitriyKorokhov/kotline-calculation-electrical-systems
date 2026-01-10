@@ -1,76 +1,74 @@
 package ui.screens.shieldeditor.input
 
-import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Divider
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import data.database.AtsModels
 import data.database.AtsVariants
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
-import kotlin.collections.iterator
 import kotlin.math.abs
 
-data class AtsUiItem(
+private data class AtsUiItem(
     val modelId: Int,
     val variantId: Int,
     val manufacturer: String,
     val modelName: String,
     val ratedCurrentA: Float,
     val polesText: String,
-    val breakingCapacityStr: String, // Icu
-    val breakingCapacityVal: Float // числовое значение для сортировки
+    val breakingCapacityStr: String,
+    val breakingCapacityVal: Float
 )
 
-// АВР
+/**
+ * Панель списка подходящих устройств АВР.
+ * Встраивается в правую часть InputTypePopup ниже параметров.
+ */
 @Composable
 fun AtsThirdWindow(
     maxShortCircuitCurrentStr: String,
+    // consumerCurrentAStr больше не используется для фильтрации, но можно оставить в сигнатуре для совместимости
     consumerCurrentAStr: String,
     selectedSeries: String?,
     selectedPoles: String?,
-    onBack: () -> Unit,
-    onDismiss: () -> Unit,
     onChoose: (String) -> Unit
 ) {
-    var loading by remember { mutableStateOf(true) }
+    var loading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var items by remember { mutableStateOf<List<AtsUiItem>>(emptyList()) }
     var selectedVariantId by remember { mutableStateOf<Int?>(null) }
 
-    val consumerA = parseAmps(consumerCurrentAStr) ?: 0f
     val requiredBreakingCapacity = parseAmps(maxShortCircuitCurrentStr) ?: 0f
 
+    // Реактивная загрузка при изменении фильтров
     LaunchedEffect(selectedSeries, selectedPoles) {
+        if (selectedSeries.isNullOrBlank() || selectedPoles.isNullOrBlank()) {
+            items = emptyList()
+            return@LaunchedEffect
+        }
+
         loading = true
         errorMsg = null
-        items = emptyList()
-
         try {
-            if (selectedSeries.isNullOrBlank() || selectedPoles.isNullOrBlank()) {
-                loading = false
-                return@LaunchedEffect
-            }
-
             transaction {
                 val models = AtsModels.select { AtsModels.series eq selectedSeries }
-                    .map {
-                        Triple(
-                            it[AtsModels.id],
-                            it[AtsModels.model],
-                            it[AtsModels.breakingCapacity]
-                        )
-                    }
+                    .map { Triple(it[AtsModels.id], it[AtsModels.model], it[AtsModels.breakingCapacity]) }
+
                 val manufacturer = AtsModels.slice(AtsModels.manufacturer)
                     .select { AtsModels.series eq selectedSeries }
                     .limit(1)
@@ -81,7 +79,7 @@ fun AtsThirdWindow(
 
                 for ((mId, mName, mCapStr) in models) {
                     val mCapVal = parseAmps(mCapStr) ?: 0f
-
+                    // Фильтр по Icu оставляем (безопасность)
                     if (requiredBreakingCapacity > 0 && mCapVal < requiredBreakingCapacity) continue
 
                     val variants = AtsVariants.select {
@@ -92,161 +90,93 @@ fun AtsThirdWindow(
                         val current = v[AtsVariants.ratedCurrent]
                         val vId = v[AtsVariants.id]
 
-                        if (current >= consumerA) {
-                            results.add(
-                                AtsUiItem(
-                                    modelId = mId,
-                                    variantId = vId,
-                                    manufacturer = manufacturer,
-                                    modelName = mName,
-                                    ratedCurrentA = current,
-                                    polesText = selectedPoles,
-                                    breakingCapacityStr = mCapStr,
-                                    breakingCapacityVal = mCapVal
-                                )
+                        // УБРАНО: фильтрация по току потребителя (if current >= consumerA)
+
+                        results.add(
+                            AtsUiItem(
+                                modelId = mId,
+                                variantId = vId,
+                                manufacturer = manufacturer,
+                                modelName = mName,
+                                ratedCurrentA = current,
+                                polesText = selectedPoles!!,
+                                breakingCapacityStr = mCapStr,
+                                breakingCapacityVal = mCapVal
                             )
-                        }
+                        )
                     }
                 }
 
-                // 1. Группируем по НАЗВАНИЮ МОДЕЛИ (modelName)
-                val groupedByModel = results.groupBy { it.modelName }
+                // УБРАНО: группировка и поиск "лучшего" (minOrNull)
 
-                val finalItems = mutableListOf<AtsUiItem>()
-
-                // 2. Для каждой модели ищем лучший вариант (минимальный подходящий ток)
-                for ((_, variants) in groupedByModel) {
-                    val bestCurrent = variants.map { it.ratedCurrentA }.minOrNull()
-                    if (bestCurrent != null) {
-                        // Берем все варианты этой модели с лучшим током (обычно он один, но вдруг дубли)
-                        val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
-                        // Чтобы не дублировать совсем одинаковые, делаем distinct
-                        finalItems.addAll(bestVariants.distinctBy { it.breakingCapacityVal })
-                    }
-                }
-
-                // Сортировка: по току, потом по названию
-                items = finalItems.sortedWith(
-                    compareBy<AtsUiItem> { it.ratedCurrentA }
-                        .thenBy { it.modelName }
+                // Просто сортируем список: сначала по имени модели, затем по току
+                items = results.sortedWith(
+                    compareBy<AtsUiItem> { it.modelName }
+                        .thenBy { it.ratedCurrentA }
                 )
 
                 selectedVariantId = items.firstOrNull()?.variantId
             }
-            loading = false
-
         } catch (t: Throwable) {
-            loading = false
-            errorMsg = t.message ?: "Ошибка при загрузке АВР"
+            errorMsg = t.message ?: "Ошибка загрузки"
             t.printStackTrace()
+        } finally {
+            loading = false
         }
     }
 
-    Popup(
-        alignment = Alignment.Center,
-        onDismissRequest = onDismiss,
-        properties = PopupProperties(focusable = true)
-    ) {
-        Card(
-            modifier = Modifier
-                .widthIn(min = 600.dp, max = 900.dp)
-                .heightIn(min = 300.dp, max = 700.dp)
-                .padding(12.dp),
-            elevation = 8.dp,
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Подбор АВР — подходящие варианты", style = MaterialTheme.typography.h6)
-                Spacer(Modifier.height(8.dp))
+    Column(modifier = Modifier.fillMaxSize()) {
+        Divider(modifier = Modifier.padding(vertical = 8.dp))
+        Text("Подходящие устройства", style = MaterialTheme.typography.subtitle2, color = Color.Gray)
+        Spacer(Modifier.height(8.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Серия: ${selectedSeries ?: "—"}", style = MaterialTheme.typography.body2)
-                    Spacer(Modifier.width(16.dp))
-                    Text("Iрасч: ${consumerCurrentAStr.ifBlank { "0" }} A", style = MaterialTheme.typography.body2)
-                    Spacer(Modifier.width(16.dp))
-                    Text("Icu треб: ${maxShortCircuitCurrentStr.ifBlank { "0" }} кА", style = MaterialTheme.typography.body2)
-                }
+        if (loading) {
+            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (errorMsg != null) {
+            Text("Ошибка: $errorMsg", color = MaterialTheme.colors.error)
+        } else if (selectedSeries.isNullOrBlank() || selectedPoles.isNullOrBlank()) {
+            Text("Выберите серию и полюса для поиска.", color = Color.Gray)
+        } else if (items.isEmpty()) {
+            Text("Нет подходящих устройств (проверьте Icu).", color = MaterialTheme.colors.onSurface)
+        } else {
+            // Заголовки таблицы
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Text("Модель", modifier = Modifier.weight(2f), style = MaterialTheme.typography.caption, fontWeight = FontWeight.Bold)
+                Text("In, A", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.caption, fontWeight = FontWeight.Bold)
+                Text("Полюса", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.caption, fontWeight = FontWeight.Bold)
+                Text("Icu, кА", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.caption, fontWeight = FontWeight.Bold)
+            }
+            Divider()
 
-                Spacer(Modifier.height(12.dp))
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                items(items, key = { it.variantId }) { item ->
+                    val isSelected = item.variantId == selectedVariantId
+                    val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else Color.Transparent
 
-                if (loading) {
-                    Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (errorMsg != null) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        Text("Ошибка: $errorMsg", color = MaterialTheme.colors.error)
-                    }
-                } else if (items.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                        Text("Нет подходящих устройств (проверьте параметры тока и Icu).", color = MaterialTheme.colors.onSurface)
-                    }
-                } else {
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                        Text("Модель", modifier = Modifier.weight(2f), style = MaterialTheme.typography.subtitle2)
-                        Text("In, A", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.subtitle2)
-                        Text("Полюса", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.subtitle2)
-                        Text("Icu, кА", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.subtitle2)
-                    }
-                    Divider()
-
-                    LazyColumn(
+                    // Элемент списка
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f)
-                    ) {
-                        items(items, key = { it.variantId }) { item ->
-                            val isSelected = item.variantId == selectedVariantId
-                            val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
-                            val borderModifier = if (isSelected)
-                                Modifier.border(2.dp, MaterialTheme.colors.primary, RoundedCornerShape(6.dp))
-                            else
-                                Modifier
-
-                            Card(
-                                elevation = if (isSelected) 4.dp else 1.dp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .then(borderModifier)
-                                    .clickable { selectedVariantId = item.variantId },
-                                backgroundColor = bg,
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(item.modelName, modifier = Modifier.weight(2f))
-                                    Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.8f))
-                                    Text(item.polesText, modifier = Modifier.weight(0.8f))
-                                    Text(item.breakingCapacityStr, modifier = Modifier.weight(0.8f))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onBack) { Text("Назад") }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = onDismiss) { Text("Отмена") }
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            val chosen = items.firstOrNull { it.variantId == selectedVariantId }
-                            if (chosen != null) {
-                                val res = "${chosen.modelName} ${formatRated(chosen.ratedCurrentA)}A ${chosen.polesText}"
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(bg)
+                            .clickable {
+                                selectedVariantId = item.variantId
+                                val res = "${item.modelName} ${formatRated(item.ratedCurrentA)}A ${item.polesText}"
                                 onChoose(res)
                             }
-                        },
-                        enabled = selectedVariantId != null
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Выбрать")
+                        Text(item.modelName, modifier = Modifier.weight(2f), style = MaterialTheme.typography.body2)
+                        Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.body2)
+                        Text(item.polesText, modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.body2)
+                        Text(item.breakingCapacityStr, modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.body2)
                     }
                 }
             }
