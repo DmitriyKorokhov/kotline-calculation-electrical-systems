@@ -128,7 +128,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         CalculationEngine.calculateAll(data)
                                         PhaseDistributor.distributePhases(data)
                                         data.consumers.forEach { consumer ->
-                                            CableCalculator.calculateCable(consumer, data)
                                             CableCalculator.calculateVoltageDrop(consumer, data)
                                         }
                                         saveNow()
@@ -212,12 +211,21 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                     else selectedColumns.add(colIndex)
                                                 },
                                                 onDataChanged = { saveNow() },
-                                                onCalculationRequired = { CalculationEngine.calculateAll(data)
+                                                onCalculationRequired = {
+                                                    CalculationEngine.calculateAll(data)
                                                     data.consumers.forEach { consumer ->
                                                         CableCalculator.calculateCable(consumer, data)
+                                                        CableCalculator.calculateVoltageDrop(consumer, data)
                                                     }
-                                                    saveNow() },
-                                                onOpenProtectionDialog = { protectionDialogForIndex = colIndex }
+                                                    saveNow()
+                                                },
+                                                onRecalculateDropOnly = {
+                                                    // Пересчитываем только падение напряжения (сечение уже изменено вручную)
+                                                    CableCalculator.calculateVoltageDrop(consumer, data)
+                                                    saveNow()
+                                                },
+                                                onOpenProtectionDialog = { protectionDialogForIndex = colIndex },
+                                                data = data
                                             )
                                         }
                                     }

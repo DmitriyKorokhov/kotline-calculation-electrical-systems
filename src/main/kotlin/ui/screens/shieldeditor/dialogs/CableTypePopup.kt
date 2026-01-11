@@ -15,27 +15,46 @@ import org.jetbrains.exposed.sql.transactions.transaction
 @Composable
 fun CableTypePopup(
     onDismissRequest: () -> Unit,
-    onConfirm: (String) -> Unit
+    onConfirm: (String) -> Unit,
+    targetMaterial: String,   // "Copper" / "Aluminum"
+    targetInsulation: String  // "PVC" / "XLPE" / "Polymer"
 ) {
     var cableTypes by remember { mutableStateOf(emptyList<String>()) }
 
-    // Загружаем типы кабелей из БД при открытии
-    LaunchedEffect(Unit) {
+    LaunchedEffect(targetMaterial, targetInsulation) {
         transaction {
-            cableTypes = Cables.selectAll()
+            val all = Cables
+                .selectAll()
                 .map { it[Cables.type] }
-                .distinct() // На всякий случай уберем дубликаты
+                .distinct()
+
+            cableTypes = all.filter { typeName ->
+                val isAl = typeName.startsWith("А", ignoreCase = true)
+                val mat = if (isAl) "Aluminum" else "Copper"
+
+                val coreName = if (isAl) typeName.drop(1) else typeName
+                val insulationCode = when {
+                    coreName.startsWith("Пв", ignoreCase = true) -> "XLPE"
+                    coreName.startsWith("В", ignoreCase = true) -> "PVC"
+                    coreName.startsWith("П", ignoreCase = true) -> "Polymer"
+                    else -> "PVC"
+                }
+
+                mat == targetMaterial && insulationCode == targetInsulation
+            }
         }
     }
 
     DropdownMenu(
         expanded = true,
         onDismissRequest = onDismissRequest,
-        modifier = Modifier.width(180.dp).heightIn(max = 200.dp)
+        modifier = Modifier
+            .width(180.dp)
+            .heightIn(max = 200.dp)
     ) {
         if (cableTypes.isEmpty()) {
             DropdownMenuItem(onClick = { }) {
-                Text("Нет данных в БД")
+                Text("Нет подходящих типов")
             }
         } else {
             cableTypes.forEach { type ->

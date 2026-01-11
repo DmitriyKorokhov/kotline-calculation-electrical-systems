@@ -44,7 +44,7 @@ fun CableSettingsTab(
         Spacer(Modifier.height(16.dp))
 
         // --- Группа А: Материал проводника ---
-        Text("А) Материал проводника", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
+        Text("Материал проводника", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically) {
             RadioButton(selected = data.cableMaterial == "Copper", onClick = { data.cableMaterial = "Copper"; onSave() })
             Text("Медь")
@@ -56,7 +56,7 @@ fun CableSettingsTab(
         Spacer(Modifier.height(16.dp))
 
         // --- Группа Б: Материал изоляции ---
-        Text("Б) Материал изоляции", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
+        Text("Материал изоляции", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(selected = data.cableInsulation == "PVC", onClick = { updateTemp("PVC") })
@@ -75,7 +75,7 @@ fun CableSettingsTab(
         Spacer(Modifier.height(16.dp))
 
         // --- Группа В: Формирование длины ---
-        Text("В) Формирование длины", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
+        Text("Формирование длины", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = data.cableReservePercent,
@@ -99,20 +99,25 @@ fun CableSettingsTab(
 
         Spacer(Modifier.height(16.dp))
 
-        // --- Группа Г: Падение напряжения ---
-        Text("Г) Падение напряжения", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
+        // --- Г) Падение напряжения ---
+        Text("Падение напряжения", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
 
-        // 1. Удельное индуктивное сопротивление (информационное поле, можно сделать редактируемым)
-        val inductiveRes = "0.08" // Обычно 0.08 мОм/м
-        Text("Удельное индуктивное сопр.: $inductiveRes мОм/м", style = MaterialTheme.typography.caption)
+        // 1. Удельное индуктивное сопротивление (редактируемое)
+        OutlinedTextField(
+            value = data.cableInductiveResistance,
+            onValueChange = { data.cableInductiveResistance = it; onSave() },
+            label = { Text("Удельное индуктивное сопр. (мОм/м)") },
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(Modifier.height(8.dp))
+
 
         // 2. Температура
         OutlinedTextField(
             value = data.cableTemperature,
             onValueChange = { data.cableTemperature = it; onSave() },
-            label = { Text("Температура кабеля (T), °C") },
+            label = { Text("Температура кабеля (°C)") },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -125,7 +130,7 @@ fun CableSettingsTab(
         } else {
             0.028 * (1 + 0.00403 * (t - 20))
         }
-        Text("Удельное активное сопр. (p): ${String.format("%.4f", rho)} Ом*мм²/м", style = MaterialTheme.typography.body2)
+        Text("Удельное активное сопротивление: ${String.format("%.4f", rho)} Ом*мм²/м", style = MaterialTheme.typography.body2)
 
         Spacer(Modifier.height(8.dp))
 
@@ -133,7 +138,7 @@ fun CableSettingsTab(
         OutlinedTextField(
             value = data.maxVoltageDropPercent,
             onValueChange = { data.maxVoltageDropPercent = it; onSave() },
-            label = { Text("Допустимое dU (%)") },
+            label = { Text("Допустимое падение напряжения (%)") },
             modifier = Modifier.fillMaxWidth()
         )
     }

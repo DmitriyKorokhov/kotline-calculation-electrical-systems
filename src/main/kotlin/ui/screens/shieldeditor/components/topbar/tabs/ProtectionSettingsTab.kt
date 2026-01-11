@@ -35,7 +35,7 @@ fun ProtectionSettingsTab(
             .padding(end = 8.dp)
     ) {
         Text(
-            text = "Настройки защиты",
+            text = "Устройства защиты",
             style = MaterialTheme.typography.h6,
             color = MaterialTheme.colors.primary
         )
@@ -128,7 +128,7 @@ fun ProtectionSettingsTab(
         Spacer(modifier = Modifier.height(24.dp))
 
         // --- Блок 4: Условие выбора защиты (Новое) ---
-        Text("Коэффициент запаса", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.primary)
+        Text("Выбор номинального тока защиты", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.primary)
         Spacer(modifier = Modifier.height(16.dp))
 
         // Порог тока (40 А)
@@ -146,7 +146,7 @@ fun ProtectionSettingsTab(
             singleLine = true
         )
         Text(
-            text = "Ток, при котором меняется коэффициент (по умолчанию 40)",
+            text = "Ток, при котором меняется коэффициент",
             style = MaterialTheme.typography.caption,
             color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -161,13 +161,13 @@ fun ProtectionSettingsTab(
                     onSave()
                 }
             },
-            label = { Text("Коэффициент (при I < порога)") },
+            label = { Text("Коэффициент, если Iрасч < порога") },
             modifier = Modifier.width(fieldWidth),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true
         )
         Text(
-            text = "Коэфф. a для малых токов (по умолчанию 0.87)",
+            text = "Отношение расчетного тока к номинальному току защиты",
             style = MaterialTheme.typography.caption,
             color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -182,13 +182,13 @@ fun ProtectionSettingsTab(
                     onSave()
                 }
             },
-            label = { Text("Коэффициент (при I ≥ порога)") },
+            label = { Text("Коэффициент, если Iрасч ≥ порога") },
             modifier = Modifier.width(fieldWidth),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true
         )
         Text(
-            text = "Коэфф. a для больших токов (по умолчанию 0.93)",
+            text = "Отношение расчетного тока к номинальному току защиты",
             style = MaterialTheme.typography.caption,
             color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.padding(top = 4.dp)

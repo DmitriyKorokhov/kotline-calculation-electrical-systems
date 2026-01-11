@@ -141,7 +141,8 @@ object CableCalculator {
         val R_line = (rho * L) / S
 
         // 6. Реактивное сопротивление X0 (Ом/м)
-        val X0 = 0.00008
+        val xMilli = data.cableInductiveResistance.replace(",", ".").toDoubleOrNull() ?: 0.08
+        val X0 = xMilli / 1000.0 // мОм/м → Ом/м
 
         // 7. Расчет падения напряжения
         val isThreePhase = U_nom >= 380

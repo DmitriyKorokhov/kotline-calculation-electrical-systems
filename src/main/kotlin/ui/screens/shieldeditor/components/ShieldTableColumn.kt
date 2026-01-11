@@ -28,9 +28,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import data.database.CableCurrentRatings
+import org.jetbrains.exposed.sql.transactions.transaction
 import ui.screens.shieldeditor.ConsumerModel
+import ui.screens.shieldeditor.ShieldData
 import view.CompactOutlinedTextField
 import ui.screens.shieldeditor.dialogs.CableTypePopup
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.and
+
 
 private val COLUMNWIDTH: Dp = 220.dp
 private val COLUMNOUTERPADDING: Dp = 4.dp
@@ -58,7 +64,9 @@ fun ShieldTableColumn(
     onHeaderClick: () -> Unit,
     onDataChanged: () -> Unit,
     onCalculationRequired: () -> Unit,
-    onOpenProtectionDialog: () -> Unit
+    onRecalculateDropOnly: () -> Unit,
+    onOpenProtectionDialog: () -> Unit,
+    data: ShieldData
 ) {
     // --- Анимации выделения ---
     val targetBg = if (isSelected) Color(0xFF1976D2) else Color.Transparent
@@ -356,7 +364,9 @@ fun ShieldTableColumn(
                                 consumer.cableType = selectedType
                                 onCalculationRequired()
                                 showCableMenu = false
-                            }
+                            },
+                            targetMaterial = if (data.cableMaterial == "Copper") "Copper" else "Aluminum",
+                            targetInsulation = data.cableInsulation
                         )
                     }
                 }
@@ -429,18 +439,46 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // --- Ячейка 14: Число жил, сечение (Авторасчет) ---
-                CompactOutlinedTextField(
-                    label = "Число жил, сечение",
-                    value = consumer.cableLine,
-                    onValueChange = {}, // ReadOnly, считает калькулятор
-                    contentPadding = FIELDCONTENTPADDING,
-                    fontSizeSp = FIELDFONT,
-                    textColor = textColor, // Можно сделать серым, чтобы показать readonly
-                    focusedBorderColor = borderColor,
-                    unfocusedBorderColor = Color.LightGray,
-                    singleLine = false, minLines = 1, maxLines = 3,
-                    modifier = Modifier.fillMaxWidth().background(Color.Gray.copy(alpha = 0.05f))
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CompactOutlinedTextField(
+                        label = "Число жил, сечение",
+                        value = consumer.cableLine,
+                        onValueChange = {}, // ReadOnly
+                        contentPadding = FIELDCONTENTPADDING,
+                        fontSizeSp = FIELDFONT,
+                        textColor = textColor,
+                        focusedBorderColor = borderColor,
+                        unfocusedBorderColor = Color.LightGray,
+                        singleLine = false,
+                        minLines = 1,
+                        maxLines = 3,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(Color.Gray.copy(alpha = 0.05f))
+                    )
+
+                    Spacer(Modifier.width(4.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("▲", Modifier.clickable {
+                            changeCableSection(consumer, data, +1)
+                            onRecalculateDropOnly() // <---
+                        })
+
+                        Text("▼", Modifier.clickable {
+                            changeCableSection(consumer, data, -1)
+                            onRecalculateDropOnly() // <---
+                        })
+                    }
+                }
+
+
 
                 Spacer(Modifier.height(FIELDVSPACE))
 
@@ -460,6 +498,84 @@ fun ShieldTableColumn(
         }
     }
 }
+
+private val FALLBACK_SECTIONS = listOf(
+    1.5, 2.5, 4.0, 6.0, 10.0, 16.0, 25.0, 35.0, 50.0, 70.0, 95.0, 120.0, 150.0, 185.0, 240.0
+)
+
+private fun changeCableSection(consumer: ConsumerModel, data: ShieldData, direction: Int) {
+    // 1. Пытаемся получить список из БД
+    var sections = try {
+        val cableType = consumer.cableType
+        if (cableType.isNotBlank()) {
+            val isAluminum = cableType.startsWith("А", ignoreCase = true)
+            val materialCode = if (isAluminum) "Al" else "Cu"
+            val typeWithoutConductor = if (isAluminum) cableType.substring(1) else cableType
+            val insulationCode = when {
+                typeWithoutConductor.startsWith("Пв", ignoreCase = true) -> "XLPE"
+                typeWithoutConductor.startsWith("В", ignoreCase = true) ||
+                        typeWithoutConductor.startsWith("П", ignoreCase = true) -> "PVC"
+                else -> "PVC"
+            }
+
+            val dbSections = mutableListOf<Double>()
+            transaction {
+                CableCurrentRatings
+                    .selectAll()
+                    .where {
+                        (CableCurrentRatings.material eq materialCode) and
+                                (CableCurrentRatings.insulation eq insulationCode)
+                    }
+                    .forEach { row ->
+                        dbSections += row[CableCurrentRatings.crossSection].toDouble()
+                    }
+            }
+            dbSections.distinct().sorted()
+        } else {
+            emptyList()
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        emptyList()
+    }
+
+    // 2. Если БД вернула пустоту (или ошибка) — используем стандартный список
+    if (sections.isEmpty()) {
+        sections = FALLBACK_SECTIONS
+    }
+
+    // 3. Парсим текущее значение (поддержка x, х, X, Х)
+    val regex = Regex("""[xхXХ]\s*(\d+[.,]?\d*)""")
+    val match = regex.find(consumer.cableLine)
+    val current = match?.groupValues?.get(1)?.replace(",", ".")?.toDoubleOrNull()
+
+    // 4. Находим индекс (ближайший)
+    val currentIndex = if (current == null) {
+        -1
+    } else {
+        sections.indices.minByOrNull { i -> kotlin.math.abs(sections[i] - current) } ?: -1
+    }
+
+    // 5. Вычисляем новый индекс
+    val newIndex = if (currentIndex == -1) {
+        0 // Если не нашли — ставим первое
+    } else {
+        (currentIndex + direction).coerceIn(0, sections.lastIndex)
+    }
+
+    // Если пытаемся уйти за границы и уже там — выходим
+    if (currentIndex != -1 && newIndex == currentIndex) return
+
+    // 6. Формируем строку
+    val newSection = sections[newIndex]
+    val cores = if ((consumer.voltage.toIntOrNull() ?: 230) >= 380) 5 else 3
+    val sectionStr = if (newSection % 1.0 == 0.0) newSection.toInt().toString() else newSection.toString()
+
+    consumer.cableLine = "${cores}x$sectionStr"
+}
+
+
+
 
 @Composable
 private fun BlockPanel(

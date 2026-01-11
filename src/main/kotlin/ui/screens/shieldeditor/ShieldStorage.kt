@@ -12,8 +12,10 @@ class ShieldData(
     var inputInfo by mutableStateOf("") // Информации о Вводе
     var shieldName by mutableStateOf("")
     var maxShortCircuitCurrent by mutableStateOf("")
-    var protectionStandard by mutableStateOf("")
-    var protectionManufacturer by mutableStateOf("")
+    var protectionStandard by mutableStateOf("ГОСТ IEC 60898-1-2020")
+    var protectionManufacturer by mutableStateOf("Nader")
+    // Чекбокс "Наличие защиты от перегрузки"
+    var hasOverloadProtection by mutableStateOf(true)
     var metaExpanded by mutableStateOf(true)
 
     var phaseL1 by mutableStateOf("0.00")
@@ -30,9 +32,6 @@ class ShieldData(
     var averageCosPhi by mutableStateOf("0.0")       // cos(f)
     var totalCurrent by mutableStateOf("0.0")        // Ток
     var shieldDemandFactor by mutableStateOf("0.0")  // Коэф.спросащита
-
-    // Новое поле для чекбокса "Наличие защиты от перегрузки"
-    var hasOverloadProtection by mutableStateOf(false)
 
     // Порог расчетного тока (по умолчанию 40)
     var protectionCurrentThreshold by mutableStateOf("40")
@@ -58,6 +57,8 @@ class ShieldData(
 
     // Температура (будет обновляться автоматически при выборе изоляции, но можно редактировать)
     var cableTemperature by mutableStateOf("70")
+
+    var cableInductiveResistance by mutableStateOf("0.08") // мОм/м
 }
 
 object ShieldStorage {
