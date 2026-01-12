@@ -45,6 +45,8 @@ fun RcdThirdWindow(
 
     val consumerA = parseAmps(consumerCurrentAStr) ?: 0f
 
+    var showAllSeriesDevices by remember { mutableStateOf(false) }
+
     LaunchedEffect(selectedSeries) {
         loading = true
         errorMsg = null
@@ -75,7 +77,9 @@ fun RcdThirdWindow(
 
     // Фильтрация
     fun passesAll(item: RcdUiItem): Boolean {
-        if (item.ratedCurrentA < consumerA) return false
+        if (!showAllSeriesDevices) {
+            if (item.ratedCurrentA < consumerA) return false
+        }
         if (!selectedPoles.isNullOrBlank()) {
             if (item.polesText.trim() != selectedPoles.trim()) return false
         }
@@ -85,32 +89,49 @@ fun RcdThirdWindow(
         return true
     }
 
-    val passing = remember(items, consumerA, selectedPoles, selectedResidualCurrent) {
+    val passing = remember(items, consumerA, selectedPoles, selectedResidualCurrent, showAllSeriesDevices) {
         items.filter { passesAll(it) }
     }
 
-    val finalList = remember(passing, consumerA, protectionThreshold, protectionFactorLow, protectionFactorHigh) {
-        val grouped = passing.groupBy { it.modelName }
-        val result = mutableListOf<RcdUiItem>()
+    val finalList = remember(
+        passing,
+        consumerA,
+        protectionThreshold,
+        protectionFactorLow,
+        protectionFactorHigh,
+        showAllSeriesDevices
+    ) {
+        if (showAllSeriesDevices) {
+            passing
+                // схлопываем до уникальных строк (как у вас уже сделано в else)
+                .distinctBy { "${it.modelName.trim()}|${it.ratedCurrentA}|${it.ratedResidualCurrent.trim()}|${it.polesText.trim()}" }
+                .sortedWith(compareBy<RcdUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
+        } else {
+            val grouped = passing.groupBy { it.modelName }
+            val result = mutableListOf<RcdUiItem>()
 
-        for ((_, variants) in grouped) {
-            val candidates = variants.map { it.ratedCurrentA }.distinct().sorted()
-            if (candidates.isNotEmpty()) {
-                val firstNominal = candidates[0]
-                var bestCurrent = firstNominal
-                if (firstNominal > 0) {
-                    val a = consumerA / firstNominal
-                    val targetK = if (consumerA < protectionThreshold) protectionFactorLow else protectionFactorHigh
-                    if (a >= targetK) {
-                        if (candidates.size > 1) bestCurrent = candidates[1]
+            for ((_, variants) in grouped) {
+                val candidates = variants.map { it.ratedCurrentA }.distinct().sorted()
+                if (candidates.isNotEmpty()) {
+                    val firstNominal = candidates[0]
+                    var bestCurrent = firstNominal
+
+                    if (firstNominal > 0) {
+                        val a = consumerA / firstNominal
+                        val targetK = if (consumerA < protectionThreshold) protectionFactorLow else protectionFactorHigh
+                        if (a >= targetK && candidates.size > 1) {
+                            bestCurrent = candidates[1]
+                        }
                     }
+
+                    val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
+                    val unique = bestVariants.distinctBy { it.ratedResidualCurrent + it.polesText }
+                    result.addAll(unique)
                 }
-                val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
-                val unique = bestVariants.distinctBy { "${it.ratedResidualCurrent}|${it.polesText}" }
-                result.addAll(unique)
             }
+
+            result.sortedWith(compareBy<RcdUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
         }
-        result.sortedWith(compareBy<RcdUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
 
     // UI Content
@@ -123,6 +144,16 @@ fun RcdThirdWindow(
             Text("Iрасч: ${consumerCurrentAStr.ifBlank { "—" }} A")
             Spacer(Modifier.width(12.dp))
             Text("U: ${consumerVoltageStr ?: "—"}")
+            Spacer(Modifier.weight(1f))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = showAllSeriesDevices,
+                    onCheckedChange = { showAllSeriesDevices = it }
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("Все устройства серии", style = MaterialTheme.typography.body2)
+            }
         }
         Spacer(Modifier.height(8.dp))
 

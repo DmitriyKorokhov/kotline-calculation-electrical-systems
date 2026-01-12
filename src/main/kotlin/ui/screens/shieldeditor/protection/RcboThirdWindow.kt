@@ -56,6 +56,8 @@ fun RcboThirdWindow(
     val maxKA = parseKa(maxShortCircuitCurrentStr) ?: 0f
     val consumerA = parseAmps(consumerCurrentAStr) ?: 0f
 
+    var showAllSeriesDevices by remember { mutableStateOf(false) }
+
     LaunchedEffect(selectedSeries) {
         loading = true
         errorMsg = null
@@ -96,7 +98,10 @@ fun RcboThirdWindow(
             (item.serviceBreakingCapacityKa ?: 0f) >= maxKA
         }
         if (!passKZ) return false
-        if (item.ratedCurrentA < consumerA) return false
+
+        if (!showAllSeriesDevices) {
+            if (item.ratedCurrentA < consumerA) return false
+        }
 
         if (!selectedPoles.isNullOrBlank()) {
             if (item.polesText.split(",").map { it.trim() }.none { it == selectedPoles }) return false
@@ -115,44 +120,78 @@ fun RcboThirdWindow(
         return true
     }
 
-    val passing = remember(items, maxKA, consumerA, selectedPoles, selectedCurve, selectedResidualCurrent, selectedAdditions) {
+    val passing = remember(
+        items,
+        maxKA,
+        consumerA,
+        selectedPoles,
+        selectedCurve,
+        selectedResidualCurrent,
+        selectedAdditions,
+        showAllSeriesDevices
+    ) {
         items.filter { passesAll(it) }
     }
 
-    val finalList = remember(passing, consumerA, protectionThreshold, protectionFactorLow, protectionFactorHigh) {
-        val grouped = passing.groupBy { it.modelName }
-        val result = mutableListOf<RcboUiItem>()
-
-        for ((_, variants) in grouped) {
-            val candidates = variants.map { it.ratedCurrentA }.distinct().sorted()
-            if (candidates.isNotEmpty()) {
-                val firstNominal = candidates[0]
-                var bestCurrent = firstNominal
-
-                if (firstNominal > 0) {
-                    val a = consumerA / firstNominal
-                    val targetK = if (consumerA < protectionThreshold) protectionFactorLow else protectionFactorHigh
-                    if (a >= targetK) {
-                        if (candidates.size > 1) bestCurrent = candidates[1]
-                    }
-                }
-                val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
-
-                // Фильтрация дубликатов по визуальным полям
-                val uniqueVisuals = bestVariants.distinctBy {
+    val finalList = remember(
+        passing,
+        consumerA,
+        protectionThreshold,
+        protectionFactorLow,
+        protectionFactorHigh,
+        showAllSeriesDevices
+    ) {
+        if (showAllSeriesDevices) {
+            passing
+                // схлопывание до уникальных строк (как у вас в else-ветке)
+                .distinctBy {
                     DataClassKey(
-                        it.ratedCurrentA,
-                        it.ratedResidualCurrent,
-                        it.breakingCapacityKa,
-                        it.curve,
-                        it.polesText
+                        current = it.ratedCurrentA,
+                        residual = it.ratedResidualCurrent,
+                        cap = it.breakingCapacityKa, // можно оставить так же, как у вас сейчас
+                        curve = it.curve,
+                        poles = it.polesText
                     )
                 }
-                result.addAll(uniqueVisuals)
+                .sortedWith(compareBy<RcboUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
+        } else {
+            val grouped = passing.groupBy { it.modelName }
+            val result = mutableListOf<RcboUiItem>()
+
+            for ((_, variants) in grouped) {
+                val candidates = variants.map { it.ratedCurrentA }.distinct().sorted()
+                if (candidates.isNotEmpty()) {
+                    val firstNominal = candidates[0]
+                    var bestCurrent = firstNominal
+
+                    if (firstNominal > 0) {
+                        val a = consumerA / firstNominal
+                        val targetK = if (consumerA < protectionThreshold) protectionFactorLow else protectionFactorHigh
+                        if (a >= targetK && candidates.size > 1) {
+                            bestCurrent = candidates[1]
+                        }
+                    }
+
+                    val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
+
+                    val uniqueVisuals = bestVariants.distinctBy {
+                        DataClassKey(
+                            current = it.ratedCurrentA,
+                            residual = it.ratedResidualCurrent,
+                            cap = it.breakingCapacityKa,
+                            curve = it.curve,
+                            poles = it.polesText
+                        )
+                    }
+
+                    result.addAll(uniqueVisuals)
+                }
             }
+
+            result.sortedWith(compareBy<RcboUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
         }
-        result.sortedWith(compareBy<RcboUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
+
 
     // UI Content
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
@@ -166,6 +205,16 @@ fun RcboThirdWindow(
             Text("Iрасч: ${consumerCurrentAStr.ifBlank { "—" }} A")
             Spacer(Modifier.weight(1f))
             Text("U: ${consumerVoltageStr ?: "—"}")
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = showAllSeriesDevices,
+                    onCheckedChange = { showAllSeriesDevices = it }
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("Все устройства серии", style = MaterialTheme.typography.body2)
+            }
+
         }
         Spacer(Modifier.height(8.dp))
 

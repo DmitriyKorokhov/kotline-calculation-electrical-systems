@@ -58,6 +58,8 @@ fun BreakerThirdWindow(
     val maxKA = parseKa(maxShortCircuitCurrentStr) ?: 0f
     val consumerA = parseAmps(consumerCurrentAStr) ?: 0f
 
+    var showAllSeriesDevices by remember { mutableStateOf(false) }
+
     LaunchedEffect(selectedSeries) {
         loading = true
         errorMsg = null
@@ -98,51 +100,77 @@ fun BreakerThirdWindow(
             (item.serviceBreakingCapacityKa ?: 0f) >= maxKA
         }
         if (!passKZ) return false
-        if (item.ratedCurrentA < consumerA) return false
+
+        if (!showAllSeriesDevices) {
+            if (item.ratedCurrentA < consumerA) return false
+        }
 
         if (!selectedPoles.isNullOrBlank()) {
             if (item.polesText.split(",").map { it.trim() }.none { it == selectedPoles }) return false
         }
+
         if (!selectedCurve.isNullOrBlank()) {
             val itemCurve = item.curve ?: ""
             if (itemCurve.isBlank() || itemCurve != selectedCurve) return false
         }
+
         if (selectedAdditions.isNotEmpty()) {
             val itemExtras = parseExtrasFromAdditions(item.additionsRaw).map { it.trim() }
             if (!selectedAdditions.all { it in itemExtras }) return false
         }
+
         return true
     }
 
-    val passing = remember(items, maxKA, consumerA, selectedPoles, selectedCurve, selectedAdditions) {
+    val passing = remember(items, maxKA, consumerA, selectedPoles, selectedCurve, selectedAdditions, showAllSeriesDevices) {
         items.filter { passesAll(it) }
     }
 
-    val finalList = remember(passing, consumerA, protectionThreshold, protectionFactorLow, protectionFactorHigh) {
-        val groupedByModel = passing.groupBy { it.modelName }
-        val result = mutableListOf<BreakerUiItem>()
-
-        for ((_, variants) in groupedByModel) {
-            val candidates = variants.map { it.ratedCurrentA }.distinct().sorted()
-            if (candidates.isNotEmpty()) {
-                val firstNominal = candidates[0]
-                var bestCurrent = firstNominal
-                if (firstNominal > 0) {
-                    val a = consumerA / firstNominal
-                    val targetK = if (consumerA < protectionThreshold) protectionFactorLow else protectionFactorHigh
-                    if (a >= targetK) {
-                        if (candidates.size > 1) {
-                            bestCurrent = candidates[1]
-                        } else {
-                            bestCurrent = firstNominal
+    val finalList = remember(
+        passing,
+        consumerA,
+        protectionThreshold,
+        protectionFactorLow,
+        protectionFactorHigh,
+        showAllSeriesDevices,
+        standard
+    ) {
+        if (showAllSeriesDevices) {
+            passing
+                .groupBy { item ->
+                    val modelKey = item.modelName.trim()
+                    val currentKey = String.format("%.2f", item.ratedCurrentA)
+                    modelKey to currentKey
+                }
+                .values
+                .map { variants -> variants.minBy { it.variantId } } // или любая ваша логика выбора представителя
+                .sortedWith(compareBy<BreakerUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
+        } else {
+            // Стандартная логика подбора (ветка else без изменений)
+            val groupedByModel = passing.groupBy { it.modelName }
+            val result = mutableListOf<BreakerUiItem>()
+            for ((_, variants) in groupedByModel) {
+                val candidates = variants.map { it.ratedCurrentA }.distinct().sorted()
+                if (candidates.isNotEmpty()) {
+                    val firstNominal = candidates[0]
+                    var bestCurrent = firstNominal
+                    if (firstNominal > 0) {
+                        val a = consumerA / firstNominal
+                        val targetK = if (consumerA < protectionThreshold) protectionFactorLow else protectionFactorHigh
+                        if (a >= targetK) {
+                            bestCurrent = if (candidates.size > 1) {
+                                candidates[1]
+                            } else {
+                                firstNominal
+                            }
                         }
                     }
+                    val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
+                    result.addAll(bestVariants.distinctBy { it.breakingCapacityKa })
                 }
-                val bestVariants = variants.filter { abs(it.ratedCurrentA - bestCurrent) < 0.001f }
-                result.addAll(bestVariants.distinctBy { it.breakingCapacityKa })
             }
+            result.sortedWith(compareBy<BreakerUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
         }
-        result.sortedWith(compareBy<BreakerUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
 
     // UI Content
@@ -155,6 +183,14 @@ fun BreakerThirdWindow(
             Text("Iрасч: ${consumerCurrentAStr.ifBlank { "—" }} A")
             Spacer(Modifier.weight(1f))
             Text("U: ${consumerVoltageStr ?: "—"}")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = showAllSeriesDevices,
+                    onCheckedChange = { showAllSeriesDevices = it }
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("Все устройства серии", style = MaterialTheme.typography.body2)
+            }
         }
         Spacer(Modifier.height(8.dp))
 

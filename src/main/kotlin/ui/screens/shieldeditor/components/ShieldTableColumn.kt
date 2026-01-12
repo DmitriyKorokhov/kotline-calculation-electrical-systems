@@ -293,7 +293,7 @@ fun ShieldTableColumn(
             BlockPanel(color = BLOCKLAVENDER) {
                 // Номер автомата
                 CompactOutlinedTextField(
-                    label = "Номер автомата",
+                    label = "Номер защиты",
                     value = consumer.breakerNumber,
                     onValueChange = { consumer.breakerNumber = it; onDataChanged() },
                     contentPadding = FIELDCONTENTPADDING,
