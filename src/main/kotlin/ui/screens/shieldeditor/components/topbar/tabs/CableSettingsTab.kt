@@ -26,8 +26,8 @@ fun CableSettingsTab(
         data.cableInsulation = insulation
         val newTemp = when (insulation) {
             "PVC" -> "70"
-            "XLPE" -> "70"
-            "Polymer" -> "90"
+            "XLPE" -> "90"
+            "Polymer" -> "70"
             else -> "70"
         }
         data.cableTemperature = newTemp
@@ -63,12 +63,12 @@ fun CableSettingsTab(
                 Text("Поливинилхлоридный пластикат (В)")
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = data.cableInsulation == "XLPE", onClick = { updateTemp("XLPE") })
-                Text("Сшитый полиэтилен (Пв)")
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(selected = data.cableInsulation == "Polymer", onClick = { updateTemp("Polymer") })
                 Text("Полимерная композиция (П)")
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = data.cableInsulation == "XLPE", onClick = { updateTemp("XLPE") })
+                Text("Сшитый полиэтилен (Пв)")
             }
         }
 
@@ -86,7 +86,7 @@ fun CableSettingsTab(
             OutlinedTextField(
                 value = data.cableDescentPercent,
                 onValueChange = { data.cableDescentPercent = it; onSave() },
-                label = { Text("Опуск %") },
+                label = { Text("Опуск + Подъем %") },
                 modifier = Modifier.weight(1f)
             )
             OutlinedTextField(

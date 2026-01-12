@@ -128,7 +128,7 @@ fun ProtectionSettingsTab(
         Spacer(modifier = Modifier.height(24.dp))
 
         // --- Блок 4: Условие выбора защиты (Новое) ---
-        Text("Выбор номинального тока защиты", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.primary)
+        Text("Выбор номинального тока аппарата защиты", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.primary)
         Spacer(modifier = Modifier.height(16.dp))
 
         // Порог тока (40 А)
