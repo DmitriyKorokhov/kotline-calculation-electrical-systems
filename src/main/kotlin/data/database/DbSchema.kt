@@ -120,6 +120,7 @@ object CableCurrentRatings : Table() {
     val crossSection = float("cross_section")   // Сечение в мм²
     val currentInAir = float("current_in_air")  // Допустимый ток в воздухе (А)
     val currentInGround = float("current_in_ground") // Допустимый ток в земле (А)
+    val structure = varchar("structure", 32)
 
     override val primaryKey = PrimaryKey(id)
 }

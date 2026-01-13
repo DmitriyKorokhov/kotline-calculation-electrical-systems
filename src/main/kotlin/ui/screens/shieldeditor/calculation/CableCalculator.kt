@@ -11,6 +11,17 @@ import ui.screens.shieldeditor.ShieldData
 object CableCalculator {
 
     fun calculateCable(consumer: ConsumerModel, data: ShieldData) {
+
+        val inputLength = consumer.cableLength.replace(",", ".").toDoubleOrNull() ?: 0.0
+        val threshold = data.singleCoreThreshold.toDoubleOrNull() ?: 30.0
+
+        // 2. Определяем, какой кабель ищем: Одножильный или Многожильный
+        // Если трасса длинная (> threshold) -> Ищем SingleCore
+        // Если короткая (<= threshold) -> Ищем MultiCore
+        val targetStructure = if (inputLength > threshold) "SingleCore" else "MultiCore"
+
+
+
         val cableType = consumer.cableType
         val protectionStr = consumer.protectionDevice
 
@@ -54,7 +65,12 @@ object CableCalculator {
         val cores = if (voltage >= 380) 5 else 3
 
         // 6. Коэффициент снижения тока для многожильных кабелей (0.93 для 5 жил)
-        val kCores = if (cores == 5) 0.93f else 1.0f
+        val kCores = if (targetStructure == "SingleCore") {
+            1.0f // Для одножильных коэффициент не применяется
+        } else {
+            // Для многожильных применяем 0.93, если 5 жил
+            if (cores == 5) 0.93f else 1.0f
+        }
 
         // 7. Способ прокладки
         val isGround = consumer.layingMethod.contains("Земля", ignoreCase = true)
@@ -65,12 +81,13 @@ object CableCalculator {
         val targetTableCurrent = requiredCurrent / kCores
 
         transaction {
-            // Ищем подходящие записи: тот же материал, сортируем по току
+            // Ищем подходящие записи
             val query = CableCurrentRatings
                 .selectAll()
                 .where {
                     (CableCurrentRatings.material eq materialCode) and
-                            (CableCurrentRatings.insulation eq insulationCode)
+                            (CableCurrentRatings.insulation eq insulationCode) and
+                            (CableCurrentRatings.structure eq targetStructure) // <-- ФИЛЬТР ПО ТИПУ!
                 }
 
             val rating = query.map { row ->
@@ -79,18 +96,21 @@ object CableCalculator {
                 else row[CableCurrentRatings.currentInAir]
                 section to current
             }
-                .filter { (_, current) -> current >= targetTableCurrent } // Фильтруем те, что держат нагрузку
-                .minByOrNull { (section, _) -> section } // Берем минимальное сечение
+                .filter { (_, current) -> current >= targetTableCurrent }
+                .minByOrNull { (section, _) -> section }
 
             // 9. Записываем результат
             if (rating != null) {
                 val (bestSection, _) = rating
-                // Форматируем: "3x2.5" или "5x4"
-                // Удаляем .0 если целое число
                 val sectionStr = if (bestSection % 1.0 == 0.0) bestSection.toInt().toString() else bestSection.toString()
-                consumer.cableLine = "${cores}x$sectionStr"
+
+                if (targetStructure == "SingleCore") {
+                    consumer.cableLine = "${cores}x(1x$sectionStr)"
+                } else {
+                    consumer.cableLine = "${cores}x$sectionStr"
+                }
             } else {
-                consumer.cableLine = "Нет сечения" // Не нашли подходящего (ток слишком велик)
+                consumer.cableLine = "Нет сечения"
             }
         }
     }
@@ -103,12 +123,9 @@ object CableCalculator {
             return
         }
 
-        val reserve = data.cableReservePercent.toDoubleOrNull() ?: 0.0
-        val descent = data.cableDescentPercent.toDoubleOrNull() ?: 0.0
-        val termination = data.cableTerminationMeters.toDoubleOrNull() ?: 0.0
-
         // Полная длина L (в метрах)
-        val L = lengthInput * (1 + (reserve + descent) / 100) + termination
+        val L = getFullLength(lengthInput, data)
+
 
         // 2. Параметры нагрузки
         val U_nom = consumer.voltage.toDoubleOrNull() ?: 230.0
@@ -198,10 +215,9 @@ object CableCalculator {
             return
         }
 
-        val reserve = data.cableReservePercent.toDoubleOrNull() ?: 0.0
-        val descent = data.cableDescentPercent.toDoubleOrNull() ?: 0.0
-        val termination = data.cableTerminationMeters.toDoubleOrNull() ?: 0.0
-        val L = lengthInput * (1 + (reserve + descent) / 100) + termination
+        // Полная длина L (в метрах)
+        val L = getFullLength(lengthInput, data)
+
 
         // Сечение S
         val sectionRegex = Regex("""[xхXХ]\s*(\d+[.,]?\d*)""")
@@ -243,6 +259,22 @@ object CableCalculator {
         } else {
             consumer.shortCircuitCurrentkA = "∞"
         }
+    }
+
+    private fun getFullLength(inputLength: Double, data: ShieldData): Double {
+        // 1. Определяем процент запаса в зависимости от длины
+        val reservePercent = when {
+            inputLength <= 20.0 -> data.reserveTier1.toDoubleOrNull() ?: 25.0
+            inputLength <= 50.0 -> data.reserveTier2.toDoubleOrNull() ?: 17.0
+            inputLength <= 90.0 -> data.reserveTier3.toDoubleOrNull() ?: 12.0
+            else -> data.reserveTier4.toDoubleOrNull() ?: 10.0
+        }
+
+        val descent = data.cableDescentPercent.toDoubleOrNull() ?: 0.0
+        val termination = data.cableTerminationMeters.toDoubleOrNull() ?: 0.0
+
+        // 2. Считаем: (Длина * (1 + (Запас% + Опуск%) / 100)) + Разделка
+        return inputLength * (1 + (reservePercent + descent) / 100.0) + termination
     }
 }
 

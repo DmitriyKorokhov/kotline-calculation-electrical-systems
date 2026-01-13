@@ -108,6 +108,7 @@ data class DbCableCurrentRating(
     val insulation: String,    // "PVC", "HALOGEN_FREE" и т.д.
     val crossSection: Float,   // Сечение в мм²
     val currentInAir: Float,   // Ток в воздухе (А)
-    val currentInGround: Float // Ток в земле (А)
+    val currentInGround: Float, // Ток в земле (А)
+    val structure: String
 )
 

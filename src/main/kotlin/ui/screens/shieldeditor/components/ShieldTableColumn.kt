@@ -223,7 +223,7 @@ fun ShieldTableColumn(
                 // Установленная мощность
                 Column(modifier = Modifier.fillMaxWidth()) {
                     CompactOutlinedTextField(
-                        label = "Установ. мощность, Вт",
+                        label = "Установ. мощность, кВт",
                         value = consumer.installedPowerW,
                         onValueChange = {
                             consumer.installedPowerW = it
@@ -254,7 +254,7 @@ fun ShieldTableColumn(
 
                 // Расчетная мощность
                 CompactOutlinedTextField(
-                    label = "Расчетная мощность, Вт",
+                    label = "Расчетная мощность, кВт",
                     value = consumer.powerKw,
                     onValueChange = { consumer.powerKw = it; onCalculationRequired() },
                     contentPadding = FIELDCONTENTPADDING,

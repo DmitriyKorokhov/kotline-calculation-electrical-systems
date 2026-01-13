@@ -312,39 +312,89 @@ object DbSeeder {
     private fun seedCableCurrentRatings() {
         // Медь, Сшитый полиэтилен (Cu, XLPE)
         val copperXlpeRatings = listOf(
-            DbCableCurrentRating(0, "Cu", "XLPE", 1.5f, 25f, 31f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 2.5f, 34f, 40f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 4.0f, 45f, 52f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 6.0f, 56f, 64f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 10.0f, 78f, 86f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 16.0f, 104f, 112f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 25.0f, 141f, 144f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 35.0f, 172f, 173f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 50.0f, 209f, 205f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 70.0f, 265f, 253f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 95.0f, 327f, 304f),
-            DbCableCurrentRating(0, "Cu", "XLPE", 120.0f, 381f, 347f)
+            DbCableCurrentRating(0, "Cu", "XLPE", 1.5f, 25f, 31f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 2.5f, 34f, 40f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 4.0f, 45f, 52f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 6.0f, 56f, 64f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 10.0f, 78f, 86f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 16.0f, 104f, 112f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 25.0f, 141f, 144f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 35.0f, 172f, 173f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 50.0f, 209f, 205f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 70.0f, 265f, 253f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 95.0f, 327f, 304f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 120.0f, 381f, 347f, "MultiCore")
         )
         // Медь, ПВХ (Cu, PVC)
         val copperPvcRatings = listOf(
-            DbCableCurrentRating(0, "Cu", "PVC", 1.5f, 21f, 27f),
-            DbCableCurrentRating(0, "Cu", "PVC", 2.5f, 27f, 36f),
-            DbCableCurrentRating(0, "Cu", "PVC", 4.0f, 36f, 47f),
-            DbCableCurrentRating(0, "Cu", "PVC", 6.0f, 46f, 59f),
-            DbCableCurrentRating(0, "Cu", "PVC", 10.0f, 63f, 79f),
-            DbCableCurrentRating(0, "Cu", "PVC", 16.0f, 84f, 102f),
-            DbCableCurrentRating(0, "Cu", "PVC", 25.0f, 112f, 133f),
-            DbCableCurrentRating(0, "Cu", "PVC", 35.0f, 137f, 158f),
-            DbCableCurrentRating(0, "Cu", "PVC", 50.0f, 167f, 187f),
-            DbCableCurrentRating(0, "Cu", "PVC", 70.0f, 211f, 231f),
-            DbCableCurrentRating(0, "Cu", "PVC", 95.0f, 261f, 279f),
-            DbCableCurrentRating(0, "Cu", "PVC", 120.0f, 302f, 317f)
+            DbCableCurrentRating(0, "Cu", "PVC", 1.5f, 21f, 27f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 2.5f, 27f, 36f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 4.0f, 36f, 47f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 6.0f, 46f, 59f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 10.0f, 63f, 79f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 16.0f, 84f, 102f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 25.0f, 112f, 133f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 35.0f, 137f, 158f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 50.0f, 167f, 187f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 70.0f, 211f, 231f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 95.0f, 261f, 279f, "MultiCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 120.0f, 302f, 317f, "MultiCore")
         )
+        val copperPvcSingleRatings = listOf(
+            DbCableCurrentRating(0, "Cu", "PVC", 1.5f, 29f, 41f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 2.5f, 37f, 55f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 4.0f, 50f, 71f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 6.0f, 63f, 90f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 10.0f, 86f, 124f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 16.0f, 113f, 159f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 25.0f, 153f, 207f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 35.0f, 187f, 249f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 50.0f, 227f, 295f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 70.0f, 286f, 364f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 95.0f, 354f, 436f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "PVC", 120.0f, 413f, 499f, "SingleCore")
+        )
+
+        // 4. Медь, Полимер (Cu, Polymer) - ОДНОЖИЛЬНЫЙ (SingleCore) - дублируем данные, так как таблица общая
+        val copperPolymerSingleRatings = listOf(
+            DbCableCurrentRating(0, "Cu", "Polymer", 1.5f, 29f, 41f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 2.5f, 37f, 55f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 4.0f, 50f, 71f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 6.0f, 63f, 90f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 10.0f, 86f, 124f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 16.0f, 113f, 159f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 25.0f, 153f, 207f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 35.0f, 187f, 249f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 50.0f, 227f, 295f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 70.0f, 286f, 364f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 95.0f, 354f, 436f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "Polymer", 120.0f, 413f, 499f, "SingleCore")
+        )
+
+        // 5. Медь, XLPE (Cu, XLPE) - ОДНОЖИЛЬНЫЙ (SingleCore)
+        val copperXlpeSingleRatings = listOf(
+            DbCableCurrentRating(0, "Cu", "XLPE", 1.5f,  /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 2.5f,  /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 4.0f,  /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 6.0f,  /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 10.0f, /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 16.0f, /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 25.0f, /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 35.0f, /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 50.0f, /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 70.0f, /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 95.0f, /* air */ 0f,  /* ground */ 0f, "SingleCore"),
+            DbCableCurrentRating(0, "Cu", "XLPE", 120.0f,/* air */ 0f,  /* ground */ 0f, "SingleCore")
+        )
+
 
         // Объединяем все таблицы
         val allRatings = mutableListOf<DbCableCurrentRating>().apply {
             addAll(copperXlpeRatings)
             addAll(copperPvcRatings)
+            addAll(copperPvcSingleRatings)
+            addAll(copperPolymerSingleRatings)
+            addAll(copperXlpeSingleRatings)
         }
 
         // Вставляем в БД
@@ -354,6 +404,7 @@ object DbSeeder {
             this[CableCurrentRatings.crossSection] = rating.crossSection
             this[CableCurrentRatings.currentInAir] = rating.currentInAir
             this[CableCurrentRatings.currentInGround] = rating.currentInGround
+            this[CableCurrentRatings.structure] = rating.structure
         }
     }
 

@@ -16,7 +16,7 @@ object CalculationEngine {
         data.consumers.forEach { c ->
             val u = parse(c.voltage)
             val cosPhi = NumberUtils.parseDouble(c.cosPhi) ?: 1.0 // Если null, берем 1.0
-            val pW = parse(c.powerKw)
+            val pW = parse(c.powerKw) * 1000
 
             if (u > 0) {
                 // Формула тока: I = P / (U * cosPhi * [sqrt(3) для 3 фаз])
@@ -35,7 +35,7 @@ object CalculationEngine {
         val demandFactor = data.demandFactor.toFloatOrNull() ?: 1.0f
         val simultaneityFactor = data.simultaneityFactor.toFloatOrNull() ?: 1.0f
 
-        // А) Установленная мощность (сумма мощностей всех потребителей в Вт)
+        // А) Установленная мощность (сумма мощностей всех потребителей в кВт)
         val totalInstalledW = data.consumers.sumOf { parse(it.installedPowerW) }
         data.totalInstalledPower = "%.2f".format(totalInstalledW)
 
@@ -52,7 +52,7 @@ object CalculationEngine {
         // Г) Общий ток щита (А)
         // I_total = P_calc / (1.732 * 400 * cos_avg)
         val totalCurrent = if (avgCosPhi > 0.001) {
-            totalCalculatedW / (1.732 * 400.0 * avgCosPhi)
+            totalCalculatedW * 1000 / (1.732 * 400.0 * avgCosPhi)
         } else {
             0.0
         }

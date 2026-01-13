@@ -61,6 +61,13 @@ class ShieldData(
     var cableInductiveResistance by mutableStateOf("0.08") // мОм/м
 
     var cableIsFlexible by mutableStateOf(false)
+
+    var reserveTier1 by mutableStateOf("25") // 0 - 20 м
+    var reserveTier2 by mutableStateOf("17") // 20 - 50 м
+    var reserveTier3 by mutableStateOf("12") // 50 - 90 м
+    var reserveTier4 by mutableStateOf("10") // > 90 м
+
+    var singleCoreThreshold by mutableStateOf("30")
 }
 
 object ShieldStorage {

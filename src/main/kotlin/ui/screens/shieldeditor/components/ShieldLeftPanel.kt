@@ -174,8 +174,8 @@ fun ShieldLeftPanel(
         // Блок результатов
         BlockPanel(BLOCK_WHITE) {
             val results = listOf(
-                "Установ. мощность, Вт" to data.totalInstalledPower,
-                "Расчетная мощность, Вт" to data.totalCalculatedPower,
+                "Установ. мощность, кВт" to data.totalInstalledPower,
+                "Расчетная мощность, кВт" to data.totalCalculatedPower,
                 "cos(φ)" to data.averageCosPhi,
                 "Ток, А" to data.totalCurrent,
                 "Коэф. спроса щита" to data.shieldDemandFactor
