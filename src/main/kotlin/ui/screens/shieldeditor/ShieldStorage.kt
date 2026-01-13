@@ -59,6 +59,8 @@ class ShieldData(
     var cableTemperature by mutableStateOf("70")
 
     var cableInductiveResistance by mutableStateOf("0.08") // мОм/м
+
+    var cableIsFlexible by mutableStateOf(false)
 }
 
 object ShieldStorage {

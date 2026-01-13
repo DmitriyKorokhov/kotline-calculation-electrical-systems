@@ -22,7 +22,8 @@ class ConsumerModel(
     cableType: String = "",
     layingMethod: String = "",
     voltageDropV: String = "",
-    cableLength: String = ""
+    cableLength: String = "",
+    shortCircuitCurrentkA: String = ""
 ) {
     var name by mutableStateOf(name)
     var roomNumber by mutableStateOf(roomNumber)
@@ -42,6 +43,7 @@ class ConsumerModel(
     var cableType by mutableStateOf(cableType)
     var voltageDropV by mutableStateOf(voltageDropV)
     var cableLength by mutableStateOf(cableLength)
+    var shortCircuitCurrentkA by mutableStateOf("")
 
     fun deepCopy(): ConsumerModel {
         return ConsumerModel(
@@ -62,7 +64,8 @@ class ConsumerModel(
             cableType = cableType,
             layingMethod = layingMethod,
             voltageDropV = voltageDropV,
-            cableLength = cableLength
+            cableLength = cableLength,
+            shortCircuitCurrentkA = shortCircuitCurrentkA
         )
     }
 }

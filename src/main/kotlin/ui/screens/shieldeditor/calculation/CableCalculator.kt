@@ -164,6 +164,86 @@ object CableCalculator {
         // Форматирование: "5.2 В (2.1%)"
         consumer.voltageDropV = String.format("%.2f В (%.2f%%)%s", dU, dU_Percent, warning)
     }
+
+    fun calculateShortCircuitCurrent(consumer: ConsumerModel, data: ShieldData) {
+        // 1. Считываем Макс. ток КЗ системы (кА -> А)
+        val ikMaxKA = data.maxShortCircuitCurrent.replace(",", ".").toDoubleOrNull() ?: 0.0
+        if (ikMaxKA <= 0.0) {
+            consumer.shortCircuitCurrentkA = ""
+            return
+        }
+
+        // 2. Определяем напряжение и тип сети
+        // Если 380 или 400 и выше — считаем трехфазное КЗ (множитель 1)
+        // Иначе (220, 230) — считаем однофазное КЗ петли фаза-ноль (множитель 2)
+        val voltageInput = consumer.voltage.toIntOrNull() ?: 230
+        val isThreePhase = voltageInput >= 380
+
+        // Множитель сопротивления кабеля:
+        // Для 3-фазного (Iкз(3)): учитываем сопротивление одной жилы (фазы).
+        // Для 1-фазного (Iкз(1)): учитываем петлю фаза-нуль (2 жилы).
+        val loopMultiplier = if (isThreePhase) 1.0 else 2.0
+
+        // Напряжение для расчета всегда фазное (230В), т.к. эквивалентная схема считается на фазу
+        val uPhase = 230.0
+
+        // 3. Сопротивление системы (Xсист), приведенное к 230В
+        // Xсист = 230 / Iкз_сист(А)
+        val xSystem = uPhase / (ikMaxKA * 1000)
+
+        // 4. Параметры кабеля
+        val lengthInput = consumer.cableLength.replace(",", ".").toDoubleOrNull() ?: 0.0
+        if (lengthInput == 0.0) {
+            consumer.shortCircuitCurrentkA = ""
+            return
+        }
+
+        val reserve = data.cableReservePercent.toDoubleOrNull() ?: 0.0
+        val descent = data.cableDescentPercent.toDoubleOrNull() ?: 0.0
+        val termination = data.cableTerminationMeters.toDoubleOrNull() ?: 0.0
+        val L = lengthInput * (1 + (reserve + descent) / 100) + termination
+
+        // Сечение S
+        val sectionRegex = Regex("""[xхXХ]\s*(\d+[.,]?\d*)""")
+        val match = sectionRegex.find(consumer.cableLine)
+        val S = match?.groupValues?.get(1)?.replace(",", ".")?.toDoubleOrNull()
+
+        if (S == null || S <= 0.0) {
+            consumer.shortCircuitCurrentkA = ""
+            return
+        }
+
+        // Удельное сопротивление (rho)
+        val t = data.cableTemperature.toDoubleOrNull() ?: 65.0
+        val isCopper = data.cableMaterial == "Copper"
+        val rho = if (isCopper) {
+            0.018 * (1 + 0.00393 * (t - 20))
+        } else {
+            0.028 * (1 + 0.00403 * (t - 20))
+        }
+
+        // 5. Расчет R и X кабеля с учетом множителя (1 или 2)
+        val rCable = (rho * L / S) * loopMultiplier
+
+        val xMilli = data.cableInductiveResistance.replace(",", ".").toDoubleOrNull() ?: 0.08
+        val xCable = (xMilli / 1000.0 * L) * loopMultiplier
+
+        // 6. Полное сопротивление Z
+        // Z = корень(R^2 + (Xкабеля + Xсистемы)^2)
+        val rTotal = rCable
+        val xTotal = xCable + xSystem // Xсистемы добавляется к реактивному сопротивлению
+
+        val Z = kotlin.math.sqrt(rTotal * rTotal + xTotal * xTotal)
+
+        // 7. Находим ток КЗ
+        if (Z > 0) {
+            val ikEndA = uPhase / Z
+            val ikEndKA = ikEndA / 1000.0
+            consumer.shortCircuitCurrentkA = String.format("%.3f", ikEndKA)
+        } else {
+            consumer.shortCircuitCurrentkA = "∞"
+        }
+    }
 }
 
 

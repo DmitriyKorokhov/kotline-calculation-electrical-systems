@@ -12,6 +12,7 @@ import androidx.compose.material.Divider
 import androidx.compose.material.DropdownMenu
 import androidx.compose.material.DropdownMenuItem
 import androidx.compose.material.Icon
+import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -66,7 +67,7 @@ fun ShieldTableColumn(
     onCalculationRequired: () -> Unit,
     onRecalculateDropOnly: () -> Unit,
     onOpenProtectionDialog: () -> Unit,
-    data: ShieldData
+    data: ShieldData,
 ) {
     // --- Анимации выделения ---
     val targetBg = if (isSelected) Color(0xFF1976D2) else Color.Transparent
@@ -85,6 +86,15 @@ fun ShieldTableColumn(
         targetValue = targetScale,
         animationSpec = spring(stiffness = 400f)
     )
+
+    val pInst = consumer.installedPowerW.toDoubleOrNull() ?: 0.0
+    val pCalc = consumer.powerKw.toDoubleOrNull() ?: 0.0
+    // Ошибка, если Установленная строго меньше Расчетной
+    val isPowerError = pInst < pCalc
+
+    // Определяем цвета на основе ошибки
+    val currentUnfocusedBorder = if (isPowerError) Color.Red else Color.LightGray
+    val currentFocusedBorder = if (isPowerError) Color.Red else borderColor
 
     Box(
         modifier = Modifier
@@ -169,7 +179,7 @@ fun ShieldTableColumn(
 
                 // Помещение
                 CompactOutlinedTextField(
-                    label = "№ Помещения",
+                    label = "Номер Помещения",
                     value = consumer.roomNumber,
                     onValueChange = { consumer.roomNumber = it; onDataChanged() },
                     contentPadding = FIELDCONTENTPADDING,
@@ -211,17 +221,35 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Установленная мощность
-                CompactOutlinedTextField(
-                    label = "Установ. мощность, Вт",
-                    value = consumer.installedPowerW,
-                    onValueChange = { consumer.installedPowerW = it; onCalculationRequired() }, // Обычно влияет на итоги
-                    contentPadding = FIELDCONTENTPADDING,
-                    fontSizeSp = FIELDFONT,
-                    textColor = textColor,
-                    focusedBorderColor = borderColor,
-                    unfocusedBorderColor = Color.LightGray,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    CompactOutlinedTextField(
+                        label = "Установ. мощность, Вт",
+                        value = consumer.installedPowerW,
+                        onValueChange = {
+                            consumer.installedPowerW = it
+                            onDataChanged()
+                        },
+                        contentPadding = FIELDCONTENTPADDING,
+                        fontSizeSp = FIELDFONT,
+
+                        textColor = textColor,
+
+                        focusedBorderColor = currentFocusedBorder,
+                        unfocusedBorderColor = currentUnfocusedBorder,
+
+                        singleLine = false, minLines = 1, maxLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (isPowerError) {
+                        Text(
+                            text = "Ошибка: Pуст < Pрасч",
+                            color = textColor,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                        )
+                    }
+                }
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Расчетная мощность
@@ -366,7 +394,8 @@ fun ShieldTableColumn(
                                 showCableMenu = false
                             },
                             targetMaterial = if (data.cableMaterial == "Copper") "Copper" else "Aluminum",
-                            targetInsulation = data.cableInsulation
+                            targetInsulation = data.cableInsulation,
+                            isFlexible = data.cableIsFlexible
                         )
                     }
                 }
@@ -490,6 +519,21 @@ fun ShieldTableColumn(
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor, // Можно выделить красным, если есть warning (реализуйте логику цвета выше)
+                    focusedBorderColor = borderColor,
+                    unfocusedBorderColor = Color.LightGray,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(FIELDVSPACE))
+
+                // Ток КЗ в конце линии
+                CompactOutlinedTextField(
+                    label = "Ток КЗ в конце КЛ, кА",
+                    value = consumer.shortCircuitCurrentkA,
+                    onValueChange = {},
+                    contentPadding = FIELDCONTENTPADDING,
+                    fontSizeSp = FIELDFONT,
+                    textColor = textColor,
                     focusedBorderColor = borderColor,
                     unfocusedBorderColor = Color.LightGray,
                     modifier = Modifier.fillMaxWidth()

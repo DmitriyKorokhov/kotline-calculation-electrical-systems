@@ -221,6 +221,15 @@ object DbSeeder {
             ППГнг(А)
             ППГнг(А)-HF
             ППГнг(А)-FRHF
+            КГВВГнг(А)
+            КГВВГнг(А)-LS
+            КГВВГнг(А)-FRLS
+            КГППГнг(А)
+            КГППГнг(А)-HF
+            КГППГнг(А)-FRHF
+            АВВГнг(А)-LS
+            АПвПГнг(А)-HF
+            АППГнг(А)-HF
         """.trimIndent().lines()
 
         val cables = cableData

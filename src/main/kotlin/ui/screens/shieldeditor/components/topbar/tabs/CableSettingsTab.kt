@@ -1,8 +1,10 @@
 package ui.screens.shieldeditor.components.topbar.tabs
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.Checkbox
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.RadioButton
@@ -51,6 +53,30 @@ fun CableSettingsTab(
             Spacer(Modifier.width(16.dp))
             RadioButton(selected = data.cableMaterial == "Aluminum", onClick = { data.cableMaterial = "Aluminum"; onSave() })
             Text("Алюминий")
+        }
+
+        Spacer(Modifier.width(16.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable {
+                data.cableIsFlexible = !data.cableIsFlexible
+                onSave()
+            }
+        ) {
+            Text(
+                text = "Гибкий (КГ)",
+                style = MaterialTheme.typography.subtitle2,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.width(4.dp))
+            Checkbox(
+                checked = data.cableIsFlexible,
+                onCheckedChange = {
+                    data.cableIsFlexible = it
+                    onSave()
+                }
+            )
         }
 
         Spacer(Modifier.height(16.dp))

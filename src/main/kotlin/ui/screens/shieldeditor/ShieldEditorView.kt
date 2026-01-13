@@ -129,6 +129,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         PhaseDistributor.distributePhases(data)
                                         data.consumers.forEach { consumer ->
                                             CableCalculator.calculateVoltageDrop(consumer, data)
+                                            CableCalculator.calculateShortCircuitCurrent(consumer, data)
                                         }
                                         saveNow()
                                     },
@@ -216,11 +217,12 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                     data.consumers.forEach { consumer ->
                                                         CableCalculator.calculateCable(consumer, data)
                                                         CableCalculator.calculateVoltageDrop(consumer, data)
+                                                        CableCalculator.calculateShortCircuitCurrent(consumer, data)
                                                     }
                                                     saveNow()
                                                 },
                                                 onRecalculateDropOnly = {
-                                                    // Пересчитываем только падение напряжения (сечение уже изменено вручную)
+                                                    CableCalculator.calculateShortCircuitCurrent(consumer, data)
                                                     CableCalculator.calculateVoltageDrop(consumer, data)
                                                     saveNow()
                                                 },
@@ -306,8 +308,9 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         consumer.protectionPoles = poles
                         // Сброс и сохранение
                         protectionDialogForIndex = null
-                        CalculationEngine.calculateAll(data) // Общий пересчет
-                        CableCalculator.calculateCable(consumer, data) // Принудительный пересчет кабеля для этого потребителя
+                        CalculationEngine.calculateAll(data)
+                        CableCalculator.calculateCable(consumer, data)
+                        CableCalculator.calculateShortCircuitCurrent(consumer, data)
                         saveNow()
                     }
                 )
