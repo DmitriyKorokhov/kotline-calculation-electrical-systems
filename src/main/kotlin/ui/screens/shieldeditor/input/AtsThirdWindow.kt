@@ -42,7 +42,6 @@ private data class AtsUiItem(
 @Composable
 fun AtsThirdWindow(
     maxShortCircuitCurrentStr: String,
-    // consumerCurrentAStr больше не используется для фильтрации, но можно оставить в сигнатуре для совместимости
     consumerCurrentAStr: String,
     selectedSeries: String?,
     selectedPoles: String?,

@@ -35,8 +35,8 @@ import kotlin.math.roundToInt
 enum class InputType(val title: String, val needsBreakerConfig: Boolean) {
     TWO_INPUTS_ATS_BREAKERS("Два ввода на общую шину с АВР на автоматических выключателях с моторприводом", false),
     TWO_INPUTS_ATS_CONTACTORS("Два ввода на общую шину с АВР на контакторах с моторприводом", false),
-    ONE_INPUT_SWITCH("Один ввод с выключателем нагрузки", false),
-    ONE_INPUT_BREAKER("Один ввод с автоматическим выключателем", true),
+    ONE_INPUT_SWITCH("N-вводов с выключателями нагрузки", false),
+    ONE_INPUT_BREAKER("N-вводов с автоматическими выключателями", true),
     ATS_BLOCK_TWO_INPUTS("Блок АВР на два ввода на общую шину", false);
 }
 
@@ -76,17 +76,43 @@ fun InputTypePopup(
     val inputBreakerState = remember { mutableStateOf(BreakerDialogState()) }
     val atsState = remember { mutableStateOf(AtsDialogState()) }
 
+    var showAtsBreakerSecond by remember { mutableStateOf(false) }
+    var showAtsBreakerThird by remember { mutableStateOf(false) }
+
     fun proceedToConfiguration() {
         val type = selectedType
-        if (type == InputType.ONE_INPUT_BREAKER) {
-            showInputParamsWindow = true
-        } else if (type == InputType.TWO_INPUTS_ATS_BREAKERS || type.needsBreakerConfig) {
-            inputBreakerState.value = BreakerDialogState(manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() })
-            showInputBreakerSecond = true
-        } else {
-            data.inputInfo = type.title
-            onSave()
-            onDismissRequest()
+
+        when (type) {
+            // 1. Одно вводное устройство (обычное окно параметров тока)
+            InputType.ONE_INPUT_BREAKER -> {
+                showInputParamsWindow = true
+            }
+
+            // 2. АВР на автоматах (НОВЫЕ ОКНА AtsBreaker...)
+            InputType.TWO_INPUTS_ATS_BREAKERS -> {
+                // Инициализируем состояние диалога производителем из настроек щита
+                inputBreakerState.value = BreakerDialogState(
+                    manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
+                )
+                // Открываем СПЕЦИАЛЬНОЕ окно для АВР
+                showAtsBreakerSecond = true
+            }
+
+            // 3. Другие типы, требующие настройки автомата (старые окна Breaker...)
+            else -> {
+                if (type.needsBreakerConfig) {
+                    inputBreakerState.value = BreakerDialogState(
+                        manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
+                    )
+                    // Открываем ОБЫЧНОЕ окно автомата
+                    showInputBreakerSecond = true
+                } else {
+                    // 4. Типы без доп. настроек (просто сохраняем название)
+                    data.inputInfo = type.title
+                    onSave()
+                    onDismissRequest()
+                }
+            }
         }
     }
 
@@ -156,12 +182,15 @@ fun InputTypePopup(
                                 isSelected = type == selectedType,
                                 onClick = {
                                     selectedType = type
-                                    // АВТОМАТИЧЕСКИЙ ПЕРЕХОД: Если выбран АВР, сразу ставим шаг 1
-                                    if (type == InputType.ATS_BLOCK_TWO_INPUTS) {
-                                        atsState.value = AtsDialogState(
-                                            manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
-                                        )
-                                        atsStep = 1
+                                    if (type == InputType.ATS_BLOCK_TWO_INPUTS || type == InputType.TWO_INPUTS_ATS_BREAKERS) {
+                                        if (type == InputType.TWO_INPUTS_ATS_BREAKERS) {
+                                            // Инициализация состояния для автоматов
+                                            inputBreakerState.value = BreakerDialogState(manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() })
+                                        } else {
+                                            // Инициализация для блочного АВР
+                                            atsState.value = AtsDialogState(manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() })
+                                        }
+                                        atsStep = 1 // <--- Запускаем сразу
                                     } else {
                                         atsStep = 0
                                     }
@@ -179,7 +208,68 @@ fun InputTypePopup(
                         .padding(16.dp)
                 ) {
                     // Ветвление логики отображения
-                    if (selectedType == InputType.ATS_BLOCK_TWO_INPUTS && atsStep > 0) {
+
+                    if (selectedType == InputType.TWO_INPUTS_ATS_BREAKERS && atsStep > 0) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Заголовок
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (atsStep == 2) {
+                                    IconButton(onClick = { atsStep = 1 }) {
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                                    }
+                                }
+                                Text(
+                                    text = if (atsStep == 1) "Параметры автоматов АВР" else "Выбор автомата",
+                                    style = MaterialTheme.typography.h6,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Divider(modifier = Modifier.padding(vertical = 16.dp))
+
+                            // Контент шагов
+                            if (atsStep == 1) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    AtsBreakerSecondWindow( // <-- ВАШ НОВЫЙ КОМПОНЕНТ
+                                        initialManufacturer = inputBreakerState.value.manufacturer,
+                                        initialSeries = inputBreakerState.value.series,
+                                        initialSelectedAdditions = inputBreakerState.value.selectedAdditions,
+                                        initialSelectedPoles = inputBreakerState.value.selectedPoles,
+                                        initialSelectedCurve = inputBreakerState.value.selectedCurve,
+                                        onBack = { atsStep = 0 }, // Возврат к пустому экрану
+                                        onDismiss = onDismissRequest,
+                                        onConfirm = { res ->
+                                            inputBreakerState.value = inputBreakerState.value.copy(
+                                                series = res.series,
+                                                selectedAdditions = res.selectedAdditions,
+                                                selectedPoles = res.selectedPoles,
+                                                selectedCurve = res.selectedCurve
+                                            )
+                                            atsStep = 2 // Переход к списку
+                                        }
+                                    )
+                                }
+                            } else if (atsStep == 2) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    AtsBreakerThirdWindow( // <-- ВАШ НОВЫЙ КОМПОНЕНТ
+                                        maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
+                                        standard = data.protectionStandard,
+                                        selectedSeries = inputBreakerState.value.series,
+                                        selectedPoles = inputBreakerState.value.selectedPoles,
+                                        selectedAdditions = inputBreakerState.value.selectedAdditions,
+                                        selectedCurve = inputBreakerState.value.selectedCurve,
+                                        onBack = { atsStep = 1 },
+                                        onDismiss = onDismissRequest,
+                                        onChoose = { resultString ->
+                                            data.inputInfo = "${InputType.TWO_INPUTS_ATS_BREAKERS.title}\n$resultString"
+                                            onSave()
+                                            onDismissRequest()
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    else if (selectedType == InputType.ATS_BLOCK_TWO_INPUTS && atsStep > 0) {
                         // --- ВСТРОЕННЫЙ ИНТЕРФЕЙС АВР ---
                         Column(modifier = Modifier.fillMaxSize()) {
                             // Заголовок шага с кнопкой Назад (если шаг 2)
@@ -240,8 +330,67 @@ fun InputTypePopup(
                                 )
                             }
                         }
+                    } else if (selectedType == InputType.TWO_INPUTS_ATS_BREAKERS && atsStep > 0) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            // Заголовок
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (atsStep == 2) {
+                                    IconButton(onClick = { atsStep = 1 }) {
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                                    }
+                                }
+                                Text(
+                                    text = if (atsStep == 1) "Параметры автоматов АВР" else "Выбор автомата",
+                                    style = MaterialTheme.typography.h6,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Divider(modifier = Modifier.padding(vertical = 16.dp))
 
-                    } else {
+                            // Контент шагов
+                            if (atsStep == 1) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    AtsBreakerSecondWindow( // <-- ВАШ НОВЫЙ КОМПОНЕНТ
+                                        initialManufacturer = inputBreakerState.value.manufacturer,
+                                        initialSeries = inputBreakerState.value.series,
+                                        initialSelectedAdditions = inputBreakerState.value.selectedAdditions,
+                                        initialSelectedPoles = inputBreakerState.value.selectedPoles,
+                                        initialSelectedCurve = inputBreakerState.value.selectedCurve,
+                                        onBack = { atsStep = 0 }, // Возврат к пустому экрану
+                                        onDismiss = onDismissRequest,
+                                        onConfirm = { res ->
+                                            inputBreakerState.value = inputBreakerState.value.copy(
+                                                series = res.series,
+                                                selectedAdditions = res.selectedAdditions,
+                                                selectedPoles = res.selectedPoles,
+                                                selectedCurve = res.selectedCurve
+                                            )
+                                            atsStep = 2 // Переход к списку
+                                        }
+                                    )
+                                }
+                            } else if (atsStep == 2) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    AtsBreakerThirdWindow( // <-- ВАШ НОВЫЙ КОМПОНЕНТ
+                                        maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
+                                        standard = data.protectionStandard,
+                                        selectedSeries = inputBreakerState.value.series,
+                                        selectedPoles = inputBreakerState.value.selectedPoles,
+                                        selectedAdditions = inputBreakerState.value.selectedAdditions,
+                                        selectedCurve = inputBreakerState.value.selectedCurve,
+                                        onBack = { atsStep = 1 },
+                                        onDismiss = onDismissRequest,
+                                        onChoose = { resultString ->
+                                            data.inputInfo = "${InputType.TWO_INPUTS_ATS_BREAKERS.title}\n$resultString"
+                                            onSave()
+                                            onDismissRequest()
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    else {
                         // --- СТАНДАРТНЫЙ ИНТЕРФЕЙС (для остальных типов) ---
                         Column(
                             modifier = Modifier.fillMaxSize(),
@@ -273,7 +422,6 @@ fun InputTypePopup(
             }
         }
 
-        // --- Resize Handle (без изменений) ---
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)

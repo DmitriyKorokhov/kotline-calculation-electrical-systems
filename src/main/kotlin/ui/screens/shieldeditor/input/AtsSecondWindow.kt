@@ -33,7 +33,6 @@ fun AtsSecondWindow(
     initialSeries: String? = null,
     initialSelectedPoles: String? = null,
     consumerVoltageStr: String? = null,
-    // ИЗМЕНЕНИЕ: Добавлен аргумент manufacturer в callback
     onParamsChanged: (manufacturer: String, series: String?, poles: String?) -> Unit
 ) {
     var manufacturer by remember { mutableStateOf(initialManufacturer ?: "") }
