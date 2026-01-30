@@ -124,7 +124,7 @@ fun RcdSecondWindow(
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Text("Параметры УЗО (RCD)", style = MaterialTheme.typography.h6)
+        Text("Параметры УЗО", style = MaterialTheme.typography.h6)
         Spacer(Modifier.height(12.dp))
 
         // --- Серия ---
@@ -139,7 +139,7 @@ fun RcdSecondWindow(
                 onValueChange = {},
                 readOnly = true,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(300.dp)
                     .onGloballyPositioned { coordinates -> textFieldSize = coordinates.size.toSize() }
                     .clickable { expanded = true },
                 trailingIcon = {

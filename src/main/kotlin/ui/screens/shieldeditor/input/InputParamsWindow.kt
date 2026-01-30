@@ -15,8 +15,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+
 // Нужно изменить название класса
-// Один ввод с автоматическим выключателем
+// N-вводов с автоматическим выключателем и байпасом
 @Composable
 fun InputParamsWindow(
     onBack: () -> Unit,

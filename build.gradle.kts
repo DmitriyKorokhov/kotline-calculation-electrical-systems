@@ -19,6 +19,8 @@ repositories {
 dependencies {
     implementation(compose.desktop.currentOs)
 
+    implementation(compose.materialIconsExtended)
+
     // Зависимость для kotlinx-serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 

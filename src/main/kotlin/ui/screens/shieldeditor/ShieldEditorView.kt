@@ -10,8 +10,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.isTertiaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -29,7 +35,7 @@ import ui.screens.shieldeditor.protection.protectionTypeFromString
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
 private val SCROLLBAR_HEIGHT: Dp = 22.dp
 
-@OptIn(ExperimentalAnimationApi::class)
+@OptIn(ExperimentalAnimationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     // данные щита (ShieldData поля уже mutableStateOf)
@@ -74,7 +80,29 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
 
     var showCalculationWindow by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val focusRequester = remember { FocusRequester() }
+
+    // Запрашиваем фокус при запуске экрана, чтобы ловить нажатия клавиш
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.key == Key.Escape && event.type == KeyEventType.KeyDown) {
+                    // Если нажали ESC и есть выделенные колонки -> очищаем
+                    if (selectedColumns.isNotEmpty()) {
+                        selectedColumns.clear()
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                false
+            }
+    ) {
 
         Column(Modifier.fillMaxSize()) {
             // Top bar сверху
@@ -180,6 +208,23 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .horizontalScroll(hScrollState)
+                                            .pointerInput(Unit) {
+                                                awaitPointerEventScope {
+                                                    while (true) {
+                                                        val event = awaitPointerEvent()
+                                                        if (event.buttons.isTertiaryPressed) {
+                                                            val change = event.changes.firstOrNull()
+                                                            if (change != null) {
+                                                                val dragAmount = change.position - change.previousPosition
+                                                                if (dragAmount.x != 0f) {
+                                                                    hScrollState.dispatchRawDelta(-dragAmount.x)
+                                                                    change.consume()
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                             .padding(vertical = 6.dp)
                                     ) {
                                         Spacer(modifier = Modifier.width(6.dp))
@@ -234,7 +279,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                 }
                             }
 
-                            // Горизонтальный scrollbar снизу (толще для удобства)
+                            // Горизонтальный scrollbar снизу
                             HorizontalScrollbar(
                                 adapter = rememberScrollbarAdapter(hScrollState),
                                 modifier = Modifier

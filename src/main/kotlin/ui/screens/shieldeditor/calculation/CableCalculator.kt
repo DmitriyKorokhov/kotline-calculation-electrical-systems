@@ -277,5 +277,3 @@ object CableCalculator {
         return inputLength * (1 + (reservePercent + descent) / 100.0) + termination
     }
 }
-
-

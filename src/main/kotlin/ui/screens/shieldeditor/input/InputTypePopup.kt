@@ -6,32 +6,30 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import ui.screens.shieldeditor.ShieldData
-import ui.screens.shieldeditor.dialogs.AtsDialogState
+import java.awt.Cursor
 import kotlin.math.roundToInt
 
-// Перечисление типов ввода
+// --- Enum Definition ---
 enum class InputType(val title: String, val needsBreakerConfig: Boolean) {
     TWO_INPUTS_ATS_BREAKERS("Два ввода на общую шину с АВР на автоматических выключателях с моторприводом", false),
     TWO_INPUTS_ATS_CONTACTORS("Два ввода на общую шину с АВР на контакторах с моторприводом", false),
@@ -40,12 +38,19 @@ enum class InputType(val title: String, val needsBreakerConfig: Boolean) {
     ATS_BLOCK_TWO_INPUTS("Блок АВР на два ввода на общую шину", false);
 }
 
-private data class BreakerDialogState(
+// --- State Holders ---
+private data class AtsBreakerState(
     val manufacturer: String? = null,
     val series: String? = null,
     val selectedAdditions: List<String> = emptyList(),
     val selectedPoles: String? = null,
     val selectedCurve: String? = null
+)
+
+private data class AtsBlockState(
+    val manufacturer: String? = null,
+    val series: String? = null,
+    val selectedPoles: String? = null
 )
 
 @Composable
@@ -54,81 +59,50 @@ fun InputTypePopup(
     onDismissRequest: () -> Unit,
     onSave: () -> Unit
 ) {
-    // Начальная позиция
+    val density = LocalDensity.current
+
+    // Window Position & Size State
     var offsetX by remember { mutableStateOf(100f) }
     var offsetY by remember { mutableStateOf(100f) }
+    var widthDp by remember { mutableStateOf(950.dp) }
+    var heightDp by remember { mutableStateOf(650.dp) }
 
-    var atsStep by remember { mutableStateOf(0) }
-    // Размеры окна (как в ProtectionSelectionWindow)
-    var currentWidth by remember { mutableStateOf(950.dp) }
-    var currentHeight by remember { mutableStateOf(650.dp) } // Было 600, стало 650
+    val minWidth = 700.dp
+    val minHeight = 500.dp
+    val resizeHandleSize = 8.dp
 
-    val density = LocalDensity.current
-    var selectedType by remember { mutableStateOf(InputType.values().first()) }
+    var selectedType by remember { mutableStateOf(InputType.TWO_INPUTS_ATS_BREAKERS) }
 
-    // --- Состояния логики переходов ---
-    var showInputParamsWindow by remember { mutableStateOf(false) }
-    var showInputBreakerSecond by remember { mutableStateOf(false) }
-    var showInputBreakerThird by remember { mutableStateOf(false) }
-    var showAtsSecondWindow by remember { mutableStateOf(false) }
-    var showAtsThirdWindow by remember { mutableStateOf(false) }
+    // --- Workflow States ---
 
-    val inputBreakerState = remember { mutableStateOf(BreakerDialogState()) }
-    val atsState = remember { mutableStateOf(AtsDialogState()) }
-
-    var showAtsBreakerSecond by remember { mutableStateOf(false) }
-    var showAtsBreakerThird by remember { mutableStateOf(false) }
-
-    fun proceedToConfiguration() {
-        val type = selectedType
-
-        when (type) {
-            // 1. Одно вводное устройство (обычное окно параметров тока)
-            InputType.ONE_INPUT_BREAKER -> {
-                showInputParamsWindow = true
-            }
-
-            // 2. АВР на автоматах (НОВЫЕ ОКНА AtsBreaker...)
-            InputType.TWO_INPUTS_ATS_BREAKERS -> {
-                // Инициализируем состояние диалога производителем из настроек щита
-                inputBreakerState.value = BreakerDialogState(
-                    manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
-                )
-                // Открываем СПЕЦИАЛЬНОЕ окно для АВР
-                showAtsBreakerSecond = true
-            }
-
-            // 3. Другие типы, требующие настройки автомата (старые окна Breaker...)
-            else -> {
-                if (type.needsBreakerConfig) {
-                    inputBreakerState.value = BreakerDialogState(
-                        manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }
-                    )
-                    // Открываем ОБЫЧНОЕ окно автомата
-                    showInputBreakerSecond = true
-                } else {
-                    // 4. Типы без доп. настроек (просто сохраняем название)
-                    data.inputInfo = type.title
-                    onSave()
-                    onDismissRequest()
-                }
-            }
-        }
+    // 1. Для АВР на автоматах
+    var atsBreakerStep by remember { mutableStateOf(1) }
+    var atsBreakerParams by remember {
+        mutableStateOf(AtsBreakerState(manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }))
     }
 
-    // Основной контейнер окна
+    // 2. Для блочного АВР
+    var atsBlockStep by remember { mutableStateOf(1) }
+    var atsBlockParams by remember {
+        mutableStateOf(AtsBlockState(manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() }))
+    }
+
+    // Сброс шагов при смене типа
+    LaunchedEffect(selectedType) {
+        atsBreakerStep = 1
+        atsBlockStep = 1
+    }
+
     Box(
         modifier = Modifier
-            .zIndex(10f)
             .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-            .size(currentWidth, currentHeight)
+            .size(widthDp, heightDp)
             .shadow(16.dp, RoundedCornerShape(4.dp))
-            .clip(RoundedCornerShape(4.dp))
-            .background(MaterialTheme.colors.surface)
+            .background(MaterialTheme.colors.surface, RoundedCornerShape(4.dp))
             .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // --- Заголовок (Draggable Area) ---
+            // --- Header (Draggable) ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -145,7 +119,7 @@ fun InputTypePopup(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Тип вводного устройства",
+                    text = "Выбор вводного устройства",
                     style = MaterialTheme.typography.subtitle1,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 16.dp)
@@ -156,8 +130,8 @@ fun InputTypePopup(
             }
             Divider(color = Color.Gray.copy(alpha = 0.2f))
 
-            Row(modifier = Modifier.weight(1f)) {
-                // --- Левая панель (Sidebar) ---
+            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                // --- Sidebar (Left) ---
                 Column(
                     modifier = Modifier
                         .width(260.dp)
@@ -167,255 +141,138 @@ fun InputTypePopup(
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Доступные варианты",
+                        text = "Тип вводного устройства",
                         style = MaterialTheme.typography.caption,
                         color = MaterialTheme.colors.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
                     )
-                    LazyColumn(
-                        contentPadding = PaddingValues(horizontal = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        items(InputType.entries.toTypedArray()) { type ->
-                            SidebarItem(
-                                text = type.title,
-                                isSelected = type == selectedType,
-                                onClick = {
-                                    selectedType = type
-                                    if (type == InputType.ATS_BLOCK_TWO_INPUTS || type == InputType.TWO_INPUTS_ATS_BREAKERS) {
-                                        if (type == InputType.TWO_INPUTS_ATS_BREAKERS) {
-                                            // Инициализация состояния для автоматов
-                                            inputBreakerState.value = BreakerDialogState(manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() })
-                                        } else {
-                                            // Инициализация для блочного АВР
-                                            atsState.value = AtsDialogState(manufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() })
-                                        }
-                                        atsStep = 1 // <--- Запускаем сразу
-                                    } else {
-                                        atsStep = 0
-                                    }
-                                }
-                            )
-                        }
+
+                    InputType.entries.forEach { type ->
+                        SidebarItem(
+                            text = type.title,
+                            isSelected = selectedType == type,
+                            onClick = { selectedType = type }
+                        )
                     }
                 }
 
-                // --- Правая панель (Main Content) ---
+                // --- Content (Right) ---
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .padding(16.dp)
                 ) {
-                    // Ветвление логики отображения
-
-                    if (selectedType == InputType.TWO_INPUTS_ATS_BREAKERS && atsStep > 0) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // Заголовок
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (atsStep == 2) {
-                                    IconButton(onClick = { atsStep = 1 }) {
-                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    when (selectedType) {
+                        // === СЦЕНАРИЙ 1: АВР НА АВТОМАТАХ ===
+                        InputType.TWO_INPUTS_ATS_BREAKERS -> {
+                            if (atsBreakerStep == 1) {
+                                AtsBreakerSecondWindow(
+                                    initialManufacturer = atsBreakerParams.manufacturer,
+                                    initialSeries = atsBreakerParams.series,
+                                    initialSelectedAdditions = atsBreakerParams.selectedAdditions,
+                                    initialSelectedPoles = atsBreakerParams.selectedPoles,
+                                    initialSelectedCurve = atsBreakerParams.selectedCurve,
+                                    onBack = { /* Нет шага назад, это первый шаг */ },
+                                    onDismiss = onDismissRequest,
+                                    onConfirm = { res ->
+                                        atsBreakerParams = atsBreakerParams.copy(
+                                            series = res.series,
+                                            selectedAdditions = res.selectedAdditions,
+                                            selectedPoles = res.selectedPoles,
+                                            selectedCurve = res.selectedCurve
+                                        )
+                                        atsBreakerStep = 2
                                     }
-                                }
-                                Text(
-                                    text = if (atsStep == 1) "Параметры автоматов АВР" else "Выбор автомата",
-                                    style = MaterialTheme.typography.h6,
-                                    fontWeight = FontWeight.Bold
                                 )
-                            }
-                            Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-                            // Контент шагов
-                            if (atsStep == 1) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    AtsBreakerSecondWindow( // <-- ВАШ НОВЫЙ КОМПОНЕНТ
-                                        initialManufacturer = inputBreakerState.value.manufacturer,
-                                        initialSeries = inputBreakerState.value.series,
-                                        initialSelectedAdditions = inputBreakerState.value.selectedAdditions,
-                                        initialSelectedPoles = inputBreakerState.value.selectedPoles,
-                                        initialSelectedCurve = inputBreakerState.value.selectedCurve,
-                                        onBack = { atsStep = 0 }, // Возврат к пустому экрану
-                                        onDismiss = onDismissRequest,
-                                        onConfirm = { res ->
-                                            inputBreakerState.value = inputBreakerState.value.copy(
-                                                series = res.series,
-                                                selectedAdditions = res.selectedAdditions,
-                                                selectedPoles = res.selectedPoles,
-                                                selectedCurve = res.selectedCurve
-                                            )
-                                            atsStep = 2 // Переход к списку
-                                        }
-                                    )
-                                }
-                            } else if (atsStep == 2) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    AtsBreakerThirdWindow( // <-- ВАШ НОВЫЙ КОМПОНЕНТ
-                                        maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
-                                        standard = data.protectionStandard,
-                                        selectedSeries = inputBreakerState.value.series,
-                                        selectedPoles = inputBreakerState.value.selectedPoles,
-                                        selectedAdditions = inputBreakerState.value.selectedAdditions,
-                                        selectedCurve = inputBreakerState.value.selectedCurve,
-                                        onBack = { atsStep = 1 },
-                                        onDismiss = onDismissRequest,
-                                        onChoose = { resultString ->
-                                            data.inputInfo = "${InputType.TWO_INPUTS_ATS_BREAKERS.title}\n$resultString"
-                                            onSave()
-                                            onDismissRequest()
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    else if (selectedType == InputType.ATS_BLOCK_TWO_INPUTS && atsStep > 0) {
-                        // --- ВСТРОЕННЫЙ ИНТЕРФЕЙС АВР ---
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // Заголовок шага с кнопкой Назад (если шаг 2)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (atsStep == 2) {
-                                    IconButton(onClick = { atsStep = 1 }) {
-                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
-                                    }
-                                }
-                                Text(
-                                    text = if (atsStep == 1) "Параметры АВР" else "Выбор устройства",
-                                    style = MaterialTheme.typography.h6,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Divider(modifier = Modifier.padding(vertical = 16.dp))
-                            // Контент шагов
-                            if (atsStep == 1) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    AtsSecondWindow(
-                                        initialManufacturer = atsState.value.manufacturer,
-                                        initialSeries = atsState.value.series,
-                                        initialSelectedPoles = atsState.value.selectedPoles,
-                                        consumerVoltageStr = "400",
-                                        onParamsChanged = { man, ser, pol ->
-                                            atsState.value = atsState.value.copy(
-                                                manufacturer = man,
-                                                series = ser,
-                                                selectedPoles = pol
-                                            )
-                                        }
-                                    )
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Button(
-                                        onClick = { atsStep = 2 },
-                                        enabled = !atsState.value.series.isNullOrBlank() && !atsState.value.selectedPoles.isNullOrBlank()
-                                    ) {
-                                        Text("Далее")
-                                    }
-                                }
                             } else {
-                                // ШАГ 2: AtsThirdWindow (список)
-                                AtsThirdWindow(
+                                AtsBreakerThirdWindow(
                                     maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
-                                    consumerCurrentAStr = data.totalCurrent,
-                                    selectedSeries = atsState.value.series,
-                                    selectedPoles = atsState.value.selectedPoles,
-                                    onChoose = { resultStr ->
-                                        val fullText = selectedType.title + "\n---------------------------------\n" + resultStr
-                                        data.inputInfo = fullText
+                                    standard = data.protectionStandard,
+                                    selectedSeries = atsBreakerParams.series,
+                                    selectedPoles = atsBreakerParams.selectedPoles,
+                                    selectedAdditions = atsBreakerParams.selectedAdditions,
+                                    selectedCurve = atsBreakerParams.selectedCurve,
+                                    onBack = { atsBreakerStep = 1 },
+                                    onDismiss = onDismissRequest,
+                                    onChoose = { resultString ->
+                                        data.inputInfo = "${InputType.TWO_INPUTS_ATS_BREAKERS.title}\n$resultString"
                                         onSave()
                                         onDismissRequest()
                                     }
                                 )
                             }
                         }
-                    } else if (selectedType == InputType.TWO_INPUTS_ATS_BREAKERS && atsStep > 0) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // Заголовок
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (atsStep == 2) {
-                                    IconButton(onClick = { atsStep = 1 }) {
-                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+
+                        // === СЦЕНАРИЙ 2: БЛОЧНЫЙ АВР ===
+                        InputType.ATS_BLOCK_TWO_INPUTS -> {
+                            if (atsBlockStep == 1) {
+                                AtsSecondWindow(
+                                    initialManufacturer = atsBlockParams.manufacturer,
+                                    initialSeries = atsBlockParams.series,
+                                    initialSelectedPoles = atsBlockParams.selectedPoles,
+                                    consumerVoltageStr = "400", // По умолчанию для ввода
+                                    onParamsChanged = { man, ser, pol ->
+                                        atsBlockParams = atsBlockParams.copy(
+                                            manufacturer = man,
+                                            series = ser,
+                                            selectedPoles = pol
+                                        )
+                                    }
+                                )
+                                // Кнопка "Далее" для AtsSecondWindow, так как он может не иметь встроенной кнопки
+                                Box(Modifier.fillMaxSize()) {
+                                    Button(
+                                        onClick = { atsBlockStep = 2 },
+                                        enabled = !atsBlockParams.series.isNullOrBlank() && !atsBlockParams.selectedPoles.isNullOrBlank(),
+                                        modifier = Modifier.align(Alignment.BottomEnd)
+                                    ) {
+                                        Text("Далее")
                                     }
                                 }
-                                Text(
-                                    text = if (atsStep == 1) "Параметры автоматов АВР" else "Выбор автомата",
-                                    style = MaterialTheme.typography.h6,
-                                    fontWeight = FontWeight.Bold
+                            } else {
+                                AtsThirdWindow(
+                                    maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
+                                    consumerCurrentAStr = data.totalCurrent,
+                                    selectedSeries = atsBlockParams.series,
+                                    selectedPoles = atsBlockParams.selectedPoles,
+                                    onBack = { atsBlockStep = 1 },
+                                    onChoose = { resultStr ->
+                                        val fullText = "${InputType.ATS_BLOCK_TWO_INPUTS.title}\n---------------------------------\n$resultStr"
+                                        data.inputInfo = fullText
+                                        onSave()
+                                        onDismissRequest()
+                                    }
                                 )
-                            }
-                            Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-                            // Контент шагов
-                            if (atsStep == 1) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    AtsBreakerSecondWindow( // <-- ВАШ НОВЫЙ КОМПОНЕНТ
-                                        initialManufacturer = inputBreakerState.value.manufacturer,
-                                        initialSeries = inputBreakerState.value.series,
-                                        initialSelectedAdditions = inputBreakerState.value.selectedAdditions,
-                                        initialSelectedPoles = inputBreakerState.value.selectedPoles,
-                                        initialSelectedCurve = inputBreakerState.value.selectedCurve,
-                                        onBack = { atsStep = 0 }, // Возврат к пустому экрану
-                                        onDismiss = onDismissRequest,
-                                        onConfirm = { res ->
-                                            inputBreakerState.value = inputBreakerState.value.copy(
-                                                series = res.series,
-                                                selectedAdditions = res.selectedAdditions,
-                                                selectedPoles = res.selectedPoles,
-                                                selectedCurve = res.selectedCurve
-                                            )
-                                            atsStep = 2 // Переход к списку
-                                        }
-                                    )
-                                }
-                            } else if (atsStep == 2) {
-                                Box(modifier = Modifier.weight(1f)) {
-                                    AtsBreakerThirdWindow( // <-- ВАШ НОВЫЙ КОМПОНЕНТ
-                                        maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
-                                        standard = data.protectionStandard,
-                                        selectedSeries = inputBreakerState.value.series,
-                                        selectedPoles = inputBreakerState.value.selectedPoles,
-                                        selectedAdditions = inputBreakerState.value.selectedAdditions,
-                                        selectedCurve = inputBreakerState.value.selectedCurve,
-                                        onBack = { atsStep = 1 },
-                                        onDismiss = onDismissRequest,
-                                        onChoose = { resultString ->
-                                            data.inputInfo = "${InputType.TWO_INPUTS_ATS_BREAKERS.title}\n$resultString"
-                                            onSave()
-                                            onDismissRequest()
-                                        }
-                                    )
+                                // Кнопка Назад для AtsThirdWindow, если она не встроенна
+                                Box(Modifier.fillMaxSize()) {
+                                    IconButton(
+                                        onClick = { atsBlockStep = 1 },
+                                        modifier = Modifier.align(Alignment.TopStart)
+                                    ) {
+                                        // Обычно иконка назад внутри окна, но если нет — можно добавить тут
+                                        // Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
+                                    }
                                 }
                             }
                         }
-                    }
-                    else {
-                        // --- СТАНДАРТНЫЙ ИНТЕРФЕЙС (для остальных типов) ---
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    text = selectedType.title,
-                                    style = MaterialTheme.typography.h6,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(bottom = 16.dp)
-                                )
-                                Divider(modifier = Modifier.padding(bottom = 16.dp))
-                                Text(
-                                    text = "Нажмите кнопку «Настроить» для ввода параметров выбранного типа ввода.",
-                                    color = Color.Gray,
-                                    style = MaterialTheme.typography.body1
-                                )
-                            }
-                            Button(
-                                onClick = { proceedToConfiguration() },
-                                modifier = Modifier.align(Alignment.End)
-                            ) {
-                                Text("Настроить")
-                            }
+
+                        // === ЗАГЛУШКИ ДЛЯ ОСТАЛЬНЫХ ===
+                        else -> {
+                            StandardInputPlaceholder(
+                                type = selectedType,
+                                onConfigure = {
+                                    if (selectedType == InputType.ONE_INPUT_BREAKER) {
+                                        // Здесь можно открыть простое окно параметров, если нужно
+                                        // showInputParamsWindow = true (логику можно добавить по требованию)
+                                    } else {
+                                        // Просто сохраняем название
+                                        data.inputInfo = selectedType.title
+                                        onSave()
+                                        onDismissRequest()
+                                    }
+                                }
+                            )
                         }
                     }
                 }
@@ -423,16 +280,31 @@ fun InputTypePopup(
         }
 
         Box(
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(resizeHandleSize)
+                .pointerHoverIcon(PointerIcon(Cursor(Cursor.E_RESIZE_CURSOR)))
+                .pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); widthDp = max(widthDp + with(density){drag.x.toDp()}, minWidth) } }
+        )
+        Box(
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(resizeHandleSize)
+                .pointerHoverIcon(PointerIcon(Cursor(Cursor.S_RESIZE_CURSOR)))
+                .pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); heightDp = max(heightDp + with(density){drag.y.toDp()}, minHeight) } }
+        )
+        Box(
+            modifier = Modifier.align(Alignment.BottomEnd).size(resizeHandleSize)
+                .pointerHoverIcon(PointerIcon(Cursor(Cursor.SE_RESIZE_CURSOR)))
+                .pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); widthDp = max(widthDp + with(density){drag.x.toDp()}, minWidth); heightDp = max(heightDp + with(density){drag.y.toDp()}, minHeight) } }
+        )
+
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .size(24.dp)
+                .size(24.dp) // Увеличенный размер для удобного захвата и отрисовки
+                .pointerHoverIcon(PointerIcon(Cursor(Cursor.SE_RESIZE_CURSOR)))
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
-                        val newW = (currentWidth + dragAmount.x.toDp()).coerceAtLeast(700.dp)
-                        val newH = (currentHeight + dragAmount.y.toDp()).coerceAtLeast(500.dp)
-                        currentWidth = newW
-                        currentHeight = newH
+                        widthDp = max(widthDp + with(density) { dragAmount.x.toDp() }, minWidth)
+                        heightDp = max(heightDp + with(density) { dragAmount.y.toDp() }, minHeight)
                     }
                 }
         ) {
@@ -440,6 +312,7 @@ fun InputTypePopup(
                 val color = Color.Gray.copy(alpha = 0.5f)
                 val w = size.width
                 val h = size.height
+                // Рисуем 3 диагональные линии
                 drawLine(color, Offset(w, h - 4), Offset(w - 4, h), strokeWidth = 2f)
                 drawLine(color, Offset(w, h - 8), Offset(w - 8, h), strokeWidth = 2f)
                 drawLine(color, Offset(w, h - 12), Offset(w - 12, h), strokeWidth = 2f)
@@ -460,7 +333,7 @@ private fun SidebarItem(
         shape = RoundedCornerShape(4.dp)
     ) {
         Box(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), // Отступы уменьшены под стиль caption
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             Text(
@@ -468,9 +341,40 @@ private fun SidebarItem(
                 style = MaterialTheme.typography.body2,
                 color = if (isSelected) MaterialTheme.colors.primary else MaterialTheme.colors.onSurface,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                maxLines = 3,
                 fontSize = 13.sp
             )
+        }
+    }
+}
+
+@Composable
+private fun StandardInputPlaceholder(
+    type: InputType,
+    onConfigure: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text(
+                text = type.title,
+                style = MaterialTheme.typography.h6,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Divider(modifier = Modifier.padding(bottom = 16.dp))
+            Text(
+                text = "Для данного типа ввода нажмите кнопку «Настроить» (или «Выбрать»), чтобы применить параметры по умолчанию или ввести дополнительные данные.",
+                color = Color.Gray,
+                style = MaterialTheme.typography.body1
+            )
+        }
+        Button(
+            onClick = onConfigure,
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text("Настроить / Выбрать")
         }
     }
 }

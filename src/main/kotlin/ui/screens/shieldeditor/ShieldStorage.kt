@@ -56,7 +56,7 @@ class ShieldData(
     var maxVoltageDropPercent by mutableStateOf("5") // Допустимое падение %
 
     // Температура (будет обновляться автоматически при выборе изоляции, но можно редактировать)
-    var cableTemperature by mutableStateOf("70")
+    var cableTemperature by mutableStateOf("20")
 
     var cableInductiveResistance by mutableStateOf("0.08") // мОм/м
 
@@ -67,7 +67,7 @@ class ShieldData(
     var reserveTier3 by mutableStateOf("12") // 50 - 90 м
     var reserveTier4 by mutableStateOf("10") // > 90 м
 
-    var singleCoreThreshold by mutableStateOf("30")
+    var singleCoreThreshold by mutableStateOf("40")
 }
 
 object ShieldStorage {

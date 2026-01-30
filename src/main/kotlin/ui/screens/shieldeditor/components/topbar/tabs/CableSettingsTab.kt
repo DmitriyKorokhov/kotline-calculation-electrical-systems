@@ -25,6 +25,7 @@ fun CableSettingsTab(
     onSave: () -> Unit
 ) {
     val scrollState = rememberScrollState()
+    val fieldWidth = 350.dp
 
     // Вспомогательная функция для обновления температуры при смене изоляции
     fun updateTemp(insulation: String) {
@@ -108,7 +109,7 @@ fun CableSettingsTab(
         Spacer(Modifier.height(8.dp))
 
         // 1. Основные параметры (Опуск и Разделка) - теперь СВЕРХУ
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.width(fieldWidth), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = data.cableDescentPercent,
                 onValueChange = { data.cableDescentPercent = it; onSave() },
@@ -167,7 +168,7 @@ fun CableSettingsTab(
                 )
 
                 // Ряд 1: Малые длины
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.width(fieldWidth), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = data.reserveTier1,
                         onValueChange = { data.reserveTier1 = it; onSave() },
@@ -185,7 +186,7 @@ fun CableSettingsTab(
                 Spacer(Modifier.height(8.dp))
 
                 // Ряд 2: Большие длины
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.width(fieldWidth), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = data.reserveTier3,
                         onValueChange = { data.reserveTier3 = it; onSave() },
@@ -212,7 +213,7 @@ fun CableSettingsTab(
             value = data.cableInductiveResistance,
             onValueChange = { data.cableInductiveResistance = it; onSave() },
             label = { Text("Удельное индуктивное сопр. (мОм/м)") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.width(fieldWidth)
         )
 
         Spacer(Modifier.height(8.dp))
@@ -223,7 +224,7 @@ fun CableSettingsTab(
             value = data.cableTemperature,
             onValueChange = { data.cableTemperature = it; onSave() },
             label = { Text("Температура кабеля (°C)") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.width(fieldWidth)
         )
 
         Spacer(Modifier.height(8.dp))
@@ -244,7 +245,7 @@ fun CableSettingsTab(
             value = data.maxVoltageDropPercent,
             onValueChange = { data.maxVoltageDropPercent = it; onSave() },
             label = { Text("Допустимое падение напряжения (%)") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.width(fieldWidth)
         )
 
         Spacer(Modifier.height(16.dp))
@@ -260,7 +261,7 @@ fun CableSettingsTab(
             value = data.singleCoreThreshold,
             onValueChange = { data.singleCoreThreshold = it; onSave() },
             label = { Text("Смена многожильного на одножильный кабель при длине трассы (м)") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.width(fieldWidth)
         )
     }
 }

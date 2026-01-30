@@ -1,29 +1,26 @@
 package ui.screens.shieldeditor.input
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import data.repository.getVariantsBySeries
 import data.repository.parseCurveFromAdditions
 import data.repository.parseExtrasFromAdditions
 import ui.screens.shieldeditor.protection.BreakerUiItem
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.Text
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.Button
-import androidx.compose.material.Card
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.Divider
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.TextButton
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AtsBreakerThirdWindow(
     maxShortCircuitCurrentStr: String,
@@ -42,7 +39,6 @@ fun AtsBreakerThirdWindow(
     var selectedVariantId by remember { mutableStateOf<Int?>(null) }
 
     val maxKA = parseKa(maxShortCircuitCurrentStr) ?: 0f
-
 
     LaunchedEffect(selectedSeries) {
         loading = true
@@ -77,7 +73,6 @@ fun AtsBreakerThirdWindow(
     }
 
     fun passesAll(item: BreakerUiItem): Boolean {
-
         val passKZ = if (standard.contains("60898", ignoreCase = true)) {
             (item.breakingCapacityKa ?: 0f) >= maxKA
         } else {
@@ -105,7 +100,6 @@ fun AtsBreakerThirdWindow(
         items.filter { passesAll(it) }
     }
 
-    // Группировка и сортировка
     val finalList = remember(passing) {
         passing
             .groupBy { item ->
@@ -118,7 +112,23 @@ fun AtsBreakerThirdWindow(
             .sortedWith(compareBy<BreakerUiItem> { it.ratedCurrentA }.thenBy { it.modelName })
     }
 
-    /// UI Content
+    // --- Настройка колонок ---
+    val showCurve = !selectedCurve.isNullOrBlank()
+    // 1. Производитель
+    val wManuf = 0.65f
+    // 2. Модель
+    val wModel = 1.2f
+    // 3. Ток КЗ
+    val wIcu = 0.7f
+    // 4. Кривая
+    val wCurve = if (showCurve) 0.5f else 0f
+    // 5. Номинал
+    val wAmps = 0.6f
+    // 6. Полюса
+    val wPoles = 0.6f
+
+    val borderColor = Color.LightGray
+
     Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
         Text("Подбор автоматов — подходящие варианты", style = MaterialTheme.typography.h6)
         Spacer(Modifier.height(8.dp))
@@ -140,45 +150,96 @@ fun AtsBreakerThirdWindow(
                     Text("Нет подходящих автоматов (по всем параметрам).", color = MaterialTheme.colors.onSurface)
                 }
             } else {
-                // Заголовки таблицы
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    Text("Производитель", modifier = Modifier.weight(1f))
-                    Text("Модель", modifier = Modifier.weight(1f))
-                    Text("U (В)", modifier = Modifier.weight(0.7f))
-                    Text(if (standard.contains("60898", ignoreCase = true)) "Icn, кА" else "Ics, кА", modifier = Modifier.weight(0.9f))
-                    if (!selectedCurve.isNullOrBlank()) Text("Кривая", modifier = Modifier.weight(0.7f))
-                    Text("In, A", modifier = Modifier.weight(0.7f))
-                    Text("Полюса", modifier = Modifier.weight(0.8f))
-                }
-                Divider()
+                // --- Шапка таблицы ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min) // Важно для вертикальных разделителей
+                        .border(1.dp, borderColor)
+                        .background(Color.LightGray.copy(alpha = 0.2f)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HeaderCell("Произв.", wManuf)
+                    VerticalDivider(color = borderColor)
+                    HeaderCell("Модель", wModel)
+                    VerticalDivider(color = borderColor)
+                    HeaderCell(if (standard.contains("60898", ignoreCase = true)) "Icn, кА" else "Ics, кА", wIcu)
 
+                    if (showCurve) {
+                        VerticalDivider(color = borderColor)
+                        HeaderCell("Кривая", wCurve)
+                    }
+
+                    VerticalDivider(color = borderColor)
+                    HeaderCell("In, A", wAmps)
+                    VerticalDivider(color = borderColor)
+                    HeaderCell("Полюса", wPoles)
+                }
+
+                // --- Список ---
                 LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     items(finalList, key = { it.variantId }) { item ->
                         val isSelected = item.variantId == selectedVariantId
-                        val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
-                        val borderModifier = if (isSelected)
-                            Modifier.border(2.dp, MaterialTheme.colors.primary, RoundedCornerShape(6.dp))
-                        else Modifier
 
-                        Card(
-                            elevation = 2.dp,
+                        // Цвет фона: выделение или чередование
+                        val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
+
+                        // Граница карточки меняется при выделении
+                        val borderStroke = if (isSelected)
+                            androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colors.primary)
+                        else
+                            androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .then(borderModifier)
-                                .clickable { selectedVariantId = item.variantId },
-                            backgroundColor = bg
+                                .padding(vertical = 0.dp)
+                                .offset(y = (-1).dp)
+                                .combinedClickable(
+                                    onClick = { selectedVariantId = item.variantId },
+                                    onDoubleClick = {
+                                        selectedVariantId = item.variantId
+                                        val curveText = selectedCurve ?: item.curve ?: ""
+                                        val ratedText = "${formatRated(item.ratedCurrentA)} A"
+                                        val line1 = item.modelName
+                                        val line2 = if (curveText.isNotBlank()) "$curveText $ratedText" else ratedText
+                                        val itemExtras = parseExtrasFromAdditions(item.additionsRaw).map { it.trim() }
+                                        val shownAdd = selectedAdditions.filter { it in itemExtras }
+                                        val line3 = if (shownAdd.isNotEmpty()) shownAdd.joinToString(", ") else ""
+                                        val resultString = listOf(line1, line2, line3).filter { it.isNotBlank() }.joinToString("\n")
+                                        onChoose(resultString)
+                                    }
+                                ),
+                            border = borderStroke,
+                            color = bg,
+                            elevation = 0.dp
                         ) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                                Text(item.manufacturer, modifier = Modifier.weight(1f))
-                                Text(item.modelName, modifier = Modifier.weight(1f))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TableCell(text = item.manufacturer, weight = wManuf)
+                                VerticalDivider(color = borderColor)
+
+                                TableCell(text = item.modelName, weight = wModel)
+                                VerticalDivider(color = borderColor)
+
                                 val capVal = if (standard.contains("60898", ignoreCase = true))
                                     item.breakingCapacityKa?.toString() ?: "-"
                                 else item.serviceBreakingCapacityKa?.toString() ?: "-"
-                                Text(capVal, modifier = Modifier.weight(0.9f))
-                                if (!selectedCurve.isNullOrBlank()) Text(selectedCurve, modifier = Modifier.weight(0.7f))
-                                Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.7f))
-                                Text(item.polesText, modifier = Modifier.weight(0.8f))
+                                TableCell(text = capVal, weight = wIcu)
+
+                                if (showCurve) {
+                                    VerticalDivider(color = borderColor)
+                                    TableCell(text = selectedCurve ?: "-", weight = wCurve)
+                                }
+
+                                VerticalDivider(color = borderColor)
+                                TableCell(text = formatRated(item.ratedCurrentA), weight = wAmps)
+
+                                VerticalDivider(color = borderColor)
+                                TableCell(text = item.polesText, weight = wPoles)
                             }
                         }
                     }
@@ -208,15 +269,56 @@ fun AtsBreakerThirdWindow(
     }
 }
 
+// --- Вспомогательные компоненты ---
+@Composable
+fun RowScope.HeaderCell(text: String, weight: Float) {
+    if (weight <= 0) return
+    Box(
+        modifier = Modifier
+            .weight(weight)
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.caption,
+            textAlign = TextAlign.Center,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun RowScope.TableCell(text: String, weight: Float) {
+    if (weight <= 0) return
+    Box(
+        modifier = Modifier
+            .weight(weight)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.body2,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+fun VerticalDivider(color: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(1.dp)
+            .background(color)
+    )
+}
+
+
 private fun parseKa(s: String?): Float? {
     if (s.isNullOrBlank()) return null
     val cleaned = s.replace("кА", "", true).replace("kA", "", true).replace(" ", "").replace(",", ".").trim()
-    return cleaned.toFloatOrNull()
-}
-
-private fun parseAmps(s: String?): Float? {
-    if (s.isNullOrBlank()) return null
-    val cleaned = s.replace("[^0-9.,]".toRegex(), "").replace(",", ".")
     return cleaned.toFloatOrNull()
 }
 

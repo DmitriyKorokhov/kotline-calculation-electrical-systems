@@ -161,7 +161,7 @@ fun RcboSecondWindow(
                 onValueChange = {},
                 readOnly = true,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(300.dp)
                     .onGloballyPositioned { coordinates -> textFieldSize = coordinates.size.toSize() }
                     .clickable { expanded = true },
                 trailingIcon = {
@@ -184,75 +184,7 @@ fun RcboSecondWindow(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        // Остаточный ток
-        Text("Остаточный ток (Утечка)", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(4.dp))
-        if (residualCurrentOptions.isEmpty()) {
-            Text("Нет данных", style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f))
-        } else {
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                residualCurrentOptions.forEach { resCur ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .padding(end = 12.dp)
-                            .clickable { selectedResidualCurrent = resCur }
-                    ) {
-                        RadioButton(
-                            selected = (selectedResidualCurrent == resCur),
-                            onClick = { selectedResidualCurrent = resCur }
-                        )
-                        Text(text = resCur, style = MaterialTheme.typography.body1)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // Полюса
-        Text("Количество полюсов", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(4.dp))
-        if (polesOptions.isEmpty()) {
-            Text("Нет данных", style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f))
-        } else {
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                polesOptions.forEach { p ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp).clickable { selectedPoles = p }
-                    ) {
-                        RadioButton(selected = selectedPoles == p, onClick = { selectedPoles = p })
-                        Text(p)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // Кривая
-        Text("Кривая отключения", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(4.dp))
-        if (curvesOptions.isEmpty()) {
-            Text("Нет данных", style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f))
-        } else {
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                curvesOptions.forEach { c ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp).clickable { selectedCurve = c }
-                    ) {
-                        RadioButton(selected = selectedCurve == c, onClick = { selectedCurve = c })
-                        Text(c)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
         // Дополнения
         Text("Дополнения", style = MaterialTheme.typography.subtitle2)
@@ -282,14 +214,78 @@ fun RcboSecondWindow(
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
+
+        // Остаточный ток
+        Text("Остаточный ток (Утечка)", style = MaterialTheme.typography.subtitle2)
+        Spacer(Modifier.height(4.dp))
+        if (residualCurrentOptions.isEmpty()) {
+            Text("Нет данных", style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f))
+        } else {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                residualCurrentOptions.forEach { resCur ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .clickable { selectedResidualCurrent = resCur }
+                    ) {
+                        RadioButton(
+                            selected = (selectedResidualCurrent == resCur),
+                            onClick = { selectedResidualCurrent = resCur }
+                        )
+                        Text(text = resCur, style = MaterialTheme.typography.body1)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Полюса
+        Text("Количество полюсов", style = MaterialTheme.typography.subtitle2)
+        Spacer(Modifier.height(4.dp))
+        if (polesOptions.isEmpty()) {
+            Text("Нет данных", style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f))
+        } else {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                polesOptions.forEach { p ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 12.dp).clickable { selectedPoles = p }
+                    ) {
+                        RadioButton(selected = selectedPoles == p, onClick = { selectedPoles = p })
+                        Text(p)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Кривая
+        Text("Кривая отключения", style = MaterialTheme.typography.subtitle2)
+        Spacer(Modifier.height(4.dp))
+        if (curvesOptions.isEmpty()) {
+            Text("Нет данных", style = MaterialTheme.typography.body2, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f))
+        } else {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                curvesOptions.forEach { c ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 12.dp).clickable { selectedCurve = c }
+                    ) {
+                        RadioButton(selected = selectedCurve == c, onClick = { selectedCurve = c })
+                        Text(c)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
 
         // Кнопки
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            // TextButton(onClick = onBack) { Text("Назад") }
-            // Spacer(Modifier.width(8.dp))
-            // TextButton(onClick = onDismiss) { Text("Отмена") }
-            // Spacer(Modifier.width(8.dp))
             Button(onClick = {
                 val res = RcboSelectionResult(
                     series = selectedSeries,

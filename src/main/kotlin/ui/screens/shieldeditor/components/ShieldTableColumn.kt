@@ -179,7 +179,7 @@ fun ShieldTableColumn(
 
                 // Помещение
                 CompactOutlinedTextField(
-                    label = "Номер Помещения",
+                    label = "Номер помещения",
                     value = consumer.roomNumber,
                     onValueChange = { consumer.roomNumber = it; onDataChanged() },
                     contentPadding = FIELDCONTENTPADDING,
@@ -243,7 +243,7 @@ fun ShieldTableColumn(
 
                     if (isPowerError) {
                         Text(
-                            text = "Ошибка: Pуст < Pрасч",
+                            text = "Внимание: Pуст < Pрасч",
                             color = textColor,
                             style = MaterialTheme.typography.caption,
                             modifier = Modifier.padding(start = 4.dp, top = 2.dp)
@@ -497,17 +497,15 @@ fun ShieldTableColumn(
                     ) {
                         Text("▲", Modifier.clickable {
                             changeCableSection(consumer, data, +1)
-                            onRecalculateDropOnly() // <---
+                            onRecalculateDropOnly()
                         })
 
                         Text("▼", Modifier.clickable {
                             changeCableSection(consumer, data, -1)
-                            onRecalculateDropOnly() // <---
+                            onRecalculateDropOnly()
                         })
                     }
                 }
-
-
 
                 Spacer(Modifier.height(FIELDVSPACE))
 
@@ -610,12 +608,21 @@ private fun changeCableSection(consumer: ConsumerModel, data: ShieldData, direct
     // Если пытаемся уйти за границы и уже там — выходим
     if (currentIndex != -1 && newIndex == currentIndex) return
 
-    // 6. Формируем строку
+    // 6. Формируем строку с учетом типа структуры
     val newSection = sections[newIndex]
     val cores = if ((consumer.voltage.toIntOrNull() ?: 230) >= 380) 5 else 3
     val sectionStr = if (newSection % 1.0 == 0.0) newSection.toInt().toString() else newSection.toString()
 
-    consumer.cableLine = "${cores}x$sectionStr"
+    // ПРОВЕРКА: Нужен ли формат одножильного кабеля (SingleCore)?
+    val inputLength = consumer.cableLength.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val threshold = data.singleCoreThreshold.toDoubleOrNull() ?: 30.0
+
+    // Если длина больше порога — используем формат с (1xS)
+    if (inputLength > threshold) {
+        consumer.cableLine = "${cores}x(1x$sectionStr)"
+    } else {
+        consumer.cableLine = "${cores}x$sectionStr"
+    }
 }
 
 

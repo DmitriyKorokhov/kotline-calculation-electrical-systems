@@ -1,15 +1,15 @@
 package ui.screens.shieldeditor.protection
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import data.repository.getRcboVariantsBySeries
 import data.repository.parseCurveFromAdditions
@@ -30,6 +30,15 @@ data class RcboUiItem(
     val curve: String?
 )
 
+private data class DataClassKey(
+    val current: Float,
+    val residual: String,
+    val cap: Float?,
+    val curve: String?,
+    val poles: String
+)
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RcboThirdWindow(
     maxShortCircuitCurrentStr: String,
@@ -57,6 +66,20 @@ fun RcboThirdWindow(
     val consumerA = parseAmps(consumerCurrentAStr) ?: 0f
 
     var showAllSeriesDevices by remember { mutableStateOf(false) }
+
+    // Функция для подтверждения выбора
+    val confirmSelection = { item: RcboUiItem ->
+        val curveText = selectedCurve ?: item.curve ?: ""
+        val ratedText = "${formatRated(item.ratedCurrentA)} A"
+        val residualText = item.ratedResidualCurrent
+        val line1 = item.modelName
+        val line2 = if (curveText.isNotBlank()) "$curveText $ratedText, $residualText" else "$ratedText, $residualText"
+        val itemExtras = parseExtrasFromAdditions(item.additionsRaw).map { it.trim() }
+        val shownAdd = selectedAdditions.filter { it in itemExtras }
+        val line3 = if (shownAdd.isNotEmpty()) shownAdd.joinToString(", ") else ""
+        val resultString = listOf(line1, line2, line3).filter { it.isNotBlank() }.joinToString("\n")
+        onChoose(resultString)
+    }
 
     LaunchedEffect(selectedSeries) {
         loading = true
@@ -230,43 +253,101 @@ fun RcboThirdWindow(
                     Text("Нет подходящих АВДТ (по всем параметрам).", color = MaterialTheme.colors.onSurface)
                 }
             } else {
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    Text("Производитель", modifier = Modifier.weight(1f))
-                    Text("Модель", modifier = Modifier.weight(1f))
-                    Text(if (standard.contains("60898", ignoreCase = true)) "Icn" else "Ics", modifier = Modifier.weight(0.6f))
-                    if (!selectedCurve.isNullOrBlank()) Text("Кривая", modifier = Modifier.weight(0.6f))
-                    Text("In, A", modifier = Modifier.weight(0.6f))
-                    Text("Утечка", modifier = Modifier.weight(0.8f))
-                    Text("Полюса", modifier = Modifier.weight(0.8f))
-                }
-                Divider()
+                // --- Таблица ---
+                val wManuf = 1.0f
+                val wModel = 1.0f
+                val wCap = 0.6f
+                val wCurve = 0.5f
+                val wAmp = 0.5f
+                val wRes = 0.7f
+                val wPoles = 0.6f
 
+                val borderColor = Color.LightGray
+
+                // Заголовки
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min)
+                        .border(1.dp, borderColor)
+                        .background(Color.LightGray.copy(alpha = 0.2f)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HeaderCell("Произв.", wManuf)
+                    VerticalDivider(borderColor)
+                    HeaderCell("Модель", wModel)
+                    VerticalDivider(borderColor)
+                    HeaderCell(if (standard.contains("60898", ignoreCase = true)) "Icn" else "Ics", wCap)
+
+                    if (!selectedCurve.isNullOrBlank()) {
+                        VerticalDivider(borderColor)
+                        HeaderCell("Кривая", wCurve)
+                    }
+
+                    VerticalDivider(borderColor)
+                    HeaderCell("In, A", wAmp)
+                    VerticalDivider(borderColor)
+                    HeaderCell("Утечка", wRes)
+                    VerticalDivider(borderColor)
+                    HeaderCell("Полюса", wPoles)
+                }
+
+                // Список строк
                 LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     items(finalList, key = { it.variantId }) { item ->
                         val isSelected = item.variantId == selectedVariantId
-                        val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
-                        val borderModifier = if (isSelected) Modifier.border(2.dp, MaterialTheme.colors.primary, RoundedCornerShape(6.dp)) else Modifier
 
-                        Card(
-                            elevation = 2.dp,
+                        val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
+                        val borderStroke = if (isSelected)
+                            BorderStroke(2.dp, MaterialTheme.colors.primary)
+                        else
+                            BorderStroke(1.dp, borderColor)
+
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .then(borderModifier)
-                                .clickable { selectedVariantId = item.variantId },
-                            backgroundColor = bg
+                                .offset(y = (-1).dp)
+                                .combinedClickable(
+                                    onClick = { selectedVariantId = item.variantId },
+                                    onDoubleClick = {
+                                        selectedVariantId = item.variantId
+                                        confirmSelection(item)
+                                    }
+                                ),
+                            border = borderStroke,
+                            color = bg,
+                            elevation = 0.dp
                         ) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                                Text(item.manufacturer, modifier = Modifier.weight(1f))
-                                Text(item.modelName, modifier = Modifier.weight(1f))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TableCell(item.manufacturer, wManuf)
+                                VerticalDivider(borderColor)
+
+                                TableCell(item.modelName, wModel)
+                                VerticalDivider(borderColor)
+
                                 val capVal = if (standard.contains("60898", ignoreCase = true))
                                     item.breakingCapacityKa?.toString() ?: "-"
                                 else item.serviceBreakingCapacityKa?.toString() ?: "-"
-                                Text(capVal, modifier = Modifier.weight(0.6f))
-                                if (!selectedCurve.isNullOrBlank()) Text(selectedCurve, modifier = Modifier.weight(0.6f))
-                                Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.6f))
-                                Text(item.ratedResidualCurrent, modifier = Modifier.weight(0.8f))
-                                Text(item.polesText, modifier = Modifier.weight(0.8f))
+                                TableCell(capVal, wCap)
+
+                                if (!selectedCurve.isNullOrBlank()) {
+                                    VerticalDivider(borderColor)
+                                    TableCell(selectedCurve, wCurve)
+                                }
+
+                                VerticalDivider(borderColor)
+                                TableCell(formatRated(item.ratedCurrentA), wAmp)
+                                VerticalDivider(borderColor)
+
+                                TableCell(item.ratedResidualCurrent, wRes)
+                                VerticalDivider(borderColor)
+
+                                TableCell(item.polesText, wPoles)
                             }
                         }
                     }
@@ -282,16 +363,7 @@ fun RcboThirdWindow(
             Button(onClick = {
                 val chosen = finalList.firstOrNull { it.variantId == selectedVariantId }
                 if (chosen != null) {
-                    val curveText = selectedCurve ?: chosen.curve ?: ""
-                    val ratedText = "${formatRated(chosen.ratedCurrentA)} A"
-                    val residualText = chosen.ratedResidualCurrent
-                    val line1 = chosen.modelName
-                    val line2 = if (curveText.isNotBlank()) "$curveText $ratedText, $residualText" else "$ratedText, $residualText"
-                    val itemExtras = parseExtrasFromAdditions(chosen.additionsRaw).map { it.trim() }
-                    val shownAdd = selectedAdditions.filter { it in itemExtras }
-                    val line3 = if (shownAdd.isNotEmpty()) shownAdd.joinToString(", ") else ""
-                    val resultString = listOf(line1, line2, line3).filter { it.isNotBlank() }.joinToString("\n")
-                    onChoose(resultString)
+                    confirmSelection(chosen)
                 }
             }) { Text("Выбрать") }
         }
@@ -315,10 +387,48 @@ private fun formatRated(v: Float): String {
     return if (abs(v - i) < 0.001f) "$i" else String.format("%.1f", v)
 }
 
-private data class DataClassKey(
-    val current: Float,
-    val residual: String,
-    val cap: Float?,
-    val curve: String?,
-    val poles: String
-)
+
+@Composable
+private fun RowScope.HeaderCell(text: String, weight: Float) {
+    Box(
+        modifier = Modifier
+            .weight(weight)
+            .fillMaxHeight()
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.subtitle2,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun RowScope.TableCell(text: String, weight: Float) {
+    Box(
+        modifier = Modifier
+            .weight(weight)
+            .fillMaxHeight()
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.body2,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun VerticalDivider(color: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(1.dp)
+            .background(color)
+    )
+}

@@ -137,7 +137,7 @@ fun BreakerSecondWindow(
                 onValueChange = {},
                 readOnly = true,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(300.dp)
                     .onGloballyPositioned { coordinates -> textFieldSize = coordinates.size.toSize() }
                     .clickable { expanded = true },
                 trailingIcon = {

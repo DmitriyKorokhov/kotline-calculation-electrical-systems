@@ -26,6 +26,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 /**
  * Панель выбора параметров АВР (Производитель, Серия, Полюса).
  * Встраивается в правую часть InputTypePopup.
+ * ATS_BLOCK_TWO_INPUTS("Блок АВР на два ввода на общую шину")
  */
 @Composable
 fun AtsSecondWindow(
@@ -43,7 +44,6 @@ fun AtsSecondWindow(
     var seriesList by remember { mutableStateOf(listOf<String>()) }
     var polesList by remember { mutableStateOf(listOf<String>()) }
 
-    // ИЗМЕНЕНИЕ: Отслеживаем manufacturer и отправляем его наверх
     LaunchedEffect(manufacturer, series, selectedPoles) {
         onParamsChanged(
             manufacturer,

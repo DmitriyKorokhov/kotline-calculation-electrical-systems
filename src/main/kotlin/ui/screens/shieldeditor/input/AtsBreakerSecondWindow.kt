@@ -40,7 +40,6 @@ fun AtsBreakerSecondWindow(
     onDismiss: () -> Unit,
     onConfirm: (BreakerSelectionResult) -> Unit
 ) {
-    // ... (весь код состояния копируем из BreakerSecondWindow) ...
     var seriesList by remember { mutableStateOf<List<String>>(emptyList()) }
     var seriesLoadingError by remember { mutableStateOf<String?>(null) }
     var selectedSeries by remember { mutableStateOf(initialSeries ?: "") }
@@ -51,13 +50,11 @@ fun AtsBreakerSecondWindow(
     var selectedPoles by remember { mutableStateOf(initialSelectedPoles) }
     var selectedAdditions by remember { mutableStateOf(initialSelectedAdditions.toSet()) }
 
-    // ИЗМЕНЕНИЕ 1: Жестко задаем логику для 400В (АВР ввода обычно трехфазный)
-    // Либо можно передавать voltage="400" в вызов
+    // Жестко задаем логику для 400В (АВР ввода обычно трехфазный)
     fun allowedPolesForAts(): Set<String> {
         return setOf("3P", "3P+N", "4P")
     }
 
-    // ... (LaunchedEffect(initialManufacturer) такой же) ...
     LaunchedEffect(initialManufacturer) {
         try {
             seriesList = if (!initialManufacturer.isNullOrBlank()) {
@@ -75,7 +72,6 @@ fun AtsBreakerSecondWindow(
         }
     }
 
-    // ... (LaunchedEffect(selectedSeries) с изменениями для полюсов) ...
     LaunchedEffect(selectedSeries) {
         if (selectedSeries.isBlank()) return@LaunchedEffect
         try {
@@ -133,7 +129,7 @@ fun AtsBreakerSecondWindow(
                 onValueChange = {},
                 readOnly = true,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .width(300.dp)
                     .onGloballyPositioned { coordinates -> textFieldSize = coordinates.size.toSize() }
                     .clickable { expanded = true },
                 trailingIcon = {
@@ -161,7 +157,7 @@ fun AtsBreakerSecondWindow(
 
         Spacer(Modifier.height(16.dp))
 
-        Text("Дополнения (можно несколько)", style = MaterialTheme.typography.subtitle2)
+        Text("Дополнения", style = MaterialTheme.typography.subtitle2)
         Spacer(Modifier.height(6.dp))
         if (additionsOptions.isEmpty()) {
             Text("Нет доступных дополнений", style = MaterialTheme.typography.body2, color = Color.Gray)

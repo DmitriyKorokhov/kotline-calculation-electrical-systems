@@ -1,5 +1,6 @@
 package ui.screens.shieldeditor.protection
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -302,6 +304,30 @@ fun ProtectionSelectionWindow(
                 .pointerHoverIcon(PointerIcon(Cursor(Cursor.SE_RESIZE_CURSOR)))
                 .pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); widthDp = max(widthDp + with(density){drag.x.toDp()}, minWidth); heightDp = max(heightDp + with(density){drag.y.toDp()}, minHeight) } }
         )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size(24.dp) // Увеличенный размер для удобного захвата и отрисовки
+                .pointerHoverIcon(PointerIcon(Cursor(Cursor.SE_RESIZE_CURSOR)))
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        widthDp = max(widthDp + with(density) { dragAmount.x.toDp() }, minWidth)
+                        heightDp = max(heightDp + with(density) { dragAmount.y.toDp() }, minHeight)
+                    }
+                }
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+                val color = Color.Gray.copy(alpha = 0.5f)
+                val w = size.width
+                val h = size.height
+                // Рисуем 3 диагональные линии
+                drawLine(color, Offset(w, h - 4), Offset(w - 4, h), strokeWidth = 2f)
+                drawLine(color, Offset(w, h - 8), Offset(w - 8, h), strokeWidth = 2f)
+                drawLine(color, Offset(w, h - 12), Offset(w - 12, h), strokeWidth = 2f)
+            }
+        }
     }
 }
 

@@ -1,21 +1,14 @@
 package ui.screens.shieldeditor.input
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.Divider
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
+import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import data.database.AtsModels
 import data.database.AtsVariants
@@ -36,15 +29,17 @@ private data class AtsUiItem(
 )
 
 /**
- * Панель списка подходящих устройств АВР.
- * Встраивается в правую часть InputTypePopup ниже параметров.
+ * Панель списка подходящих устройств АВР (блочные).
+ * ATS_BLOCK_TWO_INPUTS("Блок АВР на два ввода на общую шину")
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AtsThirdWindow(
     maxShortCircuitCurrentStr: String,
     consumerCurrentAStr: String,
     selectedSeries: String?,
     selectedPoles: String?,
+    onBack: () -> Unit,
     onChoose: (String) -> Unit
 ) {
     var loading by remember { mutableStateOf(false) }
@@ -53,6 +48,15 @@ fun AtsThirdWindow(
     var selectedVariantId by remember { mutableStateOf<Int?>(null) }
 
     val requiredBreakingCapacity = parseAmps(maxShortCircuitCurrentStr) ?: 0f
+
+    // --- Настройка колонок (веса) ---
+    val wManuf = 0.7f
+    val wModel = 1.2f
+    val wAmps = 0.5f
+    val wPoles = 0.5f
+    val wIcu = 0.6f
+
+    val borderColor = Color.LightGray
 
     // Реактивная загрузка при изменении фильтров
     LaunchedEffect(selectedSeries, selectedPoles) {
@@ -78,7 +82,7 @@ fun AtsThirdWindow(
 
                 for ((mId, mName, mCapStr) in models) {
                     val mCapVal = parseAmps(mCapStr) ?: 0f
-                    // Фильтр по Icu оставляем (безопасность)
+                    // Фильтр по Icu (безопасность)
                     if (requiredBreakingCapacity > 0 && mCapVal < requiredBreakingCapacity) continue
 
                     val variants = AtsVariants.select {
@@ -89,8 +93,6 @@ fun AtsThirdWindow(
                         val current = v[AtsVariants.ratedCurrent]
                         val vId = v[AtsVariants.id]
 
-                        // УБРАНО: фильтрация по току потребителя (if current >= consumerA)
-
                         results.add(
                             AtsUiItem(
                                 modelId = mId,
@@ -98,7 +100,7 @@ fun AtsThirdWindow(
                                 manufacturer = manufacturer,
                                 modelName = mName,
                                 ratedCurrentA = current,
-                                polesText = selectedPoles!!,
+                                polesText = selectedPoles,
                                 breakingCapacityStr = mCapStr,
                                 breakingCapacityVal = mCapVal
                             )
@@ -106,15 +108,12 @@ fun AtsThirdWindow(
                     }
                 }
 
-                // УБРАНО: группировка и поиск "лучшего" (minOrNull)
-
-                // Просто сортируем список: сначала по имени модели, затем по току
                 items = results.sortedWith(
                     compareBy<AtsUiItem> { it.modelName }
                         .thenBy { it.ratedCurrentA }
                 )
 
-                selectedVariantId = items.firstOrNull()?.variantId
+                selectedVariantId = null
             }
         } catch (t: Throwable) {
             errorMsg = t.message ?: "Ошибка загрузки"
@@ -124,13 +123,20 @@ fun AtsThirdWindow(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Divider(modifier = Modifier.padding(vertical = 8.dp))
-        Text("Подходящие устройства", style = MaterialTheme.typography.subtitle2, color = Color.Gray)
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        Text("Подбор АВР — подходящие варианты", style = MaterialTheme.typography.h6)
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Серия: ${selectedSeries ?: "—"}")
+            Spacer(Modifier.width(12.dp))
+            if (requiredBreakingCapacity > 0) {
+                Text("Мин. Icu: $maxShortCircuitCurrentStr", style = MaterialTheme.typography.caption, color = Color.Gray)
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         if (loading) {
-            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else if (errorMsg != null) {
@@ -138,50 +144,108 @@ fun AtsThirdWindow(
         } else if (selectedSeries.isNullOrBlank() || selectedPoles.isNullOrBlank()) {
             Text("Выберите серию и полюса для поиска.", color = Color.Gray)
         } else if (items.isEmpty()) {
-            Text("Нет подходящих устройств (проверьте Icu).", color = MaterialTheme.colors.onSurface)
-        } else {
-            // Заголовки таблицы
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Text("Модель", modifier = Modifier.weight(2f), style = MaterialTheme.typography.caption, fontWeight = FontWeight.Bold)
-                Text("In, A", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.caption, fontWeight = FontWeight.Bold)
-                Text("Полюса", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.caption, fontWeight = FontWeight.Bold)
-                Text("Icu, кА", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.caption, fontWeight = FontWeight.Bold)
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Text("Нет подходящих устройств (проверьте Icu).", color = MaterialTheme.colors.onSurface)
             }
-            Divider()
+        } else {
 
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .border(1.dp, borderColor)
+                    .background(Color.LightGray.copy(alpha = 0.2f)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HeaderCell("Произв.", wManuf)
+                VerticalDivider(color = borderColor)
+                HeaderCell("Модель", wModel)
+                VerticalDivider(color = borderColor)
+                HeaderCell("In, A", wAmps)
+                VerticalDivider(color = borderColor)
+                HeaderCell("Полюса", wPoles)
+                VerticalDivider(color = borderColor)
+                HeaderCell("Icu, кА", wIcu)
+            }
+
+            // --- Список ---
             LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                contentPadding = PaddingValues(vertical = 4.dp)
+                modifier = Modifier.weight(1f).fillMaxWidth()
             ) {
                 items(items, key = { it.variantId }) { item ->
                     val isSelected = item.variantId == selectedVariantId
-                    val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else Color.Transparent
 
-                    // Элемент списка
-                    Row(
+                    // Цвет фона и границы
+                    val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
+                    val borderStroke = if (isSelected)
+                        BorderStroke(2.dp, MaterialTheme.colors.primary)
+                    else
+                        BorderStroke(1.dp, borderColor)
+
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(bg)
-                            .clickable {
-                                selectedVariantId = item.variantId
-                                val res = "${item.modelName} ${formatRated(item.ratedCurrentA)}A ${item.polesText}"
-                                onChoose(res)
-                            }
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .offset(y = (-1).dp) // "Схлопывание" границ
+                            .combinedClickable(
+                                onClick = { selectedVariantId = item.variantId },
+                                onDoubleClick = {
+                                    selectedVariantId = item.variantId
+                                    val res = "${item.manufacturer} ${item.modelName} ${formatRated(item.ratedCurrentA)}A ${item.polesText}"
+                                    onChoose(res)
+                                }
+                            ),
+                        border = borderStroke,
+                        color = bg,
+                        elevation = 0.dp
                     ) {
-                        Text(item.modelName, modifier = Modifier.weight(2f), style = MaterialTheme.typography.body2)
-                        Text(formatRated(item.ratedCurrentA), modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.body2)
-                        Text(item.polesText, modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.body2)
-                        Text(item.breakingCapacityStr, modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.body2)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Min),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TableCell(text = item.manufacturer, weight = wManuf)
+                            VerticalDivider(color = borderColor)
+
+                            TableCell(text = item.modelName, weight = wModel)
+                            VerticalDivider(color = borderColor)
+
+                            TableCell(text = formatRated(item.ratedCurrentA), weight = wAmps)
+                            VerticalDivider(color = borderColor)
+
+                            TableCell(text = item.polesText, weight = wPoles)
+                            VerticalDivider(color = borderColor)
+
+                            TableCell(text = item.breakingCapacityStr, weight = wIcu)
+                        }
                     }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { onBack() }) {
+                    Text("Назад к параметрам")
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        val chosen = items.firstOrNull { it.variantId == selectedVariantId }
+                        if (chosen != null) {
+                            val res = "${chosen.manufacturer} ${chosen.modelName} ${formatRated(chosen.ratedCurrentA)}A ${chosen.polesText}"
+                            onChoose(res)
+                        }
+                    },
+                    enabled = selectedVariantId != null
+                ) {
+                    Text("Выбрать")
                 }
             }
         }
     }
 }
+
+// --- Утилиты парсинга (оставляем private, так как в соседнем файле они тоже могут быть private) ---
 
 private fun parseAmps(s: String?): Float? {
     if (s.isNullOrBlank()) return null
