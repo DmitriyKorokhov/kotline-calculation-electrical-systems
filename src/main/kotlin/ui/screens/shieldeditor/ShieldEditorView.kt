@@ -31,6 +31,7 @@ import ui.screens.shieldeditor.exporter.ExportEditor
 import ui.screens.shieldeditor.input.InputTypePopup
 import ui.screens.shieldeditor.protection.ProtectionSelectionWindow
 import ui.screens.shieldeditor.protection.protectionTypeFromString
+import ui.utils.HistoryManager
 
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
 private val SCROLLBAR_HEIGHT: Dp = 22.dp
@@ -40,6 +41,17 @@ private val SCROLLBAR_HEIGHT: Dp = 22.dp
 fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     // данные щита (ShieldData поля уже mutableStateOf)
     val data = remember { ShieldStorage.loadOrCreate(shieldId) }
+    // Менеджер истории
+    val historyManager = remember { HistoryManager() }
+    // Триггер для сброса флагов в текстовых полях
+    var historyTrigger by remember { mutableStateOf(0) }
+
+    fun pushHistory(isDiscrete: Boolean = false) {
+        historyManager.pushState(data)
+        if (isDiscrete) {
+            historyTrigger++
+        }
+    }
 
     val borderColor = Color.White
     val textColor = Color.White
@@ -100,10 +112,36 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                         return@onPreviewKeyEvent true
                     }
                 }
+                // ОБРАБОТКА CTRL+Z / CTRL+SHIFT+Z
+                if (event.key == Key.Z && event.type == KeyEventType.KeyDown) {
+                    if (event.isCtrlPressed) {
+                        if (event.isShiftPressed) {
+                            historyManager.redo(data)
+                            historyTrigger++
+                            CalculationEngine.calculateAll(data)
+                            data.consumers.forEach {
+                                CableCalculator.calculateCable(it, data)
+                                CableCalculator.calculateVoltageDrop(it, data)
+                                CableCalculator.calculateShortCircuitCurrent(it, data)
+                            }
+                            saveNow()
+                        } else {
+                            historyManager.undo(data)
+                            historyTrigger++
+                            CalculationEngine.calculateAll(data)
+                            data.consumers.forEach {
+                                CableCalculator.calculateCable(it, data)
+                                CableCalculator.calculateVoltageDrop(it, data)
+                                CableCalculator.calculateShortCircuitCurrent(it, data)
+                            }
+                            saveNow()
+                        }
+                        return@onPreviewKeyEvent true
+                    }
+                }
                 false
             }
     ) {
-
         Column(Modifier.fillMaxSize()) {
             // Top bar сверху
             ShieldTopBar(
@@ -161,7 +199,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         }
                                         saveNow()
                                     },
-                                    onOpenInputTypeDialog = { showInputTypeDialog = true }
+                                    onOpenInputTypeDialog = { showInputTypeDialog = true },
+                                    onPushHistory = { pushHistory(true) }
                                 )
                             }
 
@@ -245,9 +284,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                         selectedColumns = selectedColumns,
                                                         copiedConsumers = copiedConsumers,
                                                         saveNow = { saveNow() },
-                                                        onShowAddDialog = {
-                                                            showAddDialog = true
-                                                        }
+                                                        onShowAddDialog = { showAddDialog = true },
+                                                        onPushHistory = { pushHistory(true) }
                                                     )
                                                 },
                                                 onHeaderClick = {
@@ -272,7 +310,9 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                     saveNow()
                                                 },
                                                 onOpenProtectionDialog = { protectionDialogForIndex = colIndex },
-                                                data = data
+                                                data = data,
+                                                onPushHistory = { isDiscrete -> pushHistory(isDiscrete) },
+                                                historyTrigger = historyTrigger
                                             )
                                         }
                                     }
@@ -293,6 +333,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                             AddConsumerDialog(
                                 onDismiss = { showAddDialog = false },
                                 onConfirm = { countStr ->
+                                    pushHistory(true)
                                     val targetIndex = selectedColumns.singleOrNull()
                                     if (countStr > 0 && targetIndex != null) {
                                         var insertPos = targetIndex + 1
@@ -327,7 +368,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
             CalculationWindow(
                 data = data,
                 onSave = { saveNow() },
-                onDismiss = { showCalculationWindow = false }
+                onDismiss = { showCalculationWindow = false },
+                onPushHistory = { pushHistory(true) }
             )
         }
 
@@ -347,6 +389,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                     maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
                     onDismiss = { protectionDialogForIndex = null },
                     onSelect = { resultString, poles ->
+                        pushHistory(true)
                         // Сохраняем результат
                         val correctedString = resultString.replace(Regex("(\\d)\\sA"), "$1A")
                         consumer.protectionDevice = correctedString
@@ -389,11 +432,13 @@ private fun handleContextAction(
     selectedColumns: MutableList<Int>,
     copiedConsumers: MutableList<ConsumerModel>,
     saveNow: () -> Unit,
-    onShowAddDialog: () -> Unit
+    onShowAddDialog: () -> Unit,
+    onPushHistory: () -> Unit
 ) {
     when (action) {
         ContextMenuAction.DELETE -> {
             if (selectedColumns.isNotEmpty()) {
+                onPushHistory()
                 selectedColumns.sortedDescending().forEach { idx ->
                     if (idx in data.consumers.indices) {
                         data.consumers.removeAt(idx)
@@ -412,6 +457,7 @@ private fun handleContextAction(
         ContextMenuAction.PASTE -> {
             val target = selectedColumns.singleOrNull()
             if (target != null && copiedConsumers.isNotEmpty()) {
+                onPushHistory()
                 var insertPos = target + 1
                 val newlyInsertedIndices = mutableListOf<Int>()
                 copiedConsumers.forEach { c ->

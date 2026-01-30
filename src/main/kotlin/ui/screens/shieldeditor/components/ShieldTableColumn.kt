@@ -37,7 +37,7 @@ import view.CompactOutlinedTextField
 import ui.screens.shieldeditor.dialogs.CableTypePopup
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.and
-
+import androidx.compose.ui.focus.onFocusChanged
 
 private val COLUMNWIDTH: Dp = 220.dp
 private val COLUMNOUTERPADDING: Dp = 4.dp
@@ -68,6 +68,8 @@ fun ShieldTableColumn(
     onRecalculateDropOnly: () -> Unit,
     onOpenProtectionDialog: () -> Unit,
     data: ShieldData,
+    onPushHistory: (Boolean) -> Unit,
+    historyTrigger: Int
 ) {
     // --- Анимации выделения ---
     val targetBg = if (isSelected) Color(0xFF1976D2) else Color.Transparent
@@ -163,10 +165,12 @@ fun ShieldTableColumn(
             // --- БЛОК 1: Входные параметры (Blue) ---
             BlockPanel(color = BLOCKBLUE) {
                 // Название
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "Наим. потребителя",
                     value = consumer.name,
                     onValueChange = { consumer.name = it; onDataChanged() },
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -178,10 +182,12 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Помещение
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "Номер помещения",
                     value = consumer.roomNumber,
                     onValueChange = { consumer.roomNumber = it; onDataChanged() },
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -193,10 +199,12 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Напряжение
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "Напряжение, В",
                     value = consumer.voltage,
                     onValueChange = { consumer.voltage = it; onCalculationRequired() },
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -207,10 +215,12 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Cos Phi
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "cos(ϕ)",
                     value = consumer.cosPhi,
                     onValueChange = { consumer.cosPhi = it; onCalculationRequired() },
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -222,25 +232,23 @@ fun ShieldTableColumn(
 
                 // Установленная мощность
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    CompactOutlinedTextField(
+                    HistoryAwareTextField(
                         label = "Установ. мощность, кВт",
                         value = consumer.installedPowerW,
                         onValueChange = {
                             consumer.installedPowerW = it
                             onDataChanged()
                         },
+                        onPushHistory = { onPushHistory(false) },
+                        historyTrigger = historyTrigger,
                         contentPadding = FIELDCONTENTPADDING,
                         fontSizeSp = FIELDFONT,
-
                         textColor = textColor,
-
                         focusedBorderColor = currentFocusedBorder,
                         unfocusedBorderColor = currentUnfocusedBorder,
-
                         singleLine = false, minLines = 1, maxLines = 3,
                         modifier = Modifier.fillMaxWidth()
                     )
-
                     if (isPowerError) {
                         Text(
                             text = "Внимание: Pуст < Pрасч",
@@ -253,10 +261,12 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Расчетная мощность
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "Расчетная мощность, кВт",
                     value = consumer.powerKw,
                     onValueChange = { consumer.powerKw = it; onCalculationRequired() },
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -271,11 +281,13 @@ fun ShieldTableColumn(
 
             // --- БЛОК 2: Результаты расчета (White) ---
             BlockPanel(color = BLOCKWHITE) {
-                // Ток (Read-only)
-                CompactOutlinedTextField(
+                // Ток
+                HistoryAwareTextField(
                     label = "Расчетный ток, А",
                     value = consumer.currentA,
                     onValueChange = {},
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -287,10 +299,12 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Номер фазы
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "Номер фазы",
                     value = consumer.phaseNumber,
                     onValueChange = { consumer.phaseNumber = it; onDataChanged() },
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -301,10 +315,12 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Номер группы
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "Номер группы",
                     value = consumer.lineName,
                     onValueChange = { consumer.lineName = it; onDataChanged() },
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -320,10 +336,12 @@ fun ShieldTableColumn(
             // --- БЛОК 3: Защита и Кабель (Lavender) ---
             BlockPanel(color = BLOCKLAVENDER) {
                 // Номер автомата
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "Номер защиты",
                     value = consumer.breakerNumber,
                     onValueChange = { consumer.breakerNumber = it; onDataChanged() },
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -335,10 +353,12 @@ fun ShieldTableColumn(
 
                 // Устройство защиты (с иконкой выбора)
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    CompactOutlinedTextField(
+                    HistoryAwareTextField(
                         label = "Устройство защиты",
                         value = consumer.protectionDevice,
                         onValueChange = { consumer.protectionDevice = it; onCalculationRequired() },
+                        onPushHistory = { onPushHistory(false) },
+                        historyTrigger = historyTrigger,
                         contentPadding = FIELDCONTENTPADDING,
                         fontSizeSp = FIELDFONT,
                         textColor = textColor,
@@ -363,10 +383,12 @@ fun ShieldTableColumn(
 
             BlockPanel(color = BLOCKWHITE) {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    CompactOutlinedTextField(
+                    HistoryAwareTextField(
                         label = "Марка кабеля",
                         value = consumer.cableType,
                         onValueChange = { consumer.cableType = it; onDataChanged() },
+                        onPushHistory = { onPushHistory(false) },
+                        historyTrigger = historyTrigger,
                         contentPadding = FIELDCONTENTPADDING,
                         fontSizeSp = FIELDFONT,
                         textColor = textColor,
@@ -389,6 +411,7 @@ fun ShieldTableColumn(
                         CableTypePopup(
                             onDismissRequest = { showCableMenu = false },
                             onConfirm = { selectedType ->
+                                onPushHistory(true)
                                 consumer.cableType = selectedType
                                 onCalculationRequired()
                                 showCableMenu = false
@@ -406,17 +429,19 @@ fun ShieldTableColumn(
                 BlockPanel(color = BLOCKWHITE) { // Можно выделить отдельным цветом
                     // 1. Выбор способа (Dropdown)
                     Box(modifier = Modifier.fillMaxWidth()) {
-                        CompactOutlinedTextField(
+                        HistoryAwareTextField(
                             label = "Способ прокладки",
                             value = consumer.layingMethod.ifBlank { "Воздух" }, // Значение по умолчанию
-                            onValueChange = {}, // ReadOnly, меняем через меню
+                            onValueChange = {},
+                            onPushHistory = { onPushHistory(false) },
+                            historyTrigger = historyTrigger,
                             contentPadding = FIELDCONTENTPADDING,
                             fontSizeSp = FIELDFONT,
                             textColor = textColor,
                             focusedBorderColor = borderColor,
                             unfocusedBorderColor = Color.LightGray,
                             modifier = Modifier.fillMaxWidth()
-                                .clickable { /* logic for dropdown handled below */ }
+                                .clickable { }
                         )
 
                         // Меню выбора
@@ -436,15 +461,17 @@ fun ShieldTableColumn(
                             onDismissRequest = { methodMenuExpanded = false }
                         ) {
                             DropdownMenuItem(onClick = {
+                                onPushHistory(true)
                                 consumer.layingMethod = "Воздух"
                                 methodMenuExpanded = false
-                                onCalculationRequired() // Пересчитываем кабель
+                                onCalculationRequired()
                             }) { Text("Воздух") }
 
                             DropdownMenuItem(onClick = {
+                                onPushHistory(true)
                                 consumer.layingMethod = "Земля"
                                 methodMenuExpanded = false
-                                onCalculationRequired() // Пересчитываем кабель
+                                onCalculationRequired()
                             }) { Text("Земля") }
                         }
                     }
@@ -452,10 +479,12 @@ fun ShieldTableColumn(
                     Spacer(Modifier.height(4.dp))
 
                     // 2. Ввод длины
-                    CompactOutlinedTextField(
+                    HistoryAwareTextField(
                         label = "Длина, м",
                         value = consumer.cableLength,
                         onValueChange = { consumer.cableLength = it; onCalculationRequired() },
+                        onPushHistory = { onPushHistory(false) },
+                        historyTrigger = historyTrigger,
                         contentPadding = FIELDCONTENTPADDING,
                         fontSizeSp = FIELDFONT,
                         textColor = textColor,
@@ -472,10 +501,12 @@ fun ShieldTableColumn(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CompactOutlinedTextField(
+                    HistoryAwareTextField(
                         label = "Число жил, сечение",
                         value = consumer.cableLine,
-                        onValueChange = {}, // ReadOnly
+                        onValueChange = {},
+                        onPushHistory = { onPushHistory(false) },
+                        historyTrigger = historyTrigger,
                         contentPadding = FIELDCONTENTPADDING,
                         fontSizeSp = FIELDFONT,
                         textColor = textColor,
@@ -496,11 +527,13 @@ fun ShieldTableColumn(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text("▲", Modifier.clickable {
+                            onPushHistory(true)
                             changeCableSection(consumer, data, +1)
                             onRecalculateDropOnly()
                         })
 
                         Text("▼", Modifier.clickable {
+                            onPushHistory(true)
                             changeCableSection(consumer, data, -1)
                             onRecalculateDropOnly()
                         })
@@ -510,13 +543,15 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Падение напряжения
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "Падение напряжения, В",
-                    value = consumer.voltageDropV, // Поле результата
-                    onValueChange = {}, // Read-only, так как это результат расчета
+                    value = consumer.voltageDropV,
+                    onValueChange = {},
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
-                    textColor = textColor, // Можно выделить красным, если есть warning (реализуйте логику цвета выше)
+                    textColor = textColor,
                     focusedBorderColor = borderColor,
                     unfocusedBorderColor = Color.LightGray,
                     modifier = Modifier.fillMaxWidth()
@@ -525,10 +560,12 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Ток КЗ в конце линии
-                CompactOutlinedTextField(
+                HistoryAwareTextField(
                     label = "Ток КЗ в конце КЛ, кА",
                     value = consumer.shortCircuitCurrentkA,
                     onValueChange = {},
+                    onPushHistory = { onPushHistory(false) },
+                    historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
                     fontSizeSp = FIELDFONT,
                     textColor = textColor,
@@ -625,9 +662,6 @@ private fun changeCableSection(consumer: ConsumerModel, data: ShieldData, direct
     }
 }
 
-
-
-
 @Composable
 private fun BlockPanel(
     color: Color,
@@ -640,6 +674,55 @@ private fun BlockPanel(
             .border(1.dp, BLOCKBORDER, RoundedCornerShape(6.dp))
             .padding(8.dp),
         content = content
+    )
+}
+
+@Composable
+private fun HistoryAwareTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onPushHistory: () -> Unit,
+    historyTrigger: Int,
+    label: String,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues,
+    fontSizeSp: Int,
+    textColor: Color,
+    focusedBorderColor: Color,
+    unfocusedBorderColor: Color,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = 1
+) {
+    var historySaved by remember { mutableStateOf(false) }
+
+    LaunchedEffect(historyTrigger) {
+        historySaved = false
+    }
+
+    CompactOutlinedTextField(
+        label = label,
+        value = value,
+        onValueChange = { newValue ->
+            if (!historySaved) {
+                onPushHistory()
+                historySaved = true
+            }
+            onValueChange(newValue)
+        },
+        contentPadding = contentPadding,
+        fontSizeSp = fontSizeSp,
+        textColor = textColor,
+        focusedBorderColor = focusedBorderColor,
+        unfocusedBorderColor = unfocusedBorderColor,
+        singleLine = singleLine,
+        minLines = minLines,
+        maxLines = maxLines,
+        modifier = modifier.onFocusChanged { focusState ->
+            if (!focusState.isFocused) {
+                historySaved = false
+            }
+        }
     )
 }
 

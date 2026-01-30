@@ -28,7 +28,8 @@ fun ShieldLeftPanel(
     data: ShieldData,
     onSave: () -> Unit,
     onCalculate: () -> Unit,
-    onOpenInputTypeDialog: () -> Unit
+    onOpenInputTypeDialog: () -> Unit,
+    onPushHistory: () -> Unit
 ) {
     val textColor = Color.White
     val borderColor = Color.White

@@ -24,12 +24,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
-import java.awt.Cursor
-import kotlin.math.max
-import kotlin.math.roundToInt
 import ui.screens.shieldeditor.ShieldData
-import ui.screens.shieldeditor.components.topbar.tabs.ProtectionSettingsTab
 import ui.screens.shieldeditor.components.topbar.tabs.CableSettingsTab
+import ui.screens.shieldeditor.components.topbar.tabs.ProtectionSettingsTab
+import java.awt.Cursor
+import kotlin.math.roundToInt
 
 private enum class CalculationTab {
     PROTECTION, CABLES
@@ -39,7 +38,8 @@ private enum class CalculationTab {
 fun CalculationWindow(
     data: ShieldData,
     onSave: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onPushHistory: () -> Unit
 ) {
     val density = LocalDensity.current
 
@@ -147,10 +147,15 @@ fun CalculationWindow(
                         .padding(24.dp)
                 ) {
                     when (selectedTab) {
-                        CalculationTab.PROTECTION -> ProtectionSettingsTab(data, onSave)
+                        CalculationTab.PROTECTION -> ProtectionSettingsTab(
+                            data,
+                            onSave,
+                            onPushHistory = onPushHistory
+                        )
                         CalculationTab.CABLES -> CableSettingsTab(
                             data = data,
-                            onSave
+                            onSave,
+                            onPushHistory = onPushHistory
                         )
                     }
                 }

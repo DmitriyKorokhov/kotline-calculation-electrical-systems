@@ -20,13 +20,15 @@ import ui.screens.shieldeditor.ShieldData
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 
 @Composable
 fun ProtectionSettingsTab(
     data: ShieldData,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onPushHistory: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     val fieldWidth = 350.dp
@@ -38,6 +40,13 @@ fun ProtectionSettingsTab(
     // Состояния раскрытия меню
     var stdMenuExpanded by remember { mutableStateOf(false) }
     var manufMenuExpanded by remember { mutableStateOf(false) }
+
+    // Вспомогательная функция для текстовых полей
+    fun Modifier.saveHistoryOnFocus(): Modifier = this.onFocusChanged { focusState ->
+        if (focusState.isFocused) {
+            onPushHistory()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -75,6 +84,7 @@ fun ProtectionSettingsTab(
                         data.protectionStandard = std
                         stdMenuExpanded = false
                         onSave()
+                        onPushHistory()
                     }) {
                         Text(std)
                     }
@@ -107,6 +117,7 @@ fun ProtectionSettingsTab(
                         data.protectionManufacturer = manuf
                         manufMenuExpanded = false
                         onSave()
+                        onPushHistory()
                     }) {
                         Text(manuf)
                     }
@@ -126,6 +137,7 @@ fun ProtectionSettingsTab(
                 onCheckedChange = {
                     data.hasOverloadProtection = it
                     onSave()
+                    onPushHistory()
                 }
             )
             Text(
@@ -184,7 +196,7 @@ fun ProtectionSettingsTab(
                         }
                     },
                     label = { Text("Пороговый расчетный ток (А)") },
-                    modifier = Modifier.width(fieldWidth),
+                    modifier = Modifier.width(fieldWidth).saveHistoryOnFocus(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
@@ -205,7 +217,7 @@ fun ProtectionSettingsTab(
                         }
                     },
                     label = { Text("Iрасч < порога") },
-                    modifier = Modifier.width(fieldWidth),
+                    modifier = Modifier.width(fieldWidth).saveHistoryOnFocus(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
@@ -226,7 +238,7 @@ fun ProtectionSettingsTab(
                         }
                     },
                     label = { Text("Iрасч ≥ порога") },
-                    modifier = Modifier.width(fieldWidth),
+                    modifier = Modifier.width(fieldWidth).saveHistoryOnFocus(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
