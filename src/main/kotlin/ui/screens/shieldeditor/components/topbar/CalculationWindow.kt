@@ -39,7 +39,8 @@ fun CalculationWindow(
     data: ShieldData,
     onSave: () -> Unit,
     onDismiss: () -> Unit,
-    onPushHistory: () -> Unit
+    onPushHistory: (Boolean) -> Unit,
+    historyTrigger: Int
 ) {
     val density = LocalDensity.current
 
@@ -150,12 +151,14 @@ fun CalculationWindow(
                         CalculationTab.PROTECTION -> ProtectionSettingsTab(
                             data,
                             onSave,
-                            onPushHistory = onPushHistory
+                            onPushHistory = onPushHistory,
+                            historyTrigger = historyTrigger
                         )
                         CalculationTab.CABLES -> CableSettingsTab(
                             data = data,
                             onSave,
-                            onPushHistory = onPushHistory
+                            onPushHistory = onPushHistory,
+                            historyTrigger = historyTrigger
                         )
                     }
                 }

@@ -1,4 +1,4 @@
-package ui.screens.shieldeditor.components.topbar.tabs
+ package ui.screens.shieldeditor.components.topbar.tabs
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
@@ -14,17 +14,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ui.screens.shieldeditor.ShieldData
+import ui.utils.HistoryAwareOutlinedTextField
 
-@Composable
+ @Composable
 fun CableSettingsTab(
     data: ShieldData,
     onSave: () -> Unit,
-    onPushHistory: () -> Unit
+    onPushHistory: (Boolean) -> Unit,
+    historyTrigger: Int
 ) {
     val scrollState = rememberScrollState()
     val fieldWidth = 350.dp
@@ -54,10 +55,10 @@ fun CableSettingsTab(
         // --- Группа А: Материал проводника ---
         Text("Материал проводника", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = data.cableMaterial == "Copper", onClick = { onPushHistory(); data.cableMaterial = "Copper"; onSave() })
+            RadioButton(selected = data.cableMaterial == "Copper", onClick = { onPushHistory(true); data.cableMaterial = "Copper"; onSave() })
             Text("Медь")
             Spacer(Modifier.width(16.dp))
-            RadioButton(selected = data.cableMaterial == "Aluminum", onClick = { onPushHistory(); data.cableMaterial = "Aluminum"; onSave() })
+            RadioButton(selected = data.cableMaterial == "Aluminum", onClick = { onPushHistory(true); data.cableMaterial = "Aluminum"; onSave() })
             Text("Алюминий")
         }
 
@@ -66,7 +67,7 @@ fun CableSettingsTab(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.clickable {
-                onPushHistory()
+                onPushHistory(true)
                 data.cableIsFlexible = !data.cableIsFlexible
                 onSave()
             }
@@ -80,7 +81,7 @@ fun CableSettingsTab(
             Checkbox(
                 checked = data.cableIsFlexible,
                 onCheckedChange = {
-                    onPushHistory()
+                    onPushHistory(true)
                     data.cableIsFlexible = it
                     onSave()
                 }
@@ -93,15 +94,15 @@ fun CableSettingsTab(
         Text("Материал изоляции", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = data.cableInsulation == "PVC", onClick = { onPushHistory(); updateTemp("PVC") })
+                RadioButton(selected = data.cableInsulation == "PVC", onClick = { onPushHistory(true); updateTemp("PVC") })
                 Text("Поливинилхлоридный пластикат (В)")
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = data.cableInsulation == "Polymer", onClick = { onPushHistory(); updateTemp("Polymer") })
+                RadioButton(selected = data.cableInsulation == "Polymer", onClick = { onPushHistory(true); updateTemp("Polymer") })
                 Text("Полимерная композиция (П)")
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = data.cableInsulation == "XLPE", onClick = { onPushHistory(); updateTemp("XLPE") })
+                RadioButton(selected = data.cableInsulation == "XLPE", onClick = { onPushHistory(true); updateTemp("XLPE") })
                 Text("Сшитый полиэтилен (Пв)")
             }
         }
@@ -114,18 +115,22 @@ fun CableSettingsTab(
 
         // 1. Основные параметры (Опуск и Разделка) - теперь СВЕРХУ
         Row(Modifier.width(fieldWidth), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
+            HistoryAwareOutlinedTextField(
                 value = data.cableDescentPercent,
                 onValueChange = { data.cableDescentPercent = it; onSave() },
+                onPushHistory = onPushHistory,
+                historyTrigger = historyTrigger,
                 label = { Text("Опуск + Подъем (%)") },
-                modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onPushHistory() }
+                modifier = Modifier.weight(1f)
             )
 
-            OutlinedTextField(
+            HistoryAwareOutlinedTextField(
                 value = data.cableTerminationMeters,
                 onValueChange = { data.cableTerminationMeters = it; onSave() },
+                onPushHistory = onPushHistory,
+                historyTrigger = historyTrigger,
                 label = { Text("Разделка (м)") },
-                modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onPushHistory() }
+                modifier = Modifier.weight(1f)
             )
         }
 
@@ -138,7 +143,7 @@ fun CableSettingsTab(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .clip(RoundedCornerShape(4.dp))
-                .clickable { onPushHistory(); showAdvancedSettings = !showAdvancedSettings }
+                .clickable { onPushHistory(true); showAdvancedSettings = !showAdvancedSettings }
                 .padding(vertical = 8.dp, horizontal = 4.dp)
         ) {
             // Иконка меняется (Плюс или Стрелка вверх/Минус)
@@ -173,17 +178,21 @@ fun CableSettingsTab(
 
                 // Ряд 1: Малые длины
                 Row(Modifier.width(fieldWidth), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    HistoryAwareOutlinedTextField(
                         value = data.reserveTier1,
                         onValueChange = { data.reserveTier1 = it; onSave() },
+                        onPushHistory = onPushHistory,
+                        historyTrigger = historyTrigger,
                         label = { Text("0 - 20 м (%)") },
-                        modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onPushHistory() }
+                        modifier = Modifier.weight(1f)
                     )
-                    OutlinedTextField(
+                    HistoryAwareOutlinedTextField(
                         value = data.reserveTier2,
                         onValueChange = { data.reserveTier2 = it; onSave() },
+                        onPushHistory = onPushHistory,
+                        historyTrigger = historyTrigger,
                         label = { Text("20 - 50 м (%)") },
-                        modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onPushHistory() }
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
@@ -191,17 +200,21 @@ fun CableSettingsTab(
 
                 // Ряд 2: Большие длины
                 Row(Modifier.width(fieldWidth), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
+                    HistoryAwareOutlinedTextField(
                         value = data.reserveTier3,
                         onValueChange = { data.reserveTier3 = it; onSave() },
+                        onPushHistory = onPushHistory,
+                        historyTrigger = historyTrigger,
                         label = { Text("50 - 90 м (%)") },
-                        modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onPushHistory() }
+                        modifier = Modifier.weight(1f)
                     )
-                    OutlinedTextField(
+                    HistoryAwareOutlinedTextField(
                         value = data.reserveTier4,
                         onValueChange = { data.reserveTier4 = it; onSave() },
+                        onPushHistory = onPushHistory,
+                        historyTrigger = historyTrigger,
                         label = { Text("> 90 м (%)") },
-                        modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) onPushHistory() }
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -213,22 +226,26 @@ fun CableSettingsTab(
         Text("Падение напряжения", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
 
         // 1. Удельное индуктивное сопротивление (редактируемое)
-        OutlinedTextField(
+        HistoryAwareOutlinedTextField(
             value = data.cableInductiveResistance,
             onValueChange = { data.cableInductiveResistance = it; onSave() },
+            onPushHistory = onPushHistory,
+            historyTrigger = historyTrigger,
             label = { Text("Удельное индуктивное сопр. (мОм/м)") },
-            modifier = Modifier.width(fieldWidth).onFocusChanged { if (it.isFocused) onPushHistory() }
+            modifier = Modifier.width(fieldWidth)
         )
 
         Spacer(Modifier.height(8.dp))
 
 
         // 2. Температура
-        OutlinedTextField(
+        HistoryAwareOutlinedTextField(
             value = data.cableTemperature,
             onValueChange = { data.cableTemperature = it; onSave() },
+            onPushHistory = onPushHistory,
+            historyTrigger = historyTrigger,
             label = { Text("Температура кабеля (°C)") },
-            modifier = Modifier.width(fieldWidth).onFocusChanged { if (it.isFocused) onPushHistory() }
+            modifier = Modifier.width(fieldWidth)
         )
 
         Spacer(Modifier.height(8.dp))
@@ -245,11 +262,13 @@ fun CableSettingsTab(
         Spacer(Modifier.height(8.dp))
 
         // 4. Допустимое падение
-        OutlinedTextField(
+        HistoryAwareOutlinedTextField(
             value = data.maxVoltageDropPercent,
             onValueChange = { data.maxVoltageDropPercent = it; onSave() },
+            onPushHistory = onPushHistory,
+            historyTrigger = historyTrigger,
             label = { Text("Допустимое падение напряжения (%)") },
-            modifier = Modifier.width(fieldWidth).onFocusChanged { if (it.isFocused) onPushHistory() }
+            modifier = Modifier.width(fieldWidth)
         )
 
         Spacer(Modifier.height(16.dp))
@@ -261,11 +280,13 @@ fun CableSettingsTab(
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        OutlinedTextField(
+        HistoryAwareOutlinedTextField(
             value = data.singleCoreThreshold,
             onValueChange = { data.singleCoreThreshold = it; onSave() },
+            onPushHistory = onPushHistory,
+            historyTrigger = historyTrigger,
             label = { Text("Смена многожильного на одножильный кабель при длине трассы (м)") },
-            modifier = Modifier.width(fieldWidth).onFocusChanged { if (it.isFocused) onPushHistory() }
+            modifier = Modifier.width(fieldWidth)
         )
     }
 }

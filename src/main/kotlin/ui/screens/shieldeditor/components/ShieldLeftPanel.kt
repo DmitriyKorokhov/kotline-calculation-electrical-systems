@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import view.CompactOutlinedTextField
 import ui.screens.shieldeditor.ShieldData
+import ui.utils.HistoryAwareCompactTextField
 
 private val FIELD_CONTENT_PADDING = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
 private val BLOCK_BORDER = Color(0xFFB0BEC5)
@@ -29,7 +30,8 @@ fun ShieldLeftPanel(
     onSave: () -> Unit,
     onCalculate: () -> Unit,
     onOpenInputTypeDialog: () -> Unit,
-    onPushHistory: () -> Unit
+    onPushHistory: (Boolean) -> Unit,
+    historyTrigger: Int
 ) {
     val textColor = Color.White
     val borderColor = Color.White
@@ -50,10 +52,12 @@ fun ShieldLeftPanel(
 
         Divider(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), color = Color.LightGray)
 
-        CompactOutlinedTextField(
+        HistoryAwareCompactTextField(
             label = "Наименование щита",
             value = data.shieldName,
             onValueChange = { data.shieldName = it; onSave() },
+            onPushHistory = onPushHistory,
+            historyTrigger = historyTrigger,
             contentPadding = FIELD_CONTENT_PADDING,
             fontSizeSp = 16,
             textColor = textColor,
@@ -63,10 +67,13 @@ fun ShieldLeftPanel(
         )
 
         Spacer(Modifier.height(8.dp))
-        CompactOutlinedTextField(
+
+        HistoryAwareCompactTextField(
             label = "Макс. ток КЗ, кА",
             value = data.maxShortCircuitCurrent,
             onValueChange = { data.maxShortCircuitCurrent = it; onSave() },
+            onPushHistory = onPushHistory,
+            historyTrigger = historyTrigger,
             contentPadding = FIELD_CONTENT_PADDING,
             fontSizeSp = 16,
             textColor = textColor,
@@ -87,12 +94,14 @@ fun ShieldLeftPanel(
             )
             Spacer(Modifier.height(8.dp))
 
-            CompactOutlinedTextField(
+            HistoryAwareCompactTextField(
                 label = "Тип и устройство",
                 value = data.inputInfo,
                 onValueChange = {
                     data.inputInfo = it; onSave()
                 },
+                onPushHistory = onPushHistory,
+                historyTrigger = historyTrigger,
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = FIELD_CONTENT_PADDING,
                 fontSizeSp = 15,
@@ -143,10 +152,12 @@ fun ShieldLeftPanel(
 
         // Блок коэффициентов
         BlockPanel(BLOCK_BLUE) {
-            CompactOutlinedTextField(
+            HistoryAwareCompactTextField(
                 label = "Коэф. спроса",
                 value = data.demandFactor,
                 onValueChange = { data.demandFactor = it; onSave() },
+                onPushHistory = onPushHistory,
+                historyTrigger = historyTrigger,
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = FIELD_CONTENT_PADDING,
                 textColor = textColor,
@@ -155,11 +166,15 @@ fun ShieldLeftPanel(
                 fontSizeSp = 15,
                 singleLine = true
             )
+
             Spacer(Modifier.height(8.dp))
-            CompactOutlinedTextField(
+
+            HistoryAwareCompactTextField(
                 label = "Коэф. одновременности",
                 value = data.simultaneityFactor,
                 onValueChange = { data.simultaneityFactor = it; onSave() },
+                onPushHistory = onPushHistory,
+                historyTrigger = historyTrigger,
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = FIELD_CONTENT_PADDING,
                 textColor = textColor,

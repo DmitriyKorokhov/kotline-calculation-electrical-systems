@@ -14,21 +14,20 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import ui.screens.shieldeditor.ShieldData
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import ui.utils.HistoryAwareOutlinedTextField
 
 @Composable
 fun ProtectionSettingsTab(
     data: ShieldData,
     onSave: () -> Unit,
-    onPushHistory: () -> Unit
+    onPushHistory: (Boolean) -> Unit,
+    historyTrigger: Int
 ) {
     val scrollState = rememberScrollState()
     val fieldWidth = 350.dp
@@ -40,13 +39,6 @@ fun ProtectionSettingsTab(
     // Состояния раскрытия меню
     var stdMenuExpanded by remember { mutableStateOf(false) }
     var manufMenuExpanded by remember { mutableStateOf(false) }
-
-    // Вспомогательная функция для текстовых полей
-    fun Modifier.saveHistoryOnFocus(): Modifier = this.onFocusChanged { focusState ->
-        if (focusState.isFocused) {
-            onPushHistory()
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -81,10 +73,10 @@ fun ProtectionSettingsTab(
             ) {
                 standards.forEach { std ->
                     DropdownMenuItem(onClick = {
+                        onPushHistory(true)
                         data.protectionStandard = std
                         stdMenuExpanded = false
                         onSave()
-                        onPushHistory()
                     }) {
                         Text(std)
                     }
@@ -114,10 +106,10 @@ fun ProtectionSettingsTab(
             ) {
                 manufacturers.forEach { manuf ->
                     DropdownMenuItem(onClick = {
+                        onPushHistory(true)
                         data.protectionManufacturer = manuf
                         manufMenuExpanded = false
                         onSave()
-                        onPushHistory()
                     }) {
                         Text(manuf)
                     }
@@ -135,9 +127,9 @@ fun ProtectionSettingsTab(
             Checkbox(
                 checked = data.hasOverloadProtection,
                 onCheckedChange = {
+                    onPushHistory(true)
                     data.hasOverloadProtection = it
                     onSave()
-                    onPushHistory()
                 }
             )
             Text(
@@ -187,7 +179,7 @@ fun ProtectionSettingsTab(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // 1. Порог тока (40 А)
-                OutlinedTextField(
+                HistoryAwareOutlinedTextField(
                     value = data.protectionCurrentThreshold,
                     onValueChange = {
                         if (it.all { char -> char.isDigit() || char == '.' || char == ',' }) {
@@ -195,8 +187,10 @@ fun ProtectionSettingsTab(
                             onSave()
                         }
                     },
+                    onPushHistory = onPushHistory,
+                    historyTrigger = historyTrigger,
                     label = { Text("Пороговый расчетный ток (А)") },
-                    modifier = Modifier.width(fieldWidth).saveHistoryOnFocus(),
+                    modifier = Modifier.width(fieldWidth),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
@@ -208,7 +202,7 @@ fun ProtectionSettingsTab(
                 )
 
                 // 2. Коэффициент для тока < Порога (0.87)
-                OutlinedTextField(
+                HistoryAwareOutlinedTextField(
                     value = data.protectionFactorLow,
                     onValueChange = {
                         if (it.all { char -> char.isDigit() || char == '.' || char == ',' }) {
@@ -216,11 +210,14 @@ fun ProtectionSettingsTab(
                             onSave()
                         }
                     },
+                    onPushHistory = onPushHistory,
+                    historyTrigger = historyTrigger,
                     label = { Text("Iрасч < порога") },
-                    modifier = Modifier.width(fieldWidth).saveHistoryOnFocus(),
+                    modifier = Modifier.width(fieldWidth),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
+
                 Text(
                     text = "Отношение расчетного тока к номинальному току защиты",
                     style = MaterialTheme.typography.caption,
@@ -229,7 +226,7 @@ fun ProtectionSettingsTab(
                 )
 
                 // 3. Коэффициент для тока >= Порога (0.93)
-                OutlinedTextField(
+                HistoryAwareOutlinedTextField(
                     value = data.protectionFactorHigh,
                     onValueChange = {
                         if (it.all { char -> char.isDigit() || char == '.' || char == ',' }) {
@@ -237,8 +234,10 @@ fun ProtectionSettingsTab(
                             onSave()
                         }
                     },
+                    onPushHistory = onPushHistory,
+                    historyTrigger = historyTrigger,
                     label = { Text("Iрасч ≥ порога") },
-                    modifier = Modifier.width(fieldWidth).saveHistoryOnFocus(),
+                    modifier = Modifier.width(fieldWidth),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )

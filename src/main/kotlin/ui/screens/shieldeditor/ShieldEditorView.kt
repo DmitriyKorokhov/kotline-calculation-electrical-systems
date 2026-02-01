@@ -200,7 +200,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                         saveNow()
                                     },
                                     onOpenInputTypeDialog = { showInputTypeDialog = true },
-                                    onPushHistory = { pushHistory(true) }
+                                    onPushHistory = { isDiscrete -> pushHistory(isDiscrete) },
+                                    historyTrigger = historyTrigger
                                 )
                             }
 
@@ -369,7 +370,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 data = data,
                 onSave = { saveNow() },
                 onDismiss = { showCalculationWindow = false },
-                onPushHistory = { pushHistory(true) }
+                onPushHistory = { isDiscrete -> pushHistory(isDiscrete) },
+                historyTrigger = historyTrigger
             )
         }
 
