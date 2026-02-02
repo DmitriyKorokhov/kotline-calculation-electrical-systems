@@ -27,7 +27,7 @@ import data.PowerSourceNode
 import data.ShieldNode
 import data.TransformerNode
 import ui.screens.shieldeditor.ShieldStorage
-import storage.ProjectStorage
+import data.storage.ProjectStorage
 
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f

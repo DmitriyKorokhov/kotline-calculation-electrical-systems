@@ -43,7 +43,7 @@ class ConsumerModel(
     var cableType by mutableStateOf(cableType)
     var voltageDropV by mutableStateOf(voltageDropV)
     var cableLength by mutableStateOf(cableLength)
-    var shortCircuitCurrentkA by mutableStateOf("")
+    var shortCircuitCurrentkA by mutableStateOf(shortCircuitCurrentkA)
 
     fun deepCopy(): ConsumerModel {
         return ConsumerModel(
