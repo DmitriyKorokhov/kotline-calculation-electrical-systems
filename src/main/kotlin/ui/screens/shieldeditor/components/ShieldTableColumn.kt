@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -26,10 +29,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.PopupProperties
+import data.database.ConsumerLibrary
 import data.database.CableCurrentRatings
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import ui.screens.shieldeditor.AdditionalProtection
 import ui.screens.shieldeditor.ConsumerModel
 import ui.screens.shieldeditor.ShieldData
 import ui.screens.shieldeditor.dialogs.CableTypePopup
@@ -62,10 +68,10 @@ fun ShieldTableColumn(
     onDataChanged: () -> Unit,
     onCalculationRequired: () -> Unit,
     onRecalculateDropOnly: () -> Unit,
-    onOpenProtectionDialog: () -> Unit,
+    onOpenProtectionDialog:(Int) -> Unit,
     data: ShieldData,
     onPushHistory: (Boolean) -> Unit,
-    historyTrigger: Int
+    historyTrigger: Int,
 ) {
     // --- Анимации выделения ---
     val targetBg = if (isSelected) Color(0xFF1976D2) else Color.Transparent
@@ -161,20 +167,66 @@ fun ShieldTableColumn(
             // --- БЛОК 1: Входные параметры (Blue) ---
             BlockPanel(color = BLOCKBLUE) {
                 // Название
-                HistoryAwareCompactTextField(
-                    label = "Наим. потребителя",
-                    value = consumer.name,
-                    onValueChange = { consumer.name = it; onDataChanged() },
-                    onPushHistory = { onPushHistory(false) },
-                    historyTrigger = historyTrigger,
-                    contentPadding = FIELDCONTENTPADDING,
-                    fontSizeSp = FIELDFONT,
-                    textColor = textColor,
-                    focusedBorderColor = borderColor,
-                    unfocusedBorderColor = Color.LightGray,
-                    singleLine = false, minLines = 1, maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    var expanded by remember { mutableStateOf(false) }
+
+                    val filteredOptions = remember(consumer.name) {
+                        ConsumerLibrary.search(consumer.name)
+                    }
+
+                    HistoryAwareCompactTextField(
+                        label = "Наим. потребителя",
+                        value = consumer.name,
+                        onValueChange = { newValue ->
+                            consumer.name = newValue
+                            onDataChanged()
+                            expanded = true
+                        },
+                        onPushHistory = { onPushHistory(false) },
+                        historyTrigger = historyTrigger,
+                        contentPadding = FIELDCONTENTPADDING,
+                        fontSizeSp = FIELDFONT,
+                        textColor = textColor,
+                        focusedBorderColor = borderColor,
+                        unfocusedBorderColor = Color.LightGray,
+                        singleLine = false, minLines = 1, maxLines = 3,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focusState ->
+                                if (!focusState.isFocused) expanded = false
+                            }
+                    )
+
+                    if (expanded && filteredOptions.isNotEmpty()) {
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false },
+
+                            properties = PopupProperties(focusable = false),
+                            modifier = Modifier
+                                .width(COLUMNWIDTH - COLUMNOUTERPADDING * 2 - 16.dp)
+                                .requiredHeightIn(max = 200.dp)
+                                .background(Color.White)
+                        ) {
+                            filteredOptions.forEach { definition ->
+                                DropdownMenuItem(
+                                    onClick = {
+                                        onPushHistory(true)
+                                        consumer.name = definition.name
+                                        onDataChanged()
+                                        expanded = false
+                                    }
+                                ) {
+                                    Text(
+                                        text = definition.name,
+                                        fontSize = 14.sp,
+                                        color = Color.Black
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Помещение
@@ -195,19 +247,70 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Напряжение
-                HistoryAwareCompactTextField(
-                    label = "Напряжение, В",
-                    value = consumer.voltage,
-                    onValueChange = { consumer.voltage = it; onCalculationRequired() },
-                    onPushHistory = { onPushHistory(false) },
-                    historyTrigger = historyTrigger,
-                    contentPadding = FIELDCONTENTPADDING,
-                    fontSizeSp = FIELDFONT,
-                    textColor = textColor,
-                    focusedBorderColor = borderColor,
-                    unfocusedBorderColor = Color.LightGray,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // --- Напряжение (Выбор: 230 или 400) ---
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    var voltageMenuExpanded by remember { mutableStateOf(false) }
+                    val voltageOptions = listOf("230", "400")
+
+                    // Используем текстовое поле для отображения, но блокируем ручной ввод
+                    // Перекрываем его прозрачным Box с clickable, чтобы клик открывал меню
+                    Box {
+                        HistoryAwareCompactTextField(
+                            label = "Напряжение, В",
+                            value = consumer.voltage,
+                            onValueChange = { }, // Игнорируем прямой ввод
+                            onPushHistory = { }, // История обрабатывается в меню
+                            historyTrigger = historyTrigger,
+                            contentPadding = FIELDCONTENTPADDING,
+                            fontSizeSp = FIELDFONT,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Прозрачная "крышка", которая ловит клики
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { voltageMenuExpanded = true }
+                        )
+                    }
+
+                    // Иконка стрелочки
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Выбрать напряжение",
+                        tint = textColor,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 4.dp)
+                            .size(24.dp)
+                            .clickable { voltageMenuExpanded = true }
+                    )
+
+                    // Выпадающее меню
+                    DropdownMenu(
+                        expanded = voltageMenuExpanded,
+                        onDismissRequest = { voltageMenuExpanded = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        voltageOptions.forEach { option ->
+                            DropdownMenuItem(
+                                onClick = {
+                                    if (consumer.voltage != option) {
+                                        onPushHistory(true)
+                                        consumer.voltage = option
+                                        onCalculationRequired()
+                                    }
+                                    voltageMenuExpanded = false
+                                }
+                            ) {
+                                Text(text = option, color = Color.Black)
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Cos Phi
@@ -329,49 +432,91 @@ fun ShieldTableColumn(
 
             Spacer(Modifier.height(8.dp))
 
-            // --- БЛОК 3: Защита и Кабель (Lavender) ---
+            // --- БЛОК 3: Защита ---
             BlockPanel(color = BLOCKLAVENDER) {
-                // Номер автомата
-                HistoryAwareCompactTextField(
-                    label = "Номер защиты",
-                    value = consumer.breakerNumber,
-                    onValueChange = { consumer.breakerNumber = it; onDataChanged() },
-                    onPushHistory = { onPushHistory(false) },
+                // Основная защита
+                ProtectionSubBlock(
+                    labelSuffix = "", // Без суффикса для первой
+                    breakerNumVal = consumer.breakerNumber,
+                    onBreakerNumChange = { consumer.breakerNumber = it; onDataChanged() },
+                    deviceVal = consumer.protectionDevice,
+                    onDeviceChange = { consumer.protectionDevice = it; onCalculationRequired() },
+                    onOpenDialog = { onOpenProtectionDialog(-1) }, // Открывает диалог для основной
+                    onPushHistory = onPushHistory,
                     historyTrigger = historyTrigger,
-                    contentPadding = FIELDCONTENTPADDING,
-                    fontSizeSp = FIELDFONT,
                     textColor = textColor,
-                    focusedBorderColor = borderColor,
-                    unfocusedBorderColor = Color.LightGray,
-                    modifier = Modifier.fillMaxWidth()
+                    borderColor = borderColor
                 )
-                Spacer(Modifier.height(FIELDVSPACE))
 
-                // Устройство защиты (с иконкой выбора)
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    HistoryAwareCompactTextField(
-                        label = "Устройство защиты",
-                        value = consumer.protectionDevice,
-                        onValueChange = { consumer.protectionDevice = it; onCalculationRequired() },
-                        onPushHistory = { onPushHistory(false) },
-                        historyTrigger = historyTrigger,
-                        contentPadding = FIELDCONTENTPADDING,
-                        fontSizeSp = FIELDFONT,
-                        textColor = textColor,
-                        focusedBorderColor = borderColor,
-                        unfocusedBorderColor = Color.LightGray,
-                        singleLine = false, minLines = 1, maxLines = 8,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = "Выбрать",
+                // Дополнительные защиты (Цикл)
+                consumer.additionalProtections.forEachIndexed { index, addProt ->
+                    Column(
                         modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 4.dp)
-                            .size(24.dp)
-                            .clickable { onOpenProtectionDialog() }
-                    )
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    ) {
+                        // Кнопка УДАЛЕНИЯ (-)
+                        OutlinedButton(
+                            onClick = {
+                                onPushHistory(true)
+                                consumer.additionalProtections.removeAt(index)
+                                onDataChanged()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(24.dp),
+                            contentPadding = PaddingValues(0.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.6f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                backgroundColor = Color.Red.copy(alpha = 0.15f),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Remove,
+                                contentDescription = "Удалить защиту",
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // --- ПОЛЯ ВВОДА ---
+                        ProtectionSubBlock(
+                            labelSuffix = "",
+                            breakerNumVal = addProt.breakerNumber,
+                            onBreakerNumChange = { addProt.breakerNumber = it; onDataChanged() },
+                            deviceVal = addProt.protectionDevice,
+                            onDeviceChange = { addProt.protectionDevice = it; onCalculationRequired() },
+                            onOpenDialog = { onOpenProtectionDialog(index) },
+                            onPushHistory = onPushHistory,
+                            historyTrigger = historyTrigger,
+                            textColor = textColor,
+                            borderColor = borderColor
+                        )
+                    }
+                }
+                // Кнопка Добавить (+)
+                if (consumer.additionalProtections.size < 1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            onPushHistory(true)
+                            consumer.additionalProtections.add(AdditionalProtection())
+                            onDataChanged()
+                        },
+                        modifier = Modifier.fillMaxWidth().height(32.dp),
+                        contentPadding = PaddingValues(0.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor.copy(alpha = 0.5f)),
+                        colors = ButtonDefaults.outlinedButtonColors(backgroundColor = Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add Protection",
+                            tint = textColor
+                        )
+                    }
                 }
             }
 
@@ -427,7 +572,7 @@ fun ShieldTableColumn(
                     Box(modifier = Modifier.fillMaxWidth()) {
                         HistoryAwareCompactTextField(
                             label = "Способ прокладки",
-                            value = consumer.layingMethod.ifBlank { "Воздух" }, // Значение по умолчанию
+                            value = consumer.layingMethod,
                             onValueChange = {},
                             onPushHistory = { onPushHistory(false) },
                             historyTrigger = historyTrigger,
@@ -671,4 +816,64 @@ private fun BlockPanel(
             .padding(8.dp),
         content = content
     )
+}
+
+@Composable
+private fun ProtectionSubBlock(
+    labelSuffix: String,
+    breakerNumVal: String,
+    onBreakerNumChange: (String) -> Unit,
+    deviceVal: String,
+    onDeviceChange: (String) -> Unit,
+    onOpenDialog: () -> Unit,
+    onPushHistory: (Boolean) -> Unit,
+    historyTrigger: Int,
+    textColor: Color,
+    borderColor: Color
+) {
+    Column {
+        // Номер автомата
+        HistoryAwareCompactTextField(
+            label = "Номер аппарата защиты$labelSuffix",
+            value = breakerNumVal,
+            onValueChange = onBreakerNumChange,
+            onPushHistory = { onPushHistory(false) },
+            historyTrigger = historyTrigger,
+            contentPadding = FIELDCONTENTPADDING,
+            fontSizeSp = FIELDFONT,
+            textColor = textColor,
+            focusedBorderColor = borderColor,
+            unfocusedBorderColor = Color.LightGray,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(FIELDVSPACE))
+
+        // Устройство защиты
+        Box(modifier = Modifier.fillMaxWidth()) {
+            HistoryAwareCompactTextField(
+                label = "Устройство защиты$labelSuffix",
+                value = deviceVal,
+                onValueChange = onDeviceChange,
+                onPushHistory = { onPushHistory(false) },
+                historyTrigger = historyTrigger,
+                contentPadding = FIELDCONTENTPADDING,
+                fontSizeSp = FIELDFONT,
+                textColor = textColor,
+                focusedBorderColor = borderColor,
+                unfocusedBorderColor = Color.LightGray,
+                singleLine = false, minLines = 1, maxLines = 8,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = "Выбрать",
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 4.dp)
+                    .size(24.dp)
+                    .clickable { onOpenDialog() },
+                tint = textColor
+            )
+        }
+    }
 }

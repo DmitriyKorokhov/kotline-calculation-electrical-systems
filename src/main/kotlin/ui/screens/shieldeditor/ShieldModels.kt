@@ -1,6 +1,7 @@
 package ui.screens.shieldeditor
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
@@ -44,9 +45,10 @@ class ConsumerModel(
     var voltageDropV by mutableStateOf(voltageDropV)
     var cableLength by mutableStateOf(cableLength)
     var shortCircuitCurrentkA by mutableStateOf(shortCircuitCurrentkA)
+    val additionalProtections = mutableStateListOf<AdditionalProtection>()
 
     fun deepCopy(): ConsumerModel {
-        return ConsumerModel(
+        val newModel = ConsumerModel(
             name = name,
             roomNumber = roomNumber,
             voltage = voltage,
@@ -66,6 +68,30 @@ class ConsumerModel(
             voltageDropV = voltageDropV,
             cableLength = cableLength,
             shortCircuitCurrentkA = shortCircuitCurrentkA
+        )
+
+        this.additionalProtections.forEach {
+            newModel.additionalProtections.add(it.deepCopy())
+        }
+
+        return newModel
+    }
+}
+
+class AdditionalProtection(
+    breakerNumber: String = "",
+    protectionDevice: String = "",
+    protectionPoles: String = ""
+) {
+    var breakerNumber by mutableStateOf(breakerNumber)
+    var protectionDevice by mutableStateOf(protectionDevice)
+    var protectionPoles by mutableStateOf(protectionPoles)
+
+    fun deepCopy(): AdditionalProtection {
+        return AdditionalProtection(
+            breakerNumber = breakerNumber,
+            protectionDevice = protectionDevice,
+            protectionPoles = protectionPoles
         )
     }
 }

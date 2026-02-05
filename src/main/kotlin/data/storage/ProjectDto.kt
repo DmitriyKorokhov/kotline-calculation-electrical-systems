@@ -118,5 +118,13 @@ data class SerializableConsumerModel(
     val cableType: String,
     val voltageDropV: String,
     val cableLength: String = "",
-    val shortCircuitCurrentkA: String = ""
+    val shortCircuitCurrentkA: String = "",
+    val additionalProtections: List<SerializableAdditionalProtection> = emptyList()
+)
+
+@Serializable
+data class SerializableAdditionalProtection(
+    val breakerNumber: String,
+    val protectionDevice: String,
+    val protectionPoles: String
 )

@@ -50,22 +50,24 @@ fun ProtectionSelectionWindow(
     var selectedType by remember { mutableStateOf(initialType) }
 
     // --- State Machines ---
+
+    // 1. Автомат
     var breakerStep by remember { mutableStateOf(1) }
     var breakerParams by remember { mutableStateOf<BreakerSelectionResult?>(null) }
 
+    // 2. АВДТ
     var rcboStep by remember { mutableStateOf(1) }
     var rcboParams by remember { mutableStateOf<RcboSelectionResult?>(null) }
 
-    var comboStep by remember { mutableStateOf(1) }
-    var comboBreakerParams by remember { mutableStateOf<BreakerSelectionResult?>(null) }
-    var comboBreakerResultStr by remember { mutableStateOf<String?>(null) }
-    var comboRcdParams by remember { mutableStateOf<RcdSelectionResult?>(null) }
+    // 3. УЗО (RCD) - теперь отдельный простой стейт
+    var rcdStep by remember { mutableStateOf(1) }
+    var rcdParams by remember { mutableStateOf<RcdSelectionResult?>(null) }
 
-    // Reset steps
+    // Сброс шагов при переключении типа
     LaunchedEffect(selectedType) {
         breakerStep = 1
         rcboStep = 1
-        comboStep = 1
+        rcdStep = 1
     }
 
     Box(
@@ -131,7 +133,6 @@ fun ProtectionSelectionWindow(
                 }
 
                 // Content (Right Side)
-                // ВАЖНО: Убрал Column с verticalScroll. Теперь контент сам решает, как скроллиться.
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -211,76 +212,37 @@ fun ProtectionSelectionWindow(
                             }
                         }
 
-                        // --- 3. Автомат + УЗО ---
-                        ProtectionType.CIRCUIT_BREAKER_AND_RCD -> {
-                            when (comboStep) {
-                                1 -> {
-                                    BreakerSecondWindow(
-                                        initialManufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() },
-                                        initialSeries = comboBreakerParams?.series,
-                                        initialSelectedAdditions = comboBreakerParams?.selectedAdditions ?: emptyList(),
-                                        initialSelectedPoles = comboBreakerParams?.selectedPoles,
-                                        initialSelectedCurve = comboBreakerParams?.selectedCurve,
-                                        consumerVoltageStr = consumerVoltageStr,
-                                        onBack = {},
-                                        onDismiss = onDismiss,
-                                        onConfirm = { res -> comboBreakerParams = res; comboStep = 2 }
-                                    )
-                                }
-                                2 -> {
-                                    val p = comboBreakerParams!!
-                                    BreakerThirdWindow(
-                                        maxShortCircuitCurrentStr = maxShortCircuitCurrentStr,
-                                        standard = data.protectionStandard,
-                                        consumerCurrentAStr = consumerCurrentAStr,
-                                        consumerVoltageStr = consumerVoltageStr,
-                                        selectedSeries = p.series,
-                                        selectedPoles = p.selectedPoles,
-                                        selectedAdditions = p.selectedAdditions,
-                                        selectedCurve = p.selectedCurve,
-                                        protectionThreshold = data.protectionCurrentThreshold.toFloatOrNull() ?: 40f,
-                                        protectionFactorLow = data.protectionFactorLow.toFloatOrNull() ?: 0.87f,
-                                        protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
-                                        onBack = { comboStep = 1 },
-                                        onDismiss = onDismiss,
-                                        onChoose = { resStr ->
-                                            comboBreakerResultStr = resStr
-                                            comboStep = 3
-                                        }
-                                    )
-                                }
-                                3 -> {
-                                    RcdSecondWindow(
-                                        initialManufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() },
-                                        initialSeries = comboRcdParams?.series,
-                                        initialSelectedPoles = comboRcdParams?.selectedPoles,
-                                        initialSelectedResidualCurrent = comboRcdParams?.selectedResidualCurrent,
-                                        consumerVoltageStr = consumerVoltageStr,
-                                        onBack = { comboStep = 2 },
-                                        onDismiss = onDismiss,
-                                        onConfirm = { res -> comboRcdParams = res; comboStep = 4 }
-                                    )
-                                }
-                                4 -> {
-                                    val p = comboRcdParams!!
-                                    RcdThirdWindow(
-                                        consumerCurrentAStr = consumerCurrentAStr,
-                                        consumerVoltageStr = consumerVoltageStr,
-                                        selectedSeries = p.series,
-                                        selectedPoles = p.selectedPoles,
-                                        selectedResidualCurrent = p.selectedResidualCurrent,
-                                        protectionThreshold = data.protectionCurrentThreshold.toFloatOrNull() ?: 40f,
-                                        protectionFactorLow = data.protectionFactorLow.toFloatOrNull() ?: 0.87f,
-                                        protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
-                                        onBack = { comboStep = 3 },
-                                        onDismiss = onDismiss,
-                                        onChoose = { rcdResStr ->
-                                            val combined = "$comboBreakerResultStr\n\n$rcdResStr"
-                                            val poles = comboRcdParams?.selectedPoles ?: ""
-                                            onSelect(combined, poles)
-                                        }
-                                    )
-                                }
+                        // --- 3. УЗО (RCD) - Новая логика ---
+                        ProtectionType.RCD -> {
+                            if (rcdStep == 1) {
+                                RcdSecondWindow(
+                                    initialManufacturer = data.protectionManufacturer.takeIf { it.isNotBlank() },
+                                    initialSeries = rcdParams?.series,
+                                    initialSelectedPoles = rcdParams?.selectedPoles,
+                                    initialSelectedResidualCurrent = rcdParams?.selectedResidualCurrent,
+                                    consumerVoltageStr = consumerVoltageStr,
+                                    onBack = {}, // Нет кнопки назад на первом шаге
+                                    onDismiss = onDismiss,
+                                    onConfirm = { res -> rcdParams = res; rcdStep = 2 }
+                                )
+                            } else {
+                                val p = rcdParams!!
+                                RcdThirdWindow(
+                                    consumerCurrentAStr = consumerCurrentAStr,
+                                    consumerVoltageStr = consumerVoltageStr,
+                                    selectedSeries = p.series,
+                                    selectedPoles = p.selectedPoles,
+                                    selectedResidualCurrent = p.selectedResidualCurrent,
+                                    protectionThreshold = data.protectionCurrentThreshold.toFloatOrNull() ?: 40f,
+                                    protectionFactorLow = data.protectionFactorLow.toFloatOrNull() ?: 0.87f,
+                                    protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
+                                    onBack = { rcdStep = 1 },
+                                    onDismiss = onDismiss,
+                                    onChoose = { resStr ->
+                                        // Возвращаем результат УЗО
+                                        onSelect(resStr, p.selectedPoles)
+                                    }
+                                )
                             }
                         }
                     }
@@ -288,7 +250,7 @@ fun ProtectionSelectionWindow(
             }
         }
 
-        // Resizers
+        // Resizers (оставлены без изменений)
         Box(
             modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(resizeHandleSize)
                 .pointerHoverIcon(PointerIcon(Cursor(Cursor.E_RESIZE_CURSOR)))
@@ -308,7 +270,7 @@ fun ProtectionSelectionWindow(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .size(24.dp) // Увеличенный размер для удобного захвата и отрисовки
+                .size(24.dp)
                 .pointerHoverIcon(PointerIcon(Cursor(Cursor.SE_RESIZE_CURSOR)))
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
@@ -322,7 +284,6 @@ fun ProtectionSelectionWindow(
                 val color = Color.Gray.copy(alpha = 0.5f)
                 val w = size.width
                 val h = size.height
-                // Рисуем 3 диагональные линии
                 drawLine(color, Offset(w, h - 4), Offset(w - 4, h), strokeWidth = 2f)
                 drawLine(color, Offset(w, h - 8), Offset(w - 8, h), strokeWidth = 2f)
                 drawLine(color, Offset(w, h - 12), Offset(w - 12, h), strokeWidth = 2f)

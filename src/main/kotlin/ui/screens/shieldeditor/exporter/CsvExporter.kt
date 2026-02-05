@@ -1,12 +1,11 @@
 package ui.screens.shieldeditor.exporter
 
+import data.database.ConsumerLibrary
 import ui.screens.shieldeditor.ShieldData
 import ui.screens.shieldeditor.protection.ProtectionType
 import ui.screens.shieldeditor.protection.protectionTypeFromString
-import java.awt.FileDialog
 import java.io.File
 import java.nio.charset.StandardCharsets
-import javax.swing.JFrame
 
 /**
  * Экспорт в CSV для AutoCAD.
@@ -53,7 +52,8 @@ class CsvExporter {
         file: File,
         baseX: Int = 0,
         stepX: Int = 50,
-        y: Int = 0
+        y: Int = 0,
+        format: String = ""
     ) {
         val entries = mutableListOf<ExportEntry>()
 
@@ -78,7 +78,7 @@ class CsvExporter {
                 blockTypePrefix = "",
                 polesText = null,
                 x = 32,
-                y = 40,
+                y = 45,
                 attributeText = deviceText,
                 explicitBlockName = blockName
             )
@@ -97,7 +97,7 @@ class CsvExporter {
                 blockTypePrefix = "",
                 polesText = null,
                 x = 53,
-                y = 40,
+                y = 45,
                 attributeText = deviceLine,
                 explicitBlockName = blockName
             )
@@ -122,24 +122,50 @@ class CsvExporter {
                 attributeText = c.protectionDevice
             )
 
-            // 4) Кабель под тем же X,Y
-            val cableBrand = c.cableLine
-            val cableType = c.cableType        // число жил, сечение
+            // 2. Кабель
+            val cableMark = c.cableType
+            val cableSection = c.cableLine
             val laying = c.layingMethod
-            val drop = c.voltageDropV
+            val length = c.cableLength
 
-            val hasAnyCableData = listOf(cableBrand, cableType, laying, drop).any { it.isNotBlank() }
+            // Очищаем падение напряжения от процентов (берем всё до открывающей скобки)
+            val rawDrop = c.voltageDropV
+            val cleanDrop = if (rawDrop.contains("(")) {
+                rawDrop.substringBefore("(").trim()
+            } else {
+                rawDrop.trim()
+            }
+
+            // Проверяем, есть ли хоть какие-то данные
+            val hasAnyCableData = listOf(cableMark, cableSection, laying, length, cleanDrop).any { it.isNotBlank() }
 
             if (hasAnyCableData) {
-                val line1 = listOf(cableType, cableBrand)
-                    .filter { it.isNotBlank() }
-                    .joinToString(" ")                  // "Марка кабеля Число жил, сечение"
+                // Добавляем "мм²" к сечению, если оно не пустое
+                val sectionWithUnit = if (cableSection.isNotBlank()) "$cableSection мм²" else ""
 
-                val line2 = listOf(laying, drop)
+                // Первая строка: "Марка кабеля Сечение мм²"
+                val line1 = listOf(cableMark, sectionWithUnit)
                     .filter { it.isNotBlank() }
-                    .joinToString(" ")                  // "Способ прокладки Падение напряжения..."
+                    .joinToString(" ")
 
-                val cableAttr = if (line2.isNotBlank()) "$line1\n$line2" else line1
+                // Вторая строка: "способ прокладки, L=Длина м, ΔU = падение В"
+                val partsLine2 = mutableListOf<String>()
+
+                if (laying.isNotBlank()) {
+                    partsLine2.add(laying)
+                }
+                if (length.isNotBlank()) {
+                    partsLine2.add("L=$length м")
+                }
+                if (cleanDrop.isNotBlank()) {
+                    partsLine2.add("ΔU=$cleanDrop")
+                }
+
+                val line2 = partsLine2.joinToString(", ")
+
+                val rawText = if (line2.isNotBlank()) "$line1\n$line2" else line1
+
+                val cableAttr = "INFO=$rawText"
 
                 entries += ExportEntry(
                     blockTypePrefix = "",
@@ -151,8 +177,10 @@ class CsvExporter {
                 )
             }
 
+            val wrappedName = wrapText(c.name)
+
             val tableAttr = listOf(
-                "NAME=${c.name}",
+                "NAME=$wrappedName",
                 "NOMROM=${c.roomNumber}",
                 "PINST=${c.installedPowerW}",
                 "PEST=${c.powerKw}",
@@ -160,7 +188,7 @@ class CsvExporter {
                 "GROUP=${c.lineName}"
             ).joinToString("|")
 
-            val tableY = y - 104
+            val tableY = y - 116
 
             entries += ExportEntry(
                 blockTypePrefix = "",
@@ -170,11 +198,25 @@ class CsvExporter {
                 attributeText = tableAttr,
                 explicitBlockName = "consumer_table"
                 )
+
+            // === Добавление условного обозначения потребителя ===
+            val symbolBlockName = ConsumerLibrary.getTagByName(c.name)
+                ?: ConsumerLibrary.FALLBACK_TAG
+            val symbolY = y - 100
+
+            entries += ExportEntry(
+                blockTypePrefix = "",
+                polesText = null,
+                x = x,
+                y = symbolY,
+                attributeText = "",
+                explicitBlockName = symbolBlockName
+            )
         }
 
         // 2) Линия (startLine, middleLine, endLine)
         if (protected.isNotEmpty()) {
-            val lineY = y + 40
+            val lineY = y + 45
             val firstX = baseX
 
             // startLine один раз
@@ -217,8 +259,8 @@ class CsvExporter {
         entries += ExportEntry(
             blockTypePrefix = "",
             polesText = null,
-            x = baseX - 85,   // x = -85 при baseX = 0
-            y = y + 90,       // y = 90 при y = 0
+            x = baseX - 110,   // x = -110 при baseX = 0
+            y = y + 95,       // y = 90 при y = 0
             attributeText = "",
             explicitBlockName = "sidebar"
         )
@@ -242,6 +284,17 @@ class CsvExporter {
             y = 120,
             attributeText = shieldCapAttr,
             explicitBlockName = "shield_cap"
+        )
+
+        // 5) Вставка формата листа
+        // Координаты вставки: x=152, y=163
+        entries += ExportEntry(
+            blockTypePrefix = "",
+            polesText = null,
+            x = -152,
+            y = 163,
+            attributeText = "",
+            explicitBlockName = format
         )
 
         exportEntries(entries, file)
@@ -286,7 +339,7 @@ class CsvExporter {
         return when (protectionTypeFromString(protectionText)) {
             ProtectionType.CIRCUIT_BREAKER -> "AV"
             ProtectionType.DIFF_CURRENT_BREAKER -> "AVDT"
-            ProtectionType.CIRCUIT_BREAKER_AND_RCD -> "AV_UZO"
+            ProtectionType.RCD -> "AV_UZO"
         }
     }
 
@@ -311,16 +364,44 @@ class CsvExporter {
         return null
     }
 
-    fun chooseSavePath(defaultName: String): String? {
-        val frame = JFrame()
-        frame.isAlwaysOnTop = true
-        val dialog = FileDialog(frame, "Экспорт схемы в AutoCAD (CSV)", FileDialog.SAVE).apply {
-            file = defaultName
-            isVisible = true
+    private fun wrapText(text: String): String {
+        val maxWidth = 50.0
+        val charWidth = 1.3
+        val letterSpacing = 1.6
+        val wordSpacing = 4.5
+
+        val words = text.split(" ")
+        val sb = StringBuilder()
+        var currentLineWidth = 0.0
+
+        for (word in words) {
+            if (word.isEmpty()) continue
+
+            // 1. Считаем ширину слова:
+            // N букв * 1.3 + (N-1) промежутков * 1.6
+            val len = word.length
+            val wordWidth = (len * charWidth) + ((len - 1).coerceAtLeast(0) * letterSpacing)
+
+            // Если это первое слово в строке, просто добавляем его
+            if (currentLineWidth == 0.0) {
+                sb.append(word)
+                currentLineWidth = wordWidth
+                continue
+            }
+
+            // 2. Считаем ширину добавления (пробел между словами + само слово)
+            val addedWidth = wordSpacing + wordWidth
+
+            if (currentLineWidth + addedWidth <= maxWidth) {
+                // Помещается в текущую строку
+                sb.append(" ").append(word)
+                currentLineWidth += addedWidth
+            } else {
+                // Не помещается -> перенос на новую строку
+                sb.append("\n").append(word)
+                currentLineWidth = wordWidth
+            }
         }
-        val dir = dialog.directory
-        val name = dialog.file
-        frame.dispose()
-        return if (name != null) File(dir, name).absolutePath else null
+        return sb.toString()
     }
 }

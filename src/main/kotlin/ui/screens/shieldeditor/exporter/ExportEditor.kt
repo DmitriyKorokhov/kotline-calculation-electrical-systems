@@ -10,7 +10,7 @@ import kotlin.concurrent.thread
 
 object ExportEditor {
 
-    fun startDwgExport(data: ShieldData) {
+    fun startDwgExport(data: ShieldData, format: String) {
         // 1) Выбор места сохранения DWG
         val frame = JFrame().apply { isAlwaysOnTop = true }
         val dlg = java.awt.FileDialog(frame, "Сохранить DWG как...", java.awt.FileDialog.SAVE).apply {
@@ -88,7 +88,8 @@ object ExportEditor {
                 stepX = 50,
                 y = 0,
                 timeoutSec = 300L,
-                useTemplateCopy = false
+                useTemplateCopy = false,
+                format = format
             )
 
             SwingUtilities.invokeLater {

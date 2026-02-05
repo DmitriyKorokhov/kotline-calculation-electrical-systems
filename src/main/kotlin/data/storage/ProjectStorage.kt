@@ -142,37 +142,43 @@ private fun ProjectCanvasState.loadFromProjectFile(file: ProjectFile) {
         // Потребители
         shieldData.consumers.clear()
         sData.consumers.forEach { c ->
-            shieldData.consumers.add(
-                ConsumerModel(
-                    name = c.name,
-                    roomNumber = c.roomNumber,
-                    voltage = c.voltage,
-                    cosPhi = c.cosPhi,
-                    powerKw = c.powerKw,
-                    installedPowerW = c.installedPowerW,
-                    modes = c.modes,
-                    cableLine = c.cableLine,
-                    layingMethod = c.layingMethod,
-                    currentA = c.currentA,
-                    phaseNumber = c.phaseNumber,
-                    lineName = c.lineName,
-                    breakerNumber = c.breakerNumber,
-                    protectionDevice = c.protectionDevice,
-                    protectionPoles = c.protectionPoles,
-                    cableType = c.cableType,
-                    voltageDropV = c.voltageDropV,
-                    // Восстановление потерянных полей
-                    cableLength = c.cableLength,
-                    shortCircuitCurrentkA = c.shortCircuitCurrentkA
-                )
+            val consumer = ConsumerModel(
+                name = c.name,
+                roomNumber = c.roomNumber,
+                voltage = c.voltage,
+                cosPhi = c.cosPhi,
+                powerKw = c.powerKw,
+                installedPowerW = c.installedPowerW,
+                modes = c.modes,
+                cableLine = c.cableLine,
+                layingMethod = c.layingMethod,
+                currentA = c.currentA,
+                phaseNumber = c.phaseNumber,
+                lineName = c.lineName,
+                breakerNumber = c.breakerNumber,
+                protectionDevice = c.protectionDevice,
+                protectionPoles = c.protectionPoles,
+                cableType = c.cableType,
+                voltageDropV = c.voltageDropV,
+                cableLength = c.cableLength,
+                shortCircuitCurrentkA = c.shortCircuitCurrentkA
             )
+            c.additionalProtections.forEach { ap ->
+                consumer.additionalProtections.add(
+                    ui.screens.shieldeditor.AdditionalProtection(
+                        breakerNumber = ap.breakerNumber,
+                        protectionDevice = ap.protectionDevice,
+                        protectionPoles = ap.protectionPoles
+                    )
+                )
+            }
+            shieldData.consumers.add(consumer)
         }
         ShieldStorage.save(id, shieldData)
     }
 }
 
 // Вспомогательные функции конвертации
-
 private fun SerializableNode.toDomainNode(): ProjectNode {
     val pos = Offset(x, y)
     return when (this) {
@@ -224,6 +230,13 @@ private fun ConsumerModel.toSerializable(): SerializableConsumerModel {
         cableType = cableType,
         voltageDropV = voltageDropV,
         cableLength = cableLength,
-        shortCircuitCurrentkA = shortCircuitCurrentkA
+        shortCircuitCurrentkA = shortCircuitCurrentkA,
+        additionalProtections = this.additionalProtections.map {
+            SerializableAdditionalProtection(
+                breakerNumber = it.breakerNumber,
+                protectionDevice = it.protectionDevice,
+                protectionPoles = it.protectionPoles
+            )
+        }
     )
 }

@@ -39,32 +39,50 @@ fun ShieldTopBar(
                 onSave()
                 onBack()
             },
-            modifier = Modifier.padding(start = 4.dp) // Небольшой отступ слева
+            modifier = Modifier.padding(start = 4.dp)
         ) {
-
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Назад",
                 tint = MaterialTheme.colors.onSurface
             )
-
         }
 
-        // 2. Пункт "Файл" (теперь идет после кнопки Назад)
+        // 2. Меню "Файл"
         Box(modifier = Modifier.padding(start = 8.dp)) {
             MenuTextItem(
                 text = "Файл",
                 onClick = { showFileMenu = true }
             )
+
             DropdownMenu(
                 expanded = showFileMenu,
-                onDismissRequest = { showFileMenu = false }
+                onDismissRequest = { showFileMenu = false },
+                // focusable = false иногда помогает, если меню перехватывает фокус,
+                // но стандартного поведения должно хватать для отображения "снизу" в рамках Box
             ) {
+                // Пункт: Сохранить
+                DropdownMenuItem(onClick = {
+                    showFileMenu = false
+                    onSave() // Вызываем сохранение (или оставьте пустым для заглушки)
+                }) {
+                    Text("Сохранить")
+                }
+
+                // Пункт: Экспорт
                 DropdownMenuItem(onClick = {
                     showFileMenu = false
                     onExportDwg()
                 }) {
-                    Text("Экспорт схемы в AutoCAD (DWG)")
+                    Text("Экспорт")
+                }
+
+                // Пункт: Настройки (Заглушка)
+                DropdownMenuItem(onClick = {
+                    showFileMenu = false
+                    // TODO: Реализовать открытие настроек
+                }) {
+                    Text("Настройки")
                 }
             }
         }
@@ -105,7 +123,7 @@ private fun MenuTextItem(
         text = text,
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp), // Область клика
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         style = MaterialTheme.typography.body2,
         color = MaterialTheme.colors.onSurface
     )

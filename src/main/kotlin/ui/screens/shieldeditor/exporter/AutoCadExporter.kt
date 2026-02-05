@@ -212,7 +212,8 @@ _.QUIT
         stepX: Int = 50,
         y: Int = 0,
         timeoutSec: Long = 300L,
-        useTemplateCopy: Boolean = false
+        useTemplateCopy: Boolean = false,
+        format: String
     ): AccoreRunResult {
         val accore = accorePath?.let { File(it) } ?: tryFindAccoreConsole()?.let { File(it) }
         if (accore == null || !accore.exists()) {
@@ -246,7 +247,7 @@ _.QUIT
 
         // Экспорт CSV
         try {
-            CsvExporter().export(shieldData, csvFile, baseX, stepX, y)
+            CsvExporter().export(shieldData, csvFile, baseX, stepX, y, format)
         } catch (ex: Exception) {
             return AccoreRunResult(-6, "Failed to write CSV: ${ex.message}", staging.absolutePath, outDwgPath)
         }

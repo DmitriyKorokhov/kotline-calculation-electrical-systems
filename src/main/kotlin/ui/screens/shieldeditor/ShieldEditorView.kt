@@ -27,6 +27,7 @@ import ui.screens.shieldeditor.calculation.PhaseDistributor
 import ui.screens.shieldeditor.components.*
 import ui.screens.shieldeditor.components.topbar.CalculationWindow
 import ui.screens.shieldeditor.dialogs.AddConsumerDialog
+import ui.screens.shieldeditor.exporter.ExportDialog
 import ui.screens.shieldeditor.exporter.ExportEditor
 import ui.screens.shieldeditor.input.InputTypePopup
 import ui.screens.shieldeditor.protection.ProtectionSelectionWindow
@@ -35,6 +36,8 @@ import ui.utils.HistoryManager
 
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
 private val SCROLLBAR_HEIGHT: Dp = 22.dp
+
+private data class DialogTarget(val colIndex: Int, val protectionIndex: Int)
 
 @OptIn(ExperimentalAnimationApi::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -77,8 +80,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
         animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing)
     )
 
-    // Когда пользователь кликает по ячейке -> показываем первый popup (там у вас protectionDialogForIndex)
-    var protectionDialogForIndex by remember { mutableStateOf<Int?>(null) }
+    var protectionDialogTarget by remember { mutableStateOf<DialogTarget?>(null) }
 
     var currentSidebarTab by remember { mutableStateOf(SidebarTab.PROJECT) }
 
@@ -93,6 +95,8 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     var showCalculationWindow by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
+
+    var showExportDialog by remember { mutableStateOf(false) }
 
     // Запрашиваем фокус при запуске экрана, чтобы ловить нажатия клавиш
     LaunchedEffect(Unit) {
@@ -148,7 +152,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 shieldId = shieldId,
                 onBack = onBack,
                 onSave = { saveNow() },
-                onExportDwg = { ExportEditor.startDwgExport(data) },
+                onExportDwg = { showExportDialog = true },
                 onCalculationClick = { showCalculationWindow = !showCalculationWindow }
             )
 
@@ -310,7 +314,9 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                     CableCalculator.calculateVoltageDrop(consumer, data)
                                                     saveNow()
                                                 },
-                                                onOpenProtectionDialog = { protectionDialogForIndex = colIndex },
+                                                onOpenProtectionDialog = { protIndex ->
+                                                    protectionDialogTarget = DialogTarget(colIndex, protIndex)
+                                                },
                                                 data = data,
                                                 onPushHistory = { isDiscrete -> pushHistory(isDiscrete) },
                                                 historyTrigger = historyTrigger
@@ -375,13 +381,21 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
             )
         }
 
-        if (protectionDialogForIndex != null) {
-            val idx = protectionDialogForIndex!!
-            val consumer = data.consumers.getOrNull(idx)
+        if (protectionDialogTarget != null) {
+            val target = protectionDialogTarget!!
+            val consumer = data.consumers.getOrNull(target.colIndex)
 
             if (consumer != null) {
-                // Определяем начальный тип (если уже выбрано, пытаемся распарсить)
-                val initialType = protectionTypeFromString(consumer.protectionDevice)
+                // 1. Определяем текущее устройство и куда сохранять
+                // Если индекс -1, работаем с основной защитой, иначе — с дополнительной
+                val currentDeviceString = if (target.protectionIndex == -1) {
+                    consumer.protectionDevice
+                } else {
+                    consumer.additionalProtections.getOrNull(target.protectionIndex)?.protectionDevice ?: ""
+                }
+
+                // Парсим начальный тип для диалога
+                val initialType = protectionTypeFromString(currentDeviceString)
 
                 ProtectionSelectionWindow(
                     data = data,
@@ -389,15 +403,31 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                     consumerCurrentAStr = consumer.currentA,
                     consumerVoltageStr = consumer.voltage,
                     maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
-                    onDismiss = { protectionDialogForIndex = null },
+                    onDismiss = { protectionDialogTarget = null },
                     onSelect = { resultString, poles ->
                         pushHistory(true)
-                        // Сохраняем результат
+
+                        // Корректировка формата ампер (как было у вас)
                         val correctedString = resultString.replace(Regex("(\\d)\\sA"), "$1A")
-                        consumer.protectionDevice = correctedString
-                        consumer.protectionPoles = poles
-                        // Сброс и сохранение
-                        protectionDialogForIndex = null
+
+                        // 2. Сохраняем в зависимости от индекса
+                        if (target.protectionIndex == -1) {
+                            // Основная
+                            consumer.protectionDevice = correctedString
+                            consumer.protectionPoles = poles
+                        } else {
+                            // Дополнительная
+                            // Проверяем, существует ли еще эта защита (вдруг удалили пока окно было открыто)
+                            val addProt = consumer.additionalProtections.getOrNull(target.protectionIndex)
+                            if (addProt != null) {
+                                addProt.protectionDevice = correctedString
+                                addProt.protectionPoles = poles
+                            }
+                        }
+
+                        protectionDialogTarget = null
+
+                        // Пересчет
                         CalculationEngine.calculateAll(data)
                         CableCalculator.calculateCable(consumer, data)
                         CableCalculator.calculateShortCircuitCurrent(consumer, data)
@@ -405,7 +435,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                     }
                 )
             } else {
-                protectionDialogForIndex = null
+                protectionDialogTarget = null
             }
         }
 
@@ -414,6 +444,22 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 data = data,
                 onDismissRequest = { showInputTypeDialog = false },
                 onSave = { saveNow() }
+            )
+        }
+
+        if (showExportDialog) {
+            ExportDialog(
+                data = data,
+                onDismissRequest = { showExportDialog = false },
+                onExportAction = { type, format ->
+                    if (type == "DWG") {
+                        // Передаем пока без формата, или можно доработать ExportEditor, чтобы он учитывал формат
+                        ExportEditor.startDwgExport(data, format)
+                    } else {
+                        // Заглушка для PDF
+                        javax.swing.JOptionPane.showMessageDialog(null, "Экспорт в PDF пока не реализован.\nВыбран формат: $format")
+                    }
+                }
             )
         }
     }
