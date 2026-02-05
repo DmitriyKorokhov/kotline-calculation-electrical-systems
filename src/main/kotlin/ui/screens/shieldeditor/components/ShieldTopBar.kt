@@ -89,7 +89,7 @@ fun ShieldTopBar(
 
         // 3. Пункт "Расчет"
         MenuTextItem(
-            text = "Расчет",
+            text = "Параметры",
             onClick = {
                 showFileMenu = false
                 onCalculationClick()

@@ -207,15 +207,63 @@ class CsvExporter {
             val localX = idx * stepX
             val absX = globalOffsetX + localX
 
-            // -- Автомат --
-            val prefix = typePrefixForProtection(consumer.protectionDevice)
-            val polesFromModel = consumer.protectionPoles.takeIf { it.isNotBlank() }
-                ?: extractPolesFromText(consumer.protectionDevice)
+            // -- Автомат / Защита --
+            if (consumer.additionalProtections.isNotEmpty()) {
+                // === ЛОГИКА ДЛЯ РАЗДЕЛЕННОЙ ЗАЩИТЫ (PART) ===
 
-            entries += ExportEntry(
-                blockTypePrefix = prefix, polesText = polesFromModel,
-                x = absX, y = y, attributeText = consumer.protectionDevice
-            )
+                // 1. Дополнительная защита (УЗО) - вставляется в Y
+                val addProt = consumer.additionalProtections[0]
+                val addPolesRaw = addProt.protectionPoles.takeIf { !it.isNullOrBlank() }
+                    ?: extractPolesFromText(addProt.protectionDevice)
+                val addPoles = normalizePoles(addPolesRaw) // 2P, 4P...
+
+                val addBlockName = when (addPoles) {
+                    "4P" -> "UZO_4P_PART"
+                    else -> "UZO_2P_PART"
+                }
+
+                // Формируем текст: Номер + Enter + Название
+                val addInfoText = "${addProt.breakerNumber}\n${addProt.protectionDevice}"
+
+                entries += ExportEntry(
+                    blockTypePrefix = "", polesText = null,
+                    x = absX, y = y,
+                    attributeText = addInfoText, // <-- Изменено
+                    explicitBlockName = addBlockName
+                )
+
+                // 2. Основная защита (Автомат) - вставляется в Y + 17
+                val mainPolesRaw = consumer.protectionPoles.takeIf { it.isNotBlank() }
+                    ?: extractPolesFromText(consumer.protectionDevice)
+                val mainPoles = normalizePoles(mainPolesRaw) // 1P, 2P, 3P, 4P
+
+                val mainBlockName = "AV_${mainPoles}_PART"
+
+                // Формируем текст: Номер + Enter + Название
+                val mainInfoText = "${consumer.breakerNumber}\n${consumer.protectionDevice}"
+
+                entries += ExportEntry(
+                    blockTypePrefix = "", polesText = null,
+                    x = absX, y = y + 17,
+                    attributeText = mainInfoText, // <-- Изменено
+                    explicitBlockName = mainBlockName
+                )
+
+            } else {
+                // === СТАНДАРТНАЯ ЛОГИКА (Один блок) ===
+                val prefix = typePrefixForProtection(consumer.protectionDevice)
+                val polesFromModel = consumer.protectionPoles.takeIf { it.isNotBlank() }
+                    ?: extractPolesFromText(consumer.protectionDevice)
+
+                // Формируем текст: Номер + Enter + Название
+                val infoText = "${consumer.breakerNumber}\n${consumer.protectionDevice}"
+
+                entries += ExportEntry(
+                    blockTypePrefix = prefix, polesText = polesFromModel,
+                    x = absX, y = y,
+                    attributeText = infoText // <-- Изменено
+                )
+            }
 
             // -- Кабель --
             drawCableInfo(entries, consumer, absX, y)
@@ -300,8 +348,17 @@ class CsvExporter {
             !data.inputInfo.contains("Блок АВР", ignoreCase = true)) {
 
             val lines = data.inputInfo.split("\n")
-            val sepIndex = lines.indexOfFirst { it.contains("-") }
-            val deviceLines = if (sepIndex >= 0 && sepIndex + 1 < lines.size) lines.subList(sepIndex + 1, lines.size) else lines.drop(1)
+            // ИСПРАВЛЕНИЕ: Ищем "---", а не "-", так как "-" может быть частью названия (например, NDB1T-63)
+            val sepIndex = lines.indexOfFirst { it.contains("---") }
+
+            // Если разделитель найден — берем всё после него.
+            // Если нет — просто отбрасываем первую строку (заголовок).
+            val deviceLines = if (sepIndex >= 0 && sepIndex + 1 < lines.size) {
+                lines.subList(sepIndex + 1, lines.size)
+            } else {
+                lines.drop(1)
+            }
+
             val deviceText = deviceLines.filter { it.isNotBlank() }.joinToString("\\P")
             val is4P = deviceText.contains("4P", ignoreCase = true) || deviceText.contains("3P+N", ignoreCase = true)
             val blockName = if (is4P) "AVR_AV_4P" else "AVR_AV_3P"

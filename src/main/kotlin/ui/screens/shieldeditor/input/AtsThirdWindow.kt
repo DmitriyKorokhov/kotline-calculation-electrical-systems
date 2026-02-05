@@ -190,7 +190,7 @@ fun AtsThirdWindow(
                                 onClick = { selectedVariantId = item.variantId },
                                 onDoubleClick = {
                                     selectedVariantId = item.variantId
-                                    val res = "${item.manufacturer} ${item.modelName} ${formatRated(item.ratedCurrentA)}A ${item.polesText}"
+                                    val res = "${item.modelName} ${formatRated(item.ratedCurrentA)}A"
                                     onChoose(res)
                                 }
                             ),
@@ -232,7 +232,7 @@ fun AtsThirdWindow(
                     onClick = {
                         val chosen = items.firstOrNull { it.variantId == selectedVariantId }
                         if (chosen != null) {
-                            val res = "${chosen.manufacturer} ${chosen.modelName} ${formatRated(chosen.ratedCurrentA)}A ${chosen.polesText}"
+                            val res = "${chosen.modelName} ${formatRated(chosen.ratedCurrentA)}A"
                             onChoose(res)
                         }
                     },

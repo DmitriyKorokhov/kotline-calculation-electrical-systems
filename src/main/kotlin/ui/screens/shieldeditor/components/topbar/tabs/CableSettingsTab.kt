@@ -257,7 +257,7 @@ fun CableSettingsTab(
         } else {
             0.028 * (1 + 0.00403 * (t - 20))
         }
-        Text("Удельное активное сопротивление: ${String.format("%.4f", rho)} Ом*мм²/м", style = MaterialTheme.typography.body2)
+        Text("Удельное активное сопротивление: ${String.format("%.4f", rho)} (Ом⨯мм²/м)", style = MaterialTheme.typography.body2)
 
         Spacer(Modifier.height(8.dp))
 
@@ -285,7 +285,7 @@ fun CableSettingsTab(
             onValueChange = { data.singleCoreThreshold = it; onSave() },
             onPushHistory = onPushHistory,
             historyTrigger = historyTrigger,
-            label = { Text("Смена многожильного на одножильный кабель при длине трассы (м)") },
+            label = { Text("Смена многожильного на одножильный кабель при сечении кабеля (мм²)") },
             modifier = Modifier.width(fieldWidth)
         )
     }

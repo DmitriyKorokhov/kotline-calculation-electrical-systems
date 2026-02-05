@@ -196,7 +196,7 @@ fun InputTypePopup(
                                     onBack = { atsBreakerStep = 1 },
                                     onDismiss = onDismissRequest,
                                     onChoose = { resultString ->
-                                        data.inputInfo = "${InputType.TWO_INPUTS_ATS_BREAKERS.title}\n$resultString"
+                                        data.inputInfo = "${InputType.TWO_INPUTS_ATS_BREAKERS.title}\n---------------------------------\n$resultString"
                                         onSave()
                                         onDismissRequest()
                                     }

@@ -12,15 +12,8 @@ object CableCalculator {
 
     fun calculateCable(consumer: ConsumerModel, data: ShieldData) {
 
-        val inputLength = consumer.cableLength.replace(",", ".").toDoubleOrNull() ?: 0.0
-        val threshold = data.singleCoreThreshold.toDoubleOrNull() ?: 30.0
-
-        // 2. Определяем, какой кабель ищем: Одножильный или Многожильный
-        // Если трасса длинная (> threshold) -> Ищем SingleCore
-        // Если короткая (<= threshold) -> Ищем MultiCore
-        val targetStructure = if (inputLength > threshold) "SingleCore" else "MultiCore"
-
-
+        // Порог сечения из настроек (по умолчанию 30 мм²)
+        val thresholdSection = data.singleCoreThreshold.replace(",", ".").toDoubleOrNull() ?: 30.0
 
         val cableType = consumer.cableType
         val protectionStr = consumer.protectionDevice
@@ -63,48 +56,66 @@ object CableCalculator {
         // 5. Определяем число жил (3 или 5)
         val voltage = consumer.voltage.toIntOrNull() ?: 230
         val cores = if (voltage >= 380) 5 else 3
-
-        // 6. Коэффициент снижения тока для многожильных кабелей (0.93 для 5 жил)
-        val kCores = if (targetStructure == "SingleCore") {
-            1.0f // Для одножильных коэффициент не применяется
-        } else {
-            // Для многожильных применяем 0.93, если 5 жил
-            if (cores == 5) 0.93f else 1.0f
-        }
-
-        // 7. Способ прокладки
         val isGround = consumer.layingMethod.contains("Земля", ignoreCase = true)
 
-        // 8. Подбор сечения из БД
-        // Условие: (TableCurrent * kCores) >= requiredCurrent
-        // => TableCurrent >= requiredCurrent / kCores
-        val targetTableCurrent = requiredCurrent / kCores
-
         transaction {
-            // Ищем подходящие записи
-            val query = CableCurrentRatings
-                .selectAll()
-                .where {
+            // Загружаем все варианты (и MultiCore, и SingleCore) для данного материала и изоляции
+            val rows = CableCurrentRatings
+                .select {
                     (CableCurrentRatings.material eq materialCode) and
-                            (CableCurrentRatings.insulation eq insulationCode) and
-                            (CableCurrentRatings.structure eq targetStructure) // <-- ФИЛЬТР ПО ТИПУ!
+                            (CableCurrentRatings.insulation eq insulationCode)
+                }
+                .map { row ->
+                    val structure = row[CableCurrentRatings.structure] // "MultiCore" или "SingleCore"
+                    val section = row[CableCurrentRatings.crossSection]
+                    val current = if (isGround) row[CableCurrentRatings.currentInGround]
+                    else row[CableCurrentRatings.currentInAir]
+                    Triple(structure, section, current)
                 }
 
-            val rating = query.map { row ->
-                val section = row[CableCurrentRatings.crossSection]
-                val current = if (isGround) row[CableCurrentRatings.currentInGround]
-                else row[CableCurrentRatings.currentInAir]
-                section to current
+            // Функция поиска минимального подходящего сечения для заданной структуры
+            fun findBestSection(structureType: String): Pair<Double, Double>? {
+                // Коэффициент снижения для многожильных (0.93 для 5 жил), для SingleCore = 1.0
+                val kCores = if (structureType == "SingleCore") 1.0f else (if (cores == 5) 0.93f else 1.0f)
+                val targetCurrent = requiredCurrent / kCores
+
+                return rows
+                    .filter { it.first == structureType && it.third >= targetCurrent }
+                    .minByOrNull { it.second }
+                    ?.let { it.second.toDouble() to it.third.toDouble() }
             }
-                .filter { (_, current) -> current >= targetTableCurrent }
-                .minByOrNull { (section, _) -> section }
 
-            // 9. Записываем результат
-            if (rating != null) {
-                val (bestSection, _) = rating
-                val sectionStr = if (bestSection % 1.0 == 0.0) bestSection.toInt().toString() else bestSection.toString()
+            // --- ЛОГИКА ВЫБОРА ---
 
-                if (targetStructure == "SingleCore") {
+            // 1. Пробуем найти многожильный кабель
+            val multiVariant = findBestSection("MultiCore")
+
+            // 2. Пробуем найти одножильный кабель (на случай если придется переключиться)
+            val singleVariant = findBestSection("SingleCore")
+
+            var finalStructure = "MultiCore"
+            var finalSection: Double? = null
+
+            // Если многожильный подходит и его сечение <= порога -> выбираем его
+            if (multiVariant != null && multiVariant.first <= thresholdSection) {
+                finalStructure = "MultiCore"
+                finalSection = multiVariant.first
+            }
+            // Иначе (если многожильный слишком толстый ИЛИ его вообще нет) -> пробуем одножильный
+            else if (singleVariant != null) {
+                finalStructure = "SingleCore"
+                finalSection = singleVariant.first
+            }
+            // Если одножильного нет, но был многожильный (пусть и больше порога) -> берем многожильный
+            else if (multiVariant != null) {
+                finalStructure = "MultiCore"
+                finalSection = multiVariant.first
+            }
+
+            // --- ЗАПИСЬ РЕЗУЛЬТАТА ---
+            if (finalSection != null) {
+                val sectionStr = if (finalSection % 1.0 == 0.0) finalSection.toInt().toString() else finalSection.toString()
+                if (finalStructure == "SingleCore") {
                     consumer.cableLine = "${cores}x(1x$sectionStr)"
                 } else {
                     consumer.cableLine = "${cores}x$sectionStr"

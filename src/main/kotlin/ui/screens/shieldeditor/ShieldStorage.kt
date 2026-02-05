@@ -67,7 +67,8 @@ class ShieldData(
     var reserveTier3 by mutableStateOf("12") // 50 - 90 м
     var reserveTier4 by mutableStateOf("10") // > 90 м
 
-    var singleCoreThreshold by mutableStateOf("40")
+    // смена кабеля с многожильного на одножильный
+    var singleCoreThreshold by mutableStateOf("70")
 }
 
 object ShieldStorage {

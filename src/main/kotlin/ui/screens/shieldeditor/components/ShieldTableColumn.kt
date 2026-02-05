@@ -765,7 +765,7 @@ private fun changeCableSection(consumer: ConsumerModel, data: ShieldData, direct
     }
 
     // 3. Парсим текущее значение (поддержка x, х, X, Х)
-    val regex = Regex("""[xхXХ]\s*(\d+[.,]?\d*)""")
+    val regex = Regex("""[xхXХ]\(?1?[xхXХ]?(\d+[.,]?\d*)""")
     val match = regex.find(consumer.cableLine)
     val current = match?.groupValues?.get(1)?.replace(",", ".")?.toDoubleOrNull()
 
@@ -792,11 +792,10 @@ private fun changeCableSection(consumer: ConsumerModel, data: ShieldData, direct
     val sectionStr = if (newSection % 1.0 == 0.0) newSection.toInt().toString() else newSection.toString()
 
     // ПРОВЕРКА: Нужен ли формат одножильного кабеля (SingleCore)?
-    val inputLength = consumer.cableLength.replace(",", ".").toDoubleOrNull() ?: 0.0
     val threshold = data.singleCoreThreshold.toDoubleOrNull() ?: 30.0
 
-    // Если длина больше порога — используем формат с (1xS)
-    if (inputLength > threshold) {
+    // ИСПРАВЛЕНИЕ ЗДЕСЬ: Сравниваем новое СЕЧЕНИЕ (newSection) с порогом
+    if (newSection > threshold) {
         consumer.cableLine = "${cores}x(1x$sectionStr)"
     } else {
         consumer.cableLine = "${cores}x$sectionStr"

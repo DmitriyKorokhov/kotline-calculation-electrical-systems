@@ -85,7 +85,7 @@ fun CalculationWindow(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Настройки расчета",
+                    text = "Параметры",
                     style = MaterialTheme.typography.subtitle1,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 16.dp)
@@ -117,13 +117,6 @@ fun CalculationWindow(
                         .border(width = 1.dp, color = Color.Gray.copy(alpha = 0.1f)) // Граница справа
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Параметры",
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
-                    )
 
                     // Пункт А: Устройства защиты
                     SidebarItem(
