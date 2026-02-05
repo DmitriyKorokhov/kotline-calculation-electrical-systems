@@ -30,12 +30,14 @@ import androidx.compose.ui.unit.max
 import ui.screens.shieldeditor.ShieldData
 import java.awt.Cursor
 import kotlin.math.roundToInt
+import javax.swing.JFileChooser
+import javax.swing.filechooser.FileNameExtensionFilter
 
 @Composable
 fun ExportDialog(
     data: ShieldData,
     onDismissRequest: () -> Unit,
-    onExportAction: (type: String, format: String) -> Unit
+    onExportAction: (type: String, format: String, stampPath: String?) -> Unit
 ) {
     val density = LocalDensity.current
 
@@ -59,6 +61,9 @@ fun ExportDialog(
     val exportFormats = listOf("A3x3", "A3x4")
     var selectedFormat by remember { mutableStateOf(exportFormats[0]) }
     var isFormatDropdownExpanded by remember { mutableStateOf(false) }
+
+    // Состояние пути к штампу
+    var stampPath by remember { mutableStateOf<String?>(null) }
 
     Box(
         modifier = Modifier
@@ -200,20 +205,53 @@ fun ExportDialog(
                 // 4. Штамп
                 Column {
                     Text("Основная надпись (Штамп)", style = MaterialTheme.typography.caption, color = Color.Gray)
+
+                    // Если файл выбран, покажем его имя
+                    if (stampPath != null) {
+                        Text(
+                            text = "Выбран: ...${java.io.File(stampPath).name}",
+                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colors.primary,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+
                     Row(
                         modifier = Modifier
-                            .width(400.dp)
+                            .width(400.dp) // Ширина как вы просили
                             .border(1.dp, Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
                             .padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Стандартный штамп", style = MaterialTheme.typography.body2)
-                        Button(
-                            onClick = { /* TODO: Добавить логику штампа */ },
-                            colors = ButtonDefaults.buttonColors(backgroundColor = MaterialTheme.colors.secondaryVariant)
-                        ) {
-                            Text("Добавить", color = Color.White)
+                        Text(
+                            text = if (stampPath == null) "Файл не выбран" else "Файл выбран",
+                            style = MaterialTheme.typography.body2,
+                            color = if (stampPath == null) Color.Gray else MaterialTheme.colors.onSurface
+                        )
+                        Row {
+                            // Кнопка очистки
+                            if (stampPath != null) {
+                                TextButton(onClick = { stampPath = null }) {
+                                    Text("Убрать", color = MaterialTheme.colors.error)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            // Кнопка выбора
+                            Button(
+                                onClick = {
+                                    val chooser = JFileChooser()
+                                    chooser.dialogTitle = "Выберите файл штампа (DWG)"
+                                    chooser.fileFilter = FileNameExtensionFilter("AutoCAD DWG", "dwg")
+                                    val result = chooser.showOpenDialog(null)
+                                    if (result == JFileChooser.APPROVE_OPTION) {
+                                        stampPath = chooser.selectedFile.absolutePath
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(backgroundColor = MaterialTheme.colors.secondaryVariant)
+                            ) {
+                                Text(if (stampPath == null) "Добавить" else "Изменить", color = Color.White)
+                            }
                         }
                     }
                 }
@@ -234,7 +272,7 @@ fun ExportDialog(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Button(onClick = {
-                    onExportAction(selectedExportType, selectedFormat)
+                    onExportAction(selectedExportType, selectedFormat, stampPath)
                     onDismissRequest()
                 }) {
                     Text("Экспорт")

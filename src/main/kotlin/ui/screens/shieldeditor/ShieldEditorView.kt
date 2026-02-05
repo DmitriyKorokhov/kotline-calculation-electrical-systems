@@ -451,13 +451,13 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
             ExportDialog(
                 data = data,
                 onDismissRequest = { showExportDialog = false },
-                onExportAction = { type, format ->
+                onExportAction = { type, format, stampPath ->
                     if (type == "DWG") {
-                        // Передаем пока без формата, или можно доработать ExportEditor, чтобы он учитывал формат
-                        ExportEditor.startDwgExport(data, format)
+                        // Передаем format и stampPath в ExportEditor
+                        ExportEditor.startDwgExport(data, format, stampPath)
                     } else {
                         // Заглушка для PDF
-                        javax.swing.JOptionPane.showMessageDialog(null, "Экспорт в PDF пока не реализован.\nВыбран формат: $format")
+                        javax.swing.JOptionPane.showMessageDialog(null, "PDF пока не реализован")
                     }
                 }
             )

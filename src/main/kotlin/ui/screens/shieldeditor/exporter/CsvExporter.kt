@@ -1,6 +1,7 @@
 package ui.screens.shieldeditor.exporter
 
 import data.database.ConsumerLibrary
+import ui.screens.shieldeditor.ConsumerModel
 import ui.screens.shieldeditor.ShieldData
 import ui.screens.shieldeditor.protection.ProtectionType
 import ui.screens.shieldeditor.protection.protectionTypeFromString
@@ -8,7 +9,7 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 
 /**
- * Экспорт в CSV для AutoCAD.
+ * Экспорт в CSV для AutoCAD с поддержкой многолистовых схем.
  */
 class CsvExporter {
 
@@ -23,7 +24,6 @@ class CsvExporter {
 
     /**
      * Экспорт произвольного списка записей в CSV.
-     * Всегда перезаписывает целевой файл.
      */
     fun exportEntries(entries: List<ExportEntry>, file: File) {
         val lines = entries.map { entry ->
@@ -44,8 +44,7 @@ class CsvExporter {
     }
 
     /**
-     * Удобная обёртка: экспорт по ShieldData.
-     * Всегда перезаписывает целевой файл.
+     * Основная функция экспорта.
      */
     fun export(
         shieldData: ShieldData,
@@ -53,284 +52,343 @@ class CsvExporter {
         baseX: Int = 0,
         stepX: Int = 50,
         y: Int = 0,
-        format: String = ""
+        format: String = "A3x3",
+        xrefPathString: String? = null
     ) {
         val entries = mutableListOf<ExportEntry>()
 
-        if (shieldData.inputInfo.contains("Два ввода", ignoreCase = true) &&
-            shieldData.inputInfo.contains("АВР", ignoreCase = true) &&
-            !shieldData.inputInfo.contains("Блок АВР", ignoreCase = true)) {
+        // 1. Параметры листа и лимиты
+        // Парсим формат, например "A3x3" -> множитель 3
+        val sheetMultiplier = format.lastOrNull()?.digitToIntOrNull() ?: 3
+        val sheetHeight = 420 // Высота согласно ТЗ (для A3x3 высота 420)
 
-            val lines = shieldData.inputInfo.split("\n")
-            val sepIndex = lines.indexOfFirst { it.contains("-") }
-            val deviceLines = if (sepIndex >= 0 && sepIndex + 1 < lines.size) {
-                lines.subList(sepIndex + 1, lines.size)
-            } else {
-                lines.drop(1)
-            }
-            val deviceText = deviceLines
-                .filter { it.isNotBlank() }
-                .joinToString("\\P")
-            val is4P = deviceText.contains("4P", ignoreCase = true) || deviceText.contains("3P+N", ignoreCase = true)
-            val blockName = if (is4P) "AVR_AV_4P" else "AVR_AV_3P"
+        val a3BaseWidth = 297
+        val currentSheetWidth = a3BaseWidth * sheetMultiplier // Например 891 для A3x3
 
-            entries += ExportEntry(
-                blockTypePrefix = "",
-                polesText = null,
-                x = 32,
-                y = 45,
-                attributeText = deviceText,
-                explicitBlockName = blockName
-            )
+        // Лимит по оси X на одном листе (согласно ТЗ)
+        // Вставка листа по X = -152.
+        // Нужно оставить 170 до конца.
+        // Условие: X_local < Width - 152 - 170
+        val xLimit = currentSheetWidth - 152 - 170
+
+        // Фильтрация потребителей (только те, у которых есть защита)
+        val protectedConsumers = shieldData.consumers.filter { it.protectionDevice.isNotBlank() }
+
+        // --- Глобальные переменные цикла ---
+        var currentSheetIndex = 0
+        var globalOffsetX = baseX // Глобальный сдвиг координат (0 для первого листа)
+
+        // Буфер для потребителей текущего листа
+        val currentSheetConsumers = mutableListOf<ConsumerModel>()
+
+        // Добавляем вводное устройство, Sidebar и Шапку (только на первом листе)
+        addInputDevice(shieldData, entries, baseX, y)
+        addSideCap(shieldData, entries, baseX)
+
+        val totalConsumers = protectedConsumers.size
+
+        // Если потребителей нет, просто рисуем один пустой лист
+        if (totalConsumers == 0) {
+            drawSheetFrame(entries, 0, format, currentSheetWidth, sheetHeight, xrefPathString)
         }
 
+        var i = 0
+        while (i < totalConsumers) {
+            val consumer = protectedConsumers[i]
 
-        if (shieldData.inputInfo.contains("Блок АВР", ignoreCase = true)) {
-            val lines = shieldData.inputInfo.split("\n")
-            val deviceLine = lines.lastOrNull {
-                it.isNotBlank() && !it.contains("---") && !it.contains("Блок АВР")
-            } ?: ""
-            val is4P = deviceLine.contains("4P", ignoreCase = true) || deviceLine.contains("3P+N", ignoreCase = true)
-            val blockName = if (is4P) "B_AVR_4P" else "B_AVR_3P"
+            // Рассчитываем, где встанет следующий автомат на ТЕКУЩЕМ листе
+            val nextLocalX = currentSheetConsumers.size * stepX
 
-            entries += ExportEntry(
-                blockTypePrefix = "",
-                polesText = null,
-                x = 53,
-                y = 45,
-                attributeText = deviceLine,
-                explicitBlockName = blockName
-            )
-        }
+            // Если добавление следующего автомата превысит лимит...
+            if (nextLocalX > xLimit && currentSheetConsumers.isNotEmpty()) {
+                // === ЗАВЕРШАЕМ ТЕКУЩИЙ ЛИСТ ===
 
-        // 1) Устройства защиты и коммутации (как раньше)
-        val protected = shieldData.consumers.withIndex()
-            .filter { it.value.protectionDevice.isNotBlank() }
+                // 1. Рамка и штамп
+                drawSheetFrame(entries, globalOffsetX, format, currentSheetWidth, sheetHeight, xrefPathString)
 
-        protected.forEachIndexed { idx, (_, c) ->
-            val prefix = typePrefixForProtection(c.protectionDevice)
-            val polesFromModel =
-                c.protectionPoles.takeIf { it.isNotBlank() } ?: extractPolesFromText(c.protectionDevice)
-            val x = baseX + idx * stepX
-
-            // сам автомат
-            entries += ExportEntry(
-                blockTypePrefix = prefix,
-                polesText = polesFromModel,
-                x = x,
-                y = y,
-                attributeText = c.protectionDevice
-            )
-
-            // 2. Кабель
-            val cableMark = c.cableType
-            val cableSection = c.cableLine
-            val laying = c.layingMethod
-            val length = c.cableLength
-
-            // Очищаем падение напряжения от процентов (берем всё до открывающей скобки)
-            val rawDrop = c.voltageDropV
-            val cleanDrop = if (rawDrop.contains("(")) {
-                rawDrop.substringBefore("(").trim()
-            } else {
-                rawDrop.trim()
-            }
-
-            // Проверяем, есть ли хоть какие-то данные
-            val hasAnyCableData = listOf(cableMark, cableSection, laying, length, cleanDrop).any { it.isNotBlank() }
-
-            if (hasAnyCableData) {
-                // Добавляем "мм²" к сечению, если оно не пустое
-                val sectionWithUnit = if (cableSection.isNotBlank()) "$cableSection мм²" else ""
-
-                // Первая строка: "Марка кабеля Сечение мм²"
-                val line1 = listOf(cableMark, sectionWithUnit)
-                    .filter { it.isNotBlank() }
-                    .joinToString(" ")
-
-                // Вторая строка: "способ прокладки, L=Длина м, ΔU = падение В"
-                val partsLine2 = mutableListOf<String>()
-
-                if (laying.isNotBlank()) {
-                    partsLine2.add(laying)
-                }
-                if (length.isNotBlank()) {
-                    partsLine2.add("L=$length м")
-                }
-                if (cleanDrop.isNotBlank()) {
-                    partsLine2.add("ΔU=$cleanDrop")
-                }
-
-                val line2 = partsLine2.joinToString(", ")
-
-                val rawText = if (line2.isNotBlank()) "$line1\n$line2" else line1
-
-                val cableAttr = "INFO=$rawText"
-
-                entries += ExportEntry(
-                    blockTypePrefix = "",
-                    polesText = null,
-                    x = x,
+                // 2. Потребители и линии (с endContLine, так как это не последний лист)
+                drawConsumersOnSheet(
+                    entries = entries,
+                    consumers = currentSheetConsumers,
+                    globalOffsetX = globalOffsetX,
                     y = y,
-                    attributeText = cableAttr,
-                    explicitBlockName = "cable"
+                    isFirstSheet = (currentSheetIndex == 0),
+                    isLastSheet = false // Будет продолжение
                 )
+
+                // 3. Переход к следующему листу
+                currentSheetIndex++
+
+                // Сдвигаем глобальный X: Ширина листа + 100 отступа
+                globalOffsetX += (currentSheetWidth + 100)
+
+                // Очищаем буфер
+                currentSheetConsumers.clear()
             }
 
-            val wrappedName = wrapText(c.name)
-
-            val tableAttr = listOf(
-                "NAME=$wrappedName",
-                "NOMROM=${c.roomNumber}",
-                "PINST=${c.installedPowerW}",
-                "PEST=${c.powerKw}",
-                "ICALC=${c.currentA}",
-                "GROUP=${c.lineName}"
-            ).joinToString("|")
-
-            val tableY = y - 116
-
-            entries += ExportEntry(
-                blockTypePrefix = "",
-                polesText = null,
-                x = x,              // тот же X, что у автомата и кабеля
-                y = tableY,         // сразу за концом кабеля
-                attributeText = tableAttr,
-                explicitBlockName = "consumer_table"
-                )
-
-            // === Добавление условного обозначения потребителя ===
-            val symbolBlockName = ConsumerLibrary.getTagByName(c.name)
-                ?: ConsumerLibrary.FALLBACK_TAG
-            val symbolY = y - 100
-
-            entries += ExportEntry(
-                blockTypePrefix = "",
-                polesText = null,
-                x = x,
-                y = symbolY,
-                attributeText = "",
-                explicitBlockName = symbolBlockName
-            )
+            // Добавляем потребителя в буфер
+            currentSheetConsumers.add(consumer)
+            i++
         }
 
-        // 2) Линия (startLine, middleLine, endLine)
-        if (protected.isNotEmpty()) {
-            val lineY = y + 45
-            val firstX = baseX
-
-            // startLine один раз
-            entries += ExportEntry(
-                blockTypePrefix = "",
-                polesText = null,
-                x = firstX,
-                y = lineY,
-                attributeText = "",
-                explicitBlockName = "startLine"
+        // === ЗАВЕРШАЕМ ПОСЛЕДНИЙ ЛИСТ ===
+        if (currentSheetConsumers.isNotEmpty()) {
+            drawSheetFrame(entries, globalOffsetX, format, currentSheetWidth, sheetHeight, xrefPathString)
+            drawConsumersOnSheet(
+                entries = entries,
+                consumers = currentSheetConsumers,
+                globalOffsetX = globalOffsetX,
+                y = y,
+                isFirstSheet = (currentSheetIndex == 0),
+                isLastSheet = true
             )
-
-            // middleLine — только до предпоследнего автомата
-            protected.dropLast(1).forEachIndexed { idx, _ ->
-                val xLine = baseX + idx * stepX
-                entries += ExportEntry(
-                    blockTypePrefix = "",
-                    polesText = null,
-                    x = xLine,
-                    y = lineY,
-                    attributeText = "",
-                    explicitBlockName = "middleLine"
-                )
-            }
-
-            // endLine — на координате последнего автомата
-            val endX = baseX + (protected.size - 1) * stepX
-            entries += ExportEntry(
-                blockTypePrefix = "",
-                polesText = null,
-                x = endX,
-                y = lineY,
-                attributeText = "",
-                explicitBlockName = "endLine"
-            )
-
         }
-
-        // 3) Боковая панель sidebar
-        entries += ExportEntry(
-            blockTypePrefix = "",
-            polesText = null,
-            x = baseX - 110,   // x = -110 при baseX = 0
-            y = y + 95,       // y = 90 при y = 0
-            attributeText = "",
-            explicitBlockName = "sidebar"
-        )
-
-        // 4) Шапка щита shield_cap с данными из ShieldData
-        val shieldCapAttr = listOf(
-            "PINSTSH=${shieldData.totalInstalledPower}",     // Установ. мощность, Вт
-            "PESTSH=${shieldData.totalCalculatedPower}",     // Расчетная мощность, Вт
-            "ICALCSH=${shieldData.totalCurrent}",            // Ток
-            "PFACTSH=${shieldData.averageCosPhi}",           // cos(f)
-            "DEMRATSH=${shieldData.shieldDemandFactor}",     // Коэф. спроса щита
-            "IL1=${shieldData.phaseL1}",                     // Нагрузка на фазу L1
-            "IL2=${shieldData.phaseL2}",                     // Нагрузка на фазу L2
-            "IL3=${shieldData.phaseL3}"                      // Нагрузка на фазу L3
-        ).joinToString("|")
-
-        entries += ExportEntry(
-            blockTypePrefix = "",
-            polesText = null,
-            x = 0,
-            y = 120,
-            attributeText = shieldCapAttr,
-            explicitBlockName = "shield_cap"
-        )
-
-        // 5) Вставка формата листа
-        // Координаты вставки: x=152, y=163
-        entries += ExportEntry(
-            blockTypePrefix = "",
-            polesText = null,
-            x = -152,
-            y = 163,
-            attributeText = "",
-            explicitBlockName = format
-        )
 
         exportEntries(entries, file)
     }
 
-    private fun writeFileOverwrite(file: File, content: String) {
-        try {
-            // убедимся, что родительская папка существует
-            file.parentFile?.let { parent ->
-                if (!parent.exists()) {
-                    parent.mkdirs()
-                }
+    // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+
+    private fun drawSheetFrame(
+        entries: MutableList<ExportEntry>,
+        globalOffsetX: Int,
+        format: String,
+        sheetWidth: Int,
+        sheetHeight: Int,
+        xrefPathString: String?
+    ) {
+        val frameX = globalOffsetX - 152
+        val frameY = 163
+
+        // 1. Формат (Рамка)
+        entries += ExportEntry(
+            blockTypePrefix = "", polesText = null,
+            x = frameX, y = frameY, attributeText = "",
+            explicitBlockName = format
+        )
+
+        // 2. Sidebar (Боковая панель) - добавляем на каждый лист
+        // Координаты по вашему ТЗ: x = 0x - 152, y = 0y + 163
+        // Примечание: предполагаем, что 0y — это базовый Y (обычно 0), а 0x — globalOffsetX
+        entries += ExportEntry(
+            blockTypePrefix = "", polesText = null,
+            x = globalOffsetX - 110,
+            y = 95, // Если базовый y всегда 0, то ставим жестко 163. Если y меняется, то (y + 163)
+            attributeText = "",
+            explicitBlockName = "sidebar"
+        )
+
+        // 3. Штамп (XREF)
+        if (!xrefPathString.isNullOrBlank()) {
+            val frameOffset = 5
+            val stampX = frameX + sheetWidth - frameOffset
+            val stampY = frameY - sheetHeight + frameOffset
+
+            entries += ExportEntry(
+                blockTypePrefix = "", polesText = null,
+                x = stampX, y = stampY, attributeText = "",
+                explicitBlockName = "XREF=$xrefPathString"
+            )
+        }
+    }
+
+    private fun drawConsumersOnSheet(
+        entries: MutableList<ExportEntry>,
+        consumers: List<ConsumerModel>,
+        globalOffsetX: Int,
+        y: Int,
+        isFirstSheet: Boolean,
+        isLastSheet: Boolean
+    ) {
+        val stepX = 50
+
+        // 1. Отрисовка потребителей
+        consumers.forEachIndexed { idx, consumer ->
+            val localX = idx * stepX
+            val absX = globalOffsetX + localX
+
+            // -- Автомат --
+            val prefix = typePrefixForProtection(consumer.protectionDevice)
+            val polesFromModel = consumer.protectionPoles.takeIf { it.isNotBlank() }
+                ?: extractPolesFromText(consumer.protectionDevice)
+
+            entries += ExportEntry(
+                blockTypePrefix = prefix, polesText = polesFromModel,
+                x = absX, y = y, attributeText = consumer.protectionDevice
+            )
+
+            // -- Кабель --
+            drawCableInfo(entries, consumer, absX, y)
+
+            // -- Таблица --
+            drawConsumerTable(entries, consumer, absX, y)
+
+            // -- УГО --
+            val symbolBlockName = ConsumerLibrary.getTagByName(consumer.name) ?: ConsumerLibrary.FALLBACK_TAG
+            entries += ExportEntry(
+                blockTypePrefix = "", polesText = null,
+                x = absX, y = y - 100, attributeText = "",
+                explicitBlockName = symbolBlockName
+            )
+        }
+
+        // 2. Отрисовка линий (Шины)
+        val lineY = y + 45
+        val count = consumers.size
+        if (count > 0) {
+            // Если это НЕ первый лист, добавляем startContLine
+            if (!isFirstSheet) {
+                // ТЗ: startContLine рисуется по координатам: x = 0x, y = 0y + 45
+                // 0x = globalOffsetX
+                // 0y = y (так как ynew = 163, 0y = 163-163 = 0, а передаваемый y=0)
+                entries += ExportEntry(
+                    blockTypePrefix = "", polesText = null,
+                    x = globalOffsetX,
+                    y = lineY, attributeText = "",
+                    explicitBlockName = "startContLine"
+                )
+            } else {
+                // Если первый лист - обычный startLine
+                entries += ExportEntry(
+                    blockTypePrefix = "", polesText = null,
+                    x = globalOffsetX,
+                    y = lineY, attributeText = "",
+                    explicitBlockName = "startLine"
+                )
             }
 
-            // Если файл существует - удаляем его (гарантированно)
+            // middleLine (между автоматами)
+            // Рисуем СТРОГО между автоматами: от 0 до предпоследнего.
+            // Последний сегмент (от последнего автомата вправо) рисует либо endLine, либо endContLine.
+            val loopLimit = count - 1
+
+            for (i in 0 until loopLimit) {
+                val absX = globalOffsetX + (i * stepX)
+                entries += ExportEntry(
+                    blockTypePrefix = "", polesText = null,
+                    x = absX, y = lineY, attributeText = "",
+                    explicitBlockName = "middleLine"
+                )
+            }
+
+            // Завершение линии на листе
+            val lastX = globalOffsetX + (count - 1) * stepX
+
+            if (isLastSheet) {
+                // Если последний лист схемы - endLine
+                entries += ExportEntry(
+                    blockTypePrefix = "", polesText = null,
+                    x = lastX, y = lineY, attributeText = "",
+                    explicitBlockName = "endLine"
+                )
+            } else {
+                // Если будет продолжение - endContLine
+                entries += ExportEntry(
+                    blockTypePrefix = "", polesText = null,
+                    x = lastX, y = lineY, attributeText = "",
+                    explicitBlockName = "endContLine"
+                )
+            }
+        }
+    }
+
+    // --- Вынесенные методы отрисовки компонентов ---
+
+    private fun addInputDevice(data: ShieldData, entries: MutableList<ExportEntry>, baseX: Int, y: Int) {
+        if (data.inputInfo.contains("Два ввода", ignoreCase = true) &&
+            data.inputInfo.contains("АВР", ignoreCase = true) &&
+            !data.inputInfo.contains("Блок АВР", ignoreCase = true)) {
+
+            val lines = data.inputInfo.split("\n")
+            val sepIndex = lines.indexOfFirst { it.contains("-") }
+            val deviceLines = if (sepIndex >= 0 && sepIndex + 1 < lines.size) lines.subList(sepIndex + 1, lines.size) else lines.drop(1)
+            val deviceText = deviceLines.filter { it.isNotBlank() }.joinToString("\\P")
+            val is4P = deviceText.contains("4P", ignoreCase = true) || deviceText.contains("3P+N", ignoreCase = true)
+            val blockName = if (is4P) "AVR_AV_4P" else "AVR_AV_3P"
+
+            entries += ExportEntry("", null, baseX + 32, y + 45, deviceText, blockName)
+        }
+
+        if (data.inputInfo.contains("Блок АВР", ignoreCase = true)) {
+            val lines = data.inputInfo.split("\n")
+            val deviceLine = lines.lastOrNull { it.isNotBlank() && !it.contains("---") && !it.contains("Блок АВР") } ?: ""
+            val is4P = deviceLine.contains("4P", ignoreCase = true) || deviceLine.contains("3P+N", ignoreCase = true)
+            val blockName = if (is4P) "B_AVR_4P" else "B_AVR_3P"
+
+            entries += ExportEntry("", null, baseX + 53, y + 45, deviceLine, blockName)
+        }
+    }
+
+    private fun addSideCap(data: ShieldData, entries: MutableList<ExportEntry>, baseX: Int) {
+        // Шапка щита
+        val shieldCapAttr = listOf(
+            "PINSTSH=${data.totalInstalledPower}",
+            "PESTSH=${data.totalCalculatedPower}",
+            "ICALCSH=${data.totalCurrent}",
+            "PFACTSH=${data.averageCosPhi}",
+            "DEMRATSH=${data.shieldDemandFactor}",
+            "IL1=${data.phaseL1}",
+            "IL2=${data.phaseL2}",
+            "IL3=${data.phaseL3}"
+        ).joinToString("|")
+
+        entries += ExportEntry("", null, baseX, 120, shieldCapAttr, "shield_cap")
+    }
+
+    private fun drawCableInfo(entries: MutableList<ExportEntry>, c: ConsumerModel, x: Int, y: Int) {
+        val cableMark = c.cableType
+        val cableSection = c.cableLine
+        val laying = c.layingMethod
+        val length = c.cableLength
+        val rawDrop = c.voltageDropV
+        val cleanDrop = if (rawDrop.contains("(")) rawDrop.substringBefore("(").trim() else rawDrop.trim()
+
+        val hasAnyCableData = listOf(cableMark, cableSection, laying, length, cleanDrop).any { it.isNotBlank() }
+
+        if (hasAnyCableData) {
+            val sectionWithUnit = if (cableSection.isNotBlank()) "$cableSection мм²" else ""
+            val line1 = listOf(cableMark, sectionWithUnit).filter { it.isNotBlank() }.joinToString(" ")
+            val partsLine2 = mutableListOf<String>()
+            if (laying.isNotBlank()) partsLine2.add(laying)
+            if (length.isNotBlank()) partsLine2.add("L=$length м")
+            if (cleanDrop.isNotBlank()) partsLine2.add("ΔU=$cleanDrop")
+            val line2 = partsLine2.joinToString(", ")
+            val rawText = if (line2.isNotBlank()) "$line1\n$line2" else line1
+
+            entries += ExportEntry("", null, x, y, "INFO=$rawText", "cable")
+        }
+    }
+
+    private fun drawConsumerTable(entries: MutableList<ExportEntry>, c: ConsumerModel, x: Int, y: Int) {
+        val wrappedName = wrapText(c.name)
+        val tableAttr = listOf(
+            "NAME=$wrappedName",
+            "NOMROM=${c.roomNumber}",
+            "PINST=${c.installedPowerW}",
+            "PEST=${c.powerKw}",
+            "ICALC=${c.currentA}",
+            "GROUP=${c.lineName}"
+        ).joinToString("|")
+
+        entries += ExportEntry("", null, x, y - 116, tableAttr, "consumer_table")
+    }
+
+    private fun writeFileOverwrite(file: File, content: String) {
+        try {
+            file.parentFile?.let { if (!it.exists()) it.mkdirs() }
             if (file.exists()) {
-                // Иногда файл может быть открыт в другом приложении — тогда delete() вернёт false.
-                // Мы попытаемся удалить и в случае неудачи бросим полезное исключение.
                 val deleted = file.delete()
                 if (!deleted) {
-                    // Если не смогли удалить, попробуем перезаписать через FileOutputStream с truncate
-                    // Но всё-таки лучше предупредить пользователя — файл может быть занят.
-                    // Попытаемся всё равно переписать:
                     file.outputStream().use { it.write(content.toByteArray(StandardCharsets.UTF_8)) }
                     return
                 }
             }
-
-            // Создаём новый файл и записываем (writeText затрёт содержимое, если файл уже существовал)
             file.writeText(content, StandardCharsets.UTF_8)
         } catch (ex: Exception) {
-            // Пробуем альтернативный метод записи (если что-то пошло не так)
             try {
                 file.outputStream().use { it.write(content.toByteArray(StandardCharsets.UTF_8)) }
             } catch (inner: Exception) {
-                throw RuntimeException("Не удалось записать CSV-файл: ${ex.message}; ${inner.message}", inner)
+                throw RuntimeException("Не удалось записать CSV-файл: ${ex.message}", inner)
             }
         }
     }
@@ -369,35 +427,24 @@ class CsvExporter {
         val charWidth = 1.3
         val letterSpacing = 1.6
         val wordSpacing = 4.5
-
         val words = text.split(" ")
         val sb = StringBuilder()
         var currentLineWidth = 0.0
 
         for (word in words) {
             if (word.isEmpty()) continue
-
-            // 1. Считаем ширину слова:
-            // N букв * 1.3 + (N-1) промежутков * 1.6
             val len = word.length
             val wordWidth = (len * charWidth) + ((len - 1).coerceAtLeast(0) * letterSpacing)
-
-            // Если это первое слово в строке, просто добавляем его
             if (currentLineWidth == 0.0) {
                 sb.append(word)
                 currentLineWidth = wordWidth
                 continue
             }
-
-            // 2. Считаем ширину добавления (пробел между словами + само слово)
             val addedWidth = wordSpacing + wordWidth
-
             if (currentLineWidth + addedWidth <= maxWidth) {
-                // Помещается в текущую строку
                 sb.append(" ").append(word)
                 currentLineWidth += addedWidth
             } else {
-                // Не помещается -> перенос на новую строку
                 sb.append("\n").append(word)
                 currentLineWidth = wordWidth
             }

@@ -5,6 +5,7 @@ import java.io.File
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.TimeUnit
 
@@ -38,14 +39,6 @@ object AutoCadExporter {
             .map { File(it) }
             .firstOrNull { it.exists() }
             ?.absolutePath
-    }
-
-    // Стаджинг только в %TEMP% согласно вашим предпочтениям
-    private fun createTempStaging(): File {
-        val base = File(System.getProperty("java.io.tmpdir"))
-        val dir = File(base, "autoCadExport_${System.currentTimeMillis()}")
-        dir.mkdirs()
-        return dir
     }
 
     private fun toAcad(path: String): String = path.replace('\\', '/')
@@ -127,37 +120,52 @@ res
         (setq parts (str-split line ";"))
         (if (and parts (>= (length parts) 4))
           (progn
+            ;; === 1. ПАРСИНГ ДАННЫХ (ОСТАВЛЯЕМ КАК БЫЛО) ===
             (setq block_name (nth 0 parts))
             (setq pt (list (distof (nth 1 parts)) (distof (nth 2 parts)) 0.0))
             ;; CSV хранит переносы как \n — превращаем в реальный перенос
             (setq attr_text (vl-string-subst "\n" "\\n" (nth 3 parts)))
             (setq attr_map (parse-attr-map attr_text))
-            (if (tblsearch "BLOCK" block_name)
+            
+            ;; === 2. ВЫБОР ЛОГИКИ: XREF или BLOCK ===
+            (if (wcmatch block_name "XREF=*")
+              ;; --- Ветка А: Вставка внешней ссылки (XREF) ---
               (progn
-                (command "_.-INSERT" block_name pt 1.0 1.0 0.0)
-                (setq new_insert (entlast))
-                (if (and new_insert (= "INSERT" (cdr (assoc 0 (entget new_insert)))))
-                  (progn
-                    (setq e (entnext new_insert))
-                    (while (and e (= "ATTRIB" (cdr (assoc 0 (entget e)))))
-                      (setq a (entget e))
-                      (setq tag (strcase (cdr (assoc 2 a))))
-                      (setq pair (assoc tag attr_map))
-                      (if pair
-                        (progn
-                          (setq a (subst (cons 1 (cdr pair)) (assoc 1 a) a))
-                          (entmod a)
-                        )
-                      )
-                      (setq e (entnext e))
-                    )
-                    (if log_file (write-line (strcat "OK row " (itoa row) ": " block_name) log_file))
-                  )
-                  (if log_file (write-line (strcat "ERR row " (itoa row) ": insert failed " block_name) log_file))
-                )
+                ;; Отрезаем префикс "XREF=" (5 символов), получаем путь
+                (setq xref_path (substr block_name 6))
+                ;; Вставляем XREF как Overlay
+                (command "_.-XREF" "_Overlay" xref_path pt 1.0 1.0 0.0)
+                (if log_file (write-line (strcat "OK row " (itoa row) ": XREF attached " xref_path) log_file))
               )
-              (if log_file (write-line (strcat "ERR row " (itoa row) ": block not found " block_name) log_file))
-            )
+              
+              ;; --- Ветка Б: Вставка обычного блока (BLOCK) ---
+              (if (tblsearch "BLOCK" block_name)
+                (progn
+                  (command "_.-INSERT" block_name pt 1.0 1.0 0.0)
+                  (setq new_insert (entlast))
+                  (if (and new_insert (= "INSERT" (cdr (assoc 0 (entget new_insert)))))
+                    (progn
+                      (setq e (entnext new_insert))
+                      (while (and e (= "ATTRIB" (cdr (assoc 0 (entget e)))))
+                        (setq a (entget e))
+                        (setq tag (strcase (cdr (assoc 2 a))))
+                        (setq pair (assoc tag attr_map))
+                        (if pair
+                          (progn
+                            (setq a (subst (cons 1 (cdr pair)) (assoc 1 a) a))
+                            (entmod a)
+                          )
+                        )
+                        (setq e (entnext e))
+                      )
+                      (if log_file (write-line (strcat "OK row " (itoa row) ": " block_name) log_file))
+                    )
+                    (if log_file (write-line (strcat "ERR row " (itoa row) ": insert failed " block_name) log_file))
+                  )
+                )
+                (if log_file (write-line (strcat "ERR row " (itoa row) ": block not found " block_name) log_file))
+              )
+            ) ;; Конец (if (wcmatch ...))
           )
           (if log_file (write-line (strcat "ERR row " (itoa row) ": bad csv format") log_file))
         )
@@ -213,7 +221,8 @@ _.QUIT
         y: Int = 0,
         timeoutSec: Long = 300L,
         useTemplateCopy: Boolean = false,
-        format: String
+        format: String,
+        stampPath: String?
     ): AccoreRunResult {
         val accore = accorePath?.let { File(it) } ?: tryFindAccoreConsole()?.let { File(it) }
         if (accore == null || !accore.exists()) {
@@ -225,7 +234,42 @@ _.QUIT
             return AccoreRunResult(-4, "Template DWG not found: $templateDwgPath", null, outDwgPath)
         }
 
-        val staging = createTempStaging()
+        // === 1. СОЗДАНИЕ ПЕСОЧНИЦЫ ===
+        // Создаем временную папку-контейнер
+        val sandboxRoot = Files.createTempDirectory("shield_sandbox_")
+        // Создаем подпапку "project", имитирующую папку с финальным файлом
+        val stagingPath = sandboxRoot.resolve("project")
+        val staging = stagingPath.toFile()
+        staging.mkdirs()
+
+        // === 2. ПОДГОТОВКА XREF (Штампа) ===
+        var xrefStringToCsv: String? = null
+
+        if (!stampPath.isNullOrBlank()) {
+            try {
+                val stampFile = File(stampPath)
+                val outDwgFile = File(outDwgPath)
+
+                // Если файлы на одном диске, делаем относительный путь
+                if (stampFile.toPath().root == outDwgFile.toPath().root) {
+                    val outDir = outDwgFile.parentFile?.toPath() ?: Paths.get(".")
+
+                    // Считаем путь: Out -> Stamp (например ..\Templates\Stamp.dwg)
+                    val relativePath = outDir.relativize(stampFile.toPath())
+                    xrefStringToCsv = relativePath.toString().replace('\\', '/')
+
+                    // Копируем штамп в песочницу по такой же структуре
+                    val mockStampFile = stagingPath.resolve(relativePath).normalize()
+                    Files.createDirectories(mockStampFile.parent)
+                    Files.copy(stampFile.toPath(), mockStampFile, StandardCopyOption.REPLACE_EXISTING)
+                } else {
+                    // Если разные диски — абсолютный путь
+                    xrefStringToCsv = toAcad(stampPath)
+                }
+            } catch (ex: Exception) {
+                return AccoreRunResult(-11, "Error preparing XREF: ${ex.message}", staging.absolutePath, outDwgPath)
+            }
+        }
 
         val csvFile = File(staging, "shield_export_${System.currentTimeMillis()}.csv")
         val lspFile = File(staging, "auto_runner.lsp")
@@ -247,7 +291,7 @@ _.QUIT
 
         // Экспорт CSV
         try {
-            CsvExporter().export(shieldData, csvFile, baseX, stepX, y, format)
+            CsvExporter().export(shieldData, csvFile, baseX, stepX, y, format, xrefStringToCsv)
         } catch (ex: Exception) {
             return AccoreRunResult(-6, "Failed to write CSV: ${ex.message}", staging.absolutePath, outDwgPath)
         }
@@ -334,6 +378,8 @@ _.QUIT
         if (exit == 0 && !outDwgFile.exists()) {
             return AccoreRunResult(exit, combined + "\n[WARN] accore exit=0 but output DWG not found: ${outDwgFile.absolutePath}", staging.absolutePath, outDwgPath)
         }
+
+        try { sandboxRoot.toFile().deleteRecursively() } catch(_:Exception){}
 
         return AccoreRunResult(exit, combined, staging.absolutePath, outDwgPath)
     }
