@@ -24,7 +24,8 @@ class ConsumerModel(
     layingMethod: String = "",
     voltageDropV: String = "",
     cableLength: String = "",
-    shortCircuitCurrentkA: String = ""
+    shortCircuitCurrentkA: String = "",
+    cableDirection: String = "Снизу"
 ) {
     var name by mutableStateOf(name)
     var roomNumber by mutableStateOf(roomNumber)
@@ -46,6 +47,7 @@ class ConsumerModel(
     var cableLength by mutableStateOf(cableLength)
     var shortCircuitCurrentkA by mutableStateOf(shortCircuitCurrentkA)
     val additionalProtections = mutableStateListOf<AdditionalProtection>()
+    var cableDirection by mutableStateOf(cableDirection)
 
     fun deepCopy(): ConsumerModel {
         val newModel = ConsumerModel(
@@ -67,7 +69,8 @@ class ConsumerModel(
             layingMethod = layingMethod,
             voltageDropV = voltageDropV,
             cableLength = cableLength,
-            shortCircuitCurrentkA = shortCircuitCurrentkA
+            shortCircuitCurrentkA = shortCircuitCurrentkA,
+            cableDirection = cableDirection
         )
 
         this.additionalProtections.forEach {

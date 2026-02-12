@@ -480,7 +480,7 @@ fun ShieldTableColumn(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(FIELDVSPACE))
 
                         // --- ПОЛЯ ВВОДА ---
                         ProtectionSubBlock(
@@ -522,6 +522,7 @@ fun ShieldTableColumn(
 
             Spacer(Modifier.height(FIELDVSPACE))
 
+            // Блок КЛ
             BlockPanel(color = BLOCKWHITE) {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     HistoryAwareCompactTextField(
@@ -566,9 +567,74 @@ fun ShieldTableColumn(
 
                 Spacer(Modifier.height(FIELDVSPACE))
 
+                // --- Направление выход КЛ ---
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    // Меню выбора направления
+                    var directionMenuExpanded by remember { mutableStateOf(false) }
+
+                    // Используем TextField, но блокируем ввод (только выбор из списка)
+                    // Перекрываем прозрачным Box для клика по всей области
+                    Box {
+                        HistoryAwareCompactTextField(
+                            label = "Направление выхода КЛ",
+                            value = consumer.cableDirection,
+                            onValueChange = {}, // Игнорируем прямой ввод
+                            onPushHistory = { }, // История обрабатывается при выборе
+                            historyTrigger = historyTrigger,
+                            contentPadding = FIELDCONTENTPADDING,
+                            fontSizeSp = FIELDFONT,
+                            textColor = textColor,
+                            focusedBorderColor = borderColor,
+                            unfocusedBorderColor = Color.LightGray,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { directionMenuExpanded = true }
+                        )
+                    }
+
+                    // Иконка стрелочки
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Выбрать направление",
+                        tint = textColor,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 4.dp)
+                            .size(24.dp)
+                            .clickable { directionMenuExpanded = true }
+                    )
+
+                    // Выпадающее меню
+                    DropdownMenu(
+                        expanded = directionMenuExpanded,
+                        onDismissRequest = { directionMenuExpanded = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        listOf("Снизу", "Сверху").forEach { direction ->
+                            DropdownMenuItem(
+                                onClick = {
+                                    if (consumer.cableDirection != direction) {
+                                        onPushHistory(true) // Сохраняем в историю
+                                        consumer.cableDirection = direction
+                                        onDataChanged() // Триггер сохранения
+                                    }
+                                    directionMenuExpanded = false
+                                }
+                            ) {
+                                Text(text = direction, color = Color.Black)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(FIELDVSPACE))
+
                 // --- Ячейка 13: Способ прокладки и Длина ---
                 BlockPanel(color = BLOCKWHITE) { // Можно выделить отдельным цветом
-                    // 1. Выбор способа (Dropdown)
                     Box(modifier = Modifier.fillMaxWidth()) {
                         HistoryAwareCompactTextField(
                             label = "Способ прокладки",
@@ -619,7 +685,6 @@ fun ShieldTableColumn(
 
                     Spacer(Modifier.height(4.dp))
 
-                    // 2. Ввод длины
                     HistoryAwareCompactTextField(
                         label = "Длина, м",
                         value = consumer.cableLength,
