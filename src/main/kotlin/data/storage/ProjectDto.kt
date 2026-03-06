@@ -95,7 +95,8 @@ data class SerializableShieldData(
     val totalCalculatedPower: String,
     val averageCosPhi: String,
     val totalCurrent: String,
-    val shieldDemandFactor: String
+    val shieldDemandFactor: String,
+    val inputCableDirection: String
 )
 
 @Serializable
@@ -119,7 +120,8 @@ data class SerializableConsumerModel(
     val voltageDropV: String,
     val cableLength: String = "",
     val shortCircuitCurrentkA: String = "",
-    val additionalProtections: List<SerializableAdditionalProtection> = emptyList()
+    val additionalProtections: List<SerializableAdditionalProtection> = emptyList(),
+    val cableDirection: String
 )
 
 @Serializable

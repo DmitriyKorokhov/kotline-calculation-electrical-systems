@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.sp
 import view.CompactOutlinedTextField
 import ui.screens.shieldeditor.ShieldData
 import ui.utils.HistoryAwareCompactTextField
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 private val FIELD_CONTENT_PADDING = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
 private val BLOCK_BORDER = Color(0xFFB0BEC5)
@@ -35,6 +37,8 @@ fun ShieldLeftPanel(
 ) {
     val textColor = Color.White
     val borderColor = Color.White
+    // Создаем состояние для отслеживания прокрутки
+    val scrollState = rememberScrollState()
 
     Column(
         modifier = Modifier
@@ -42,6 +46,7 @@ fun ShieldLeftPanel(
             .padding(6.dp)
             .background(Color.Gray.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
             .padding(8.dp)
+            .verticalScroll(scrollState)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

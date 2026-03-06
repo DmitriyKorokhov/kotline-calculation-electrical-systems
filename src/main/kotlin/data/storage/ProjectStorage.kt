@@ -26,13 +26,13 @@ object ProjectStorage {
     fun saveProject(state: ProjectCanvasState) {
         val fileChooser = JFileChooser().apply {
             dialogTitle = "Сохранить проект как..."
-            fileFilter = FileNameExtensionFilter("Файлы проекта (*.project)", "project")
+            fileFilter = FileNameExtensionFilter("Файлы проекта (*.elc)", "elc")
         }
 
         if (fileChooser.showSaveDialog(null) == JFileChooser.APPROVE_OPTION) {
             var selectedFile = fileChooser.selectedFile
-            if (!selectedFile.name.endsWith(".project")) {
-                selectedFile = File(selectedFile.absolutePath + ".project")
+            if (!selectedFile.name.endsWith(".elc")) {
+                selectedFile = File(selectedFile.absolutePath + ".elc")
             }
 
             // Конвертация и сохранение
@@ -45,7 +45,7 @@ object ProjectStorage {
     fun loadProject(state: ProjectCanvasState): Boolean {
         val fileChooser = JFileChooser().apply {
             dialogTitle = "Открыть проект"
-            fileFilter = FileNameExtensionFilter("Файлы проекта (*.project)", "project")
+            fileFilter = FileNameExtensionFilter("Файлы проекта (*.elc)", "elc")
         }
 
         if (fileChooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
@@ -138,6 +138,7 @@ private fun ProjectCanvasState.loadFromProjectFile(file: ProjectFile) {
         shieldData.averageCosPhi = sData.averageCosPhi
         shieldData.totalCurrent = sData.totalCurrent
         shieldData.shieldDemandFactor = sData.shieldDemandFactor
+        shieldData.inputCableDirection = sData.inputCableDirection
 
         // Потребители
         shieldData.consumers.clear()
@@ -161,7 +162,8 @@ private fun ProjectCanvasState.loadFromProjectFile(file: ProjectFile) {
                 cableType = c.cableType,
                 voltageDropV = c.voltageDropV,
                 cableLength = c.cableLength,
-                shortCircuitCurrentkA = c.shortCircuitCurrentkA
+                shortCircuitCurrentkA = c.shortCircuitCurrentkA,
+                cableDirection = c.cableDirection
             )
             c.additionalProtections.forEach { ap ->
                 consumer.additionalProtections.add(
@@ -206,7 +208,8 @@ private fun ShieldData.toSerializable(): SerializableShieldData {
         totalCalculatedPower = this.totalCalculatedPower,
         averageCosPhi = this.averageCosPhi,
         totalCurrent = this.totalCurrent,
-        shieldDemandFactor = this.shieldDemandFactor
+        shieldDemandFactor = this.shieldDemandFactor,
+        inputCableDirection = this.inputCableDirection
     )
 }
 
@@ -237,6 +240,7 @@ private fun ConsumerModel.toSerializable(): SerializableConsumerModel {
                 protectionDevice = it.protectionDevice,
                 protectionPoles = it.protectionPoles
             )
-        }
+        },
+        cableDirection = this.cableDirection
     )
 }
