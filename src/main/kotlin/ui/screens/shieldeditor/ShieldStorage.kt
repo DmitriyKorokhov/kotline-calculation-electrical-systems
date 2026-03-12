@@ -70,8 +70,7 @@ class ShieldData(
     // смена кабеля с многожильного на одножильный
     var singleCoreThreshold by mutableStateOf("70")
 
-    // направление ввода кабеля
-    var inputCableDirection by mutableStateOf("")
+    var inputCableDirection by mutableStateOf("Сверху")
 }
 
 object ShieldStorage {

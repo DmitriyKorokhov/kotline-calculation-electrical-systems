@@ -25,7 +25,7 @@ class ConsumerModel(
     voltageDropV: String = "",
     cableLength: String = "",
     shortCircuitCurrentkA: String = "",
-    cableDirection: String = ""
+    cableDirection: String = "Снизу"
 ) {
     var name by mutableStateOf(name)
     var roomNumber by mutableStateOf(roomNumber)
