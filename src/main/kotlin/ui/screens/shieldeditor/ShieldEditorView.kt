@@ -31,7 +31,7 @@ import ui.screens.shieldeditor.exporter.ExportDialog
 import ui.screens.shieldeditor.exporter.ExportEditor
 import ui.screens.shieldeditor.input.InputTypePopup
 import ui.screens.shieldeditor.protection.ProtectionSelectionWindow
-import ui.screens.shieldeditor.protection.protectionTypeFromString
+import ui.screens.shieldeditor.protection.ProtectionType
 import ui.utils.HistoryManager
 
 private val LEFT_PANEL_WIDTH: Dp = 300.dp
@@ -386,16 +386,18 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
             val consumer = data.consumers.getOrNull(target.colIndex)
 
             if (consumer != null) {
-                // 1. Определяем текущее устройство и куда сохранять
-                // Если индекс -1, работаем с основной защитой, иначе — с дополнительной
-                val currentDeviceString = if (target.protectionIndex == -1) {
-                    consumer.protectionDevice
+                // Читаем сохраненный тип напрямую из модели
+                val initialTypeStr = if (target.protectionIndex == -1) {
+                    consumer.protectionType
                 } else {
-                    consumer.additionalProtections.getOrNull(target.protectionIndex)?.protectionDevice ?: ""
+                    consumer.additionalProtections.getOrNull(target.protectionIndex)?.protectionType ?: "CIRCUIT_BREAKER"
                 }
 
-                // Парсим начальный тип для диалога
-                val initialType = protectionTypeFromString(currentDeviceString)
+                val initialType = try {
+                    ProtectionType.valueOf(initialTypeStr)
+                } catch (e: Exception) {
+                    ProtectionType.CIRCUIT_BREAKER
+                }
 
                 ProtectionSelectionWindow(
                     data = data,
@@ -404,30 +406,28 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                     consumerVoltageStr = consumer.voltage,
                     maxShortCircuitCurrentStr = data.maxShortCircuitCurrent,
                     onDismiss = { protectionDialogTarget = null },
-                    onSelect = { resultString, poles ->
+                    onSelect = { resultString, poles, selectedProtType -> // <--- ПРИНИМАЕМ ТИП
                         pushHistory(true)
 
-                        // Корректировка формата ампер (как было у вас)
                         val correctedString = resultString.replace(Regex("(\\d)\\sA"), "$1A")
 
-                        // 2. Сохраняем в зависимости от индекса
                         if (target.protectionIndex == -1) {
                             // Основная
                             consumer.protectionDevice = correctedString
                             consumer.protectionPoles = poles
+                            consumer.protectionType = selectedProtType.name // <--- СОХРАНЯЕМ ТИП
                         } else {
                             // Дополнительная
-                            // Проверяем, существует ли еще эта защита (вдруг удалили пока окно было открыто)
                             val addProt = consumer.additionalProtections.getOrNull(target.protectionIndex)
                             if (addProt != null) {
                                 addProt.protectionDevice = correctedString
                                 addProt.protectionPoles = poles
+                                addProt.protectionType = selectedProtType.name // <--- СОХРАНЯЕМ ТИП
                             }
                         }
 
                         protectionDialogTarget = null
 
-                        // Пересчет
                         CalculationEngine.calculateAll(data)
                         CableCalculator.calculateCable(consumer, data)
                         CableCalculator.calculateShortCircuitCurrent(consumer, data)

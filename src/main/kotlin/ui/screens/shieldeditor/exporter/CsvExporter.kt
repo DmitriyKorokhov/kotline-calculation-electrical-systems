@@ -4,7 +4,6 @@ import data.database.ConsumerLibrary
 import ui.screens.shieldeditor.ConsumerModel
 import ui.screens.shieldeditor.ShieldData
 import ui.screens.shieldeditor.protection.ProtectionType
-import ui.screens.shieldeditor.protection.protectionTypeFromString
 import java.io.File
 import java.nio.charset.StandardCharsets
 
@@ -148,7 +147,6 @@ class CsvExporter {
     }
 
     // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
-
     private fun drawSheetFrame(
         entries: MutableList<ExportEntry>,
         globalOffsetX: Int,
@@ -213,7 +211,7 @@ class CsvExporter {
 
                 // 1. Дополнительная защита (УЗО) - вставляется в Y
                 val addProt = consumer.additionalProtections[0]
-                val addPolesRaw = addProt.protectionPoles.takeIf { !it.isNullOrBlank() }
+                val addPolesRaw = addProt.protectionPoles.takeIf { it.isNotBlank() }
                     ?: extractPolesFromText(addProt.protectionDevice)
                 val addPoles = normalizePoles(addPolesRaw) // 2P, 4P...
 
@@ -251,7 +249,7 @@ class CsvExporter {
 
             } else {
                 // === СТАНДАРТНАЯ ЛОГИКА (Один блок) ===
-                val prefix = typePrefixForProtection(consumer.protectionDevice)
+                val prefix = typePrefixForProtection(consumer.protectionType)
                 val polesFromModel = consumer.protectionPoles.takeIf { it.isNotBlank() }
                     ?: extractPolesFromText(consumer.protectionDevice)
 
@@ -450,8 +448,14 @@ class CsvExporter {
         }
     }
 
-    private fun typePrefixForProtection(protectionText: String?): String {
-        return when (protectionTypeFromString(protectionText)) {
+    private fun typePrefixForProtection(typeStr: String): String {
+        val type = try {
+            ProtectionType.valueOf(typeStr)
+        } catch (e: Exception) {
+            ProtectionType.CIRCUIT_BREAKER
+        }
+
+        return when (type) {
             ProtectionType.CIRCUIT_BREAKER -> "AV"
             ProtectionType.DIFF_CURRENT_BREAKER -> "AVDT"
             ProtectionType.RCD -> "AV_UZO"

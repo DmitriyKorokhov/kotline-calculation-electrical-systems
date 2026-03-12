@@ -35,7 +35,7 @@ fun ProtectionSelectionWindow(
     consumerCurrentAStr: String,
     consumerVoltageStr: String?,
     maxShortCircuitCurrentStr: String,
-    onSelect: (resultString: String, poles: String) -> Unit,
+    onSelect: (resultString: String, poles: String, type: ProtectionType) -> Unit,
     onDismiss: () -> Unit
 ) {
     val density = LocalDensity.current
@@ -170,7 +170,7 @@ fun ProtectionSelectionWindow(
                                     protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
                                     onBack = { breakerStep = 1 },
                                     onDismiss = onDismiss,
-                                    onChoose = { resStr -> onSelect(resStr, p.selectedPoles) }
+                                    onChoose = { resStr -> onSelect(resStr, p.selectedPoles, selectedType) }
                                 )
                             }
                         }
@@ -207,7 +207,7 @@ fun ProtectionSelectionWindow(
                                     protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
                                     onBack = { rcboStep = 1 },
                                     onDismiss = onDismiss,
-                                    onChoose = { resStr -> onSelect(resStr, p.selectedPoles) }
+                                    onChoose = { resStr -> onSelect(resStr, p.selectedPoles, selectedType) }
                                 )
                             }
                         }
@@ -238,10 +238,7 @@ fun ProtectionSelectionWindow(
                                     protectionFactorHigh = data.protectionFactorHigh.toFloatOrNull() ?: 0.93f,
                                     onBack = { rcdStep = 1 },
                                     onDismiss = onDismiss,
-                                    onChoose = { resStr ->
-                                        // Возвращаем результат УЗО
-                                        onSelect(resStr, p.selectedPoles)
-                                    }
+                                    onChoose = { resStr -> onSelect(resStr, p.selectedPoles, selectedType) }
                                 )
                             }
                         }

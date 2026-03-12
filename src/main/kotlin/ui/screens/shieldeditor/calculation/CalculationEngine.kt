@@ -12,6 +12,10 @@ object CalculationEngine {
      * Выполняет полный пересчет данных щита.
      */
     fun calculateAll(data: ShieldData) {
+
+        // Запускаем перенумерацию устройств защиты
+        ProtectionNumberingEngine.applyNumbering(data)
+
         // 1. Расчет токов для каждого потребителя
         data.consumers.forEach { c ->
             val u = parse(c.voltage)

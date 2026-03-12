@@ -21,6 +21,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import ui.screens.shieldeditor.ShieldData
 import ui.utils.HistoryAwareOutlinedTextField
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 
 @Composable
 fun ProtectionSettingsTab(
@@ -140,7 +142,171 @@ fun ProtectionSettingsTab(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- Блок 4: Условие выбора защиты (Новое) ---
+        // --- Блок 4: Порядок нумерации ---
+        Text("Порядок нумерации", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 1. Параллельный
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onPushHistory(true)
+                        data.numberingOrder = "Parallel"
+                        onSave()
+                    }
+                    .padding(vertical = 4.dp)
+            ) {
+                RadioButton(
+                    selected = data.numberingOrder == "Parallel",
+                    onClick = {
+                        onPushHistory(true)
+                        data.numberingOrder = "Parallel"
+                        onSave()
+                    }
+                )
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Параллельный", style = MaterialTheme.typography.body1)
+                    Text(
+                        text = "Разбивка осуществляется по типу устройств",
+                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            // 2. Последовательный
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onPushHistory(true)
+                        data.numberingOrder = "Sequential"
+                        onSave()
+                    }
+                    .padding(vertical = 4.dp)
+            ) {
+                RadioButton(
+                    selected = data.numberingOrder == "Sequential",
+                    onClick = {
+                        onPushHistory(true)
+                        data.numberingOrder = "Sequential"
+                        onSave()
+                    }
+                )
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Последовательный", style = MaterialTheme.typography.body1)
+                    Text(
+                        text = "Единый поток без разбивки",
+                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            // 3. Другой...
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onPushHistory(true)
+                        data.numberingOrder = "Other"
+                        onSave()
+                    }
+                    .padding(vertical = 4.dp)
+            ) {
+                RadioButton(
+                    selected = data.numberingOrder == "Other",
+                    onClick = {
+                        onPushHistory(true)
+                        data.numberingOrder = "Other"
+                        onSave()
+                    }
+                )
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Другой...", style = MaterialTheme.typography.body1)
+                    Text(
+                        text = "Автоматическая расстановка отключена",
+                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // --- Блок 4.1: Направление нумерации ---
+        Text("Направление нумерации", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    onPushHistory(true)
+                    data.numberingLeftToRight = !data.numberingLeftToRight
+                    onSave()
+                }
+                .padding(vertical = 8.dp)
+        ) {
+            // Иконка "Слева направо" (Голубая, когда активна, иначе серая)
+            Icon(
+                imageVector = Icons.Default.ArrowForward,
+                contentDescription = "Слева направо",
+                tint = if (data.numberingLeftToRight) MaterialTheme.colors.primary else Color.Gray.copy(alpha = 0.4f),
+                modifier = Modifier.size(20.dp)
+            )
+
+            Spacer(Modifier.width(8.dp))
+
+            Switch(
+                checked = !data.numberingLeftToRight, // Выключен = Слева направо, Включен = Справа налево
+                onCheckedChange = { isRightToLeft ->
+                    onPushHistory(true)
+                    data.numberingLeftToRight = !isRightToLeft
+                    onSave()
+                },
+                colors = SwitchDefaults.colors(
+                    // Настройки для варианта "Справа налево" (checked = true)
+                    checkedThumbColor = Color(0xFF4CAF50), // Зеленый ползунок
+                    checkedTrackColor = Color(0xFF4CAF50).copy(alpha = 0.5f), // Зеленая дорожка
+
+                    // Настройки для варианта "Слева направо" (checked = false)
+                    uncheckedThumbColor = MaterialTheme.colors.primary, // Голубой/синий ползунок
+                    uncheckedTrackColor = MaterialTheme.colors.primary.copy(alpha = 0.5f) // Голубая дорожка
+                )
+            )
+
+            Spacer(Modifier.width(8.dp))
+
+            // Иконка "Справа налево" (Зеленая, когда активна, иначе серая)
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Справа налево",
+                tint = if (!data.numberingLeftToRight) Color(0xFF4CAF50) else Color.Gray.copy(alpha = 0.4f),
+                modifier = Modifier.size(20.dp)
+            )
+
+            Spacer(Modifier.width(16.dp))
+
+            // Текстовое описание
+            Column {
+                Text(
+                    text = if (data.numberingLeftToRight) "Слева направо" else "Справа налево",
+                    style = MaterialTheme.typography.body1,
+                    color = if (data.numberingLeftToRight) MaterialTheme.colors.primary else Color(0xFF4CAF50),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // --- Блок 5: Условие выбора защиты (Новое) ---
         // Кнопка "Дополнительные параметры"
         var showAdvancedProtection by remember { mutableStateOf(false) }
 

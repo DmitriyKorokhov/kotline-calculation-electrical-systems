@@ -72,6 +72,12 @@ class ShieldData(
 
     // направление ввода кабеля
     var inputCableDirection by mutableStateOf("")
+
+    // Порядок нумерации защиты: "Parallel", "Sequential", "Other"
+    var numberingOrder by mutableStateOf("Parallel")
+
+    // Направление нумерации (true = слева направо, false = справа налево)
+    var numberingLeftToRight by mutableStateOf(true)
 }
 
 object ShieldStorage {

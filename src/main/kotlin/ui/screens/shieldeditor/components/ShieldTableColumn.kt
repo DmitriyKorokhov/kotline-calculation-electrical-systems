@@ -460,7 +460,7 @@ fun ShieldTableColumn(
                             onClick = {
                                 onPushHistory(true)
                                 consumer.additionalProtections.removeAt(index)
-                                onDataChanged()
+                                onCalculationRequired()
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -504,7 +504,7 @@ fun ShieldTableColumn(
                         onClick = {
                             onPushHistory(true)
                             consumer.additionalProtections.add(AdditionalProtection())
-                            onDataChanged()
+                            onCalculationRequired()
                         },
                         modifier = Modifier.fillMaxWidth().height(32.dp),
                         contentPadding = PaddingValues(0.dp),
