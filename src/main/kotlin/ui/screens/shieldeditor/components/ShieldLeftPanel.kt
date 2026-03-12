@@ -24,6 +24,7 @@ private val BLOCK_BORDER = Color(0xFFB0BEC5)
 private val BLOCK_BLUE = Color(0xFFE3F2FD).copy(alpha = 0.15f)
 private val BLOCK_WHITE = Color.White.copy(alpha = 0.15f)
 
+
 @Composable
 fun ShieldLeftPanel(
     data: ShieldData,
