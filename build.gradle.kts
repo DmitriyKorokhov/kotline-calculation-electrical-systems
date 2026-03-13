@@ -47,7 +47,7 @@ compose.desktop {
             modules("java.instrument", "java.prefs", "java.sql", "jdk.unsupported")
 
             windows {
-                iconFile.set(project.file("src/main/resources/circuit_icon.png"))
+                iconFile.set(project.file("src/main/resources/circuit_icon.ico"))
             }
         }
     }
