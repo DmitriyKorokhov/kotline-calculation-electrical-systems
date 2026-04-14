@@ -5,6 +5,7 @@ import ui.screens.shieldeditor.ConsumerModel
 import ui.screens.shieldeditor.ShieldData
 import ui.screens.shieldeditor.protection.ProtectionType
 import java.io.File
+import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 
 /**
@@ -429,19 +430,20 @@ class CsvExporter {
     }
 
     private fun writeFileOverwrite(file: File, content: String) {
+        val win1251 = Charset.forName("windows-1251")
         try {
             file.parentFile?.let { if (!it.exists()) it.mkdirs() }
             if (file.exists()) {
                 val deleted = file.delete()
                 if (!deleted) {
-                    file.outputStream().use { it.write(content.toByteArray(StandardCharsets.UTF_8)) }
+                    file.outputStream().use { it.write(content.toByteArray(win1251)) }
                     return
                 }
             }
-            file.writeText(content, StandardCharsets.UTF_8)
+            file.writeText(content, win1251)
         } catch (ex: Exception) {
             try {
-                file.outputStream().use { it.write(content.toByteArray(StandardCharsets.UTF_8)) }
+                file.outputStream().use { it.write(content.toByteArray(win1251)) }
             } catch (inner: Exception) {
                 throw RuntimeException("Не удалось записать CSV-файл: ${ex.message}", inner)
             }

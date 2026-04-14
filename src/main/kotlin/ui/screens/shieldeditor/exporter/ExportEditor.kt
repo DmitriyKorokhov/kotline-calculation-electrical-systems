@@ -24,6 +24,13 @@ object ExportEditor {
 
         // 2) Найти accoreconsole
         var accorePath = ShieldStorage.accoreConsolePath
+
+        // НОВОЕ: Если путь сохранен, но файла по нему фактически нет — сбрасываем его
+        if (!accorePath.isNullOrBlank() && !File(accorePath).exists()) {
+            accorePath = null
+            ShieldStorage.accoreConsolePath = null
+        }
+
         if (accorePath.isNullOrBlank()) {
             accorePath = AutoCadExporter.tryFindAccoreConsole()
             if (accorePath != null) ShieldStorage.accoreConsolePath = accorePath
@@ -94,11 +101,27 @@ object ExportEditor {
             )
 
             SwingUtilities.invokeLater {
-                val msg = javax.swing.JTextArea(result.output)
-                    .apply { isEditable = false; lineWrap = true; wrapStyleWord = true }
-                val scroll = javax.swing.JScrollPane(msg).apply { preferredSize = java.awt.Dimension(900, 420) }
+                // Ограничиваем длину строки, чтобы Swing не сошел с ума при расчете переносов
+                val maxLogLength = 4000
+                val safeOutput = if (result.output.length > maxLogLength) {
+                    result.output.take(maxLogLength) + "\n\n... [ЛОГ ОБРЕЗАН. Полный вывод слишком велик для окна]"
+                } else {
+                    result.output
+                }
+
+                val msg = javax.swing.JTextArea(safeOutput).apply {
+                    isEditable = false
+                    lineWrap = true
+                    wrapStyleWord = true
+                }
+
+                val scroll = javax.swing.JScrollPane(msg).apply {
+                    preferredSize = java.awt.Dimension(900, 420)
+                }
+
                 val title = if (result.exitCode == 0) "Экспорт успешен" else "Экспорт завершился с ошибкой"
                 val type = if (result.exitCode == 0) JOptionPane.INFORMATION_MESSAGE else JOptionPane.ERROR_MESSAGE
+
                 JOptionPane.showMessageDialog(null, scroll, title, type)
             }
         }
