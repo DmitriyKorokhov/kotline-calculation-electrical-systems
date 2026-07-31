@@ -76,8 +76,11 @@ class ShieldData(
     // Порядок нумерации защиты: "Parallel", "Sequential", "Other"
     var numberingOrder by mutableStateOf("Parallel")
 
-    // Направление нумерации (true = слева направо, false = справа налево)
+    // Направление нумерации устройств защиты (true = слева направо, false = справа налево)
     var numberingLeftToRight by mutableStateOf(true)
+
+    // Направление нумерации группы
+    var groupNumberingOrder by mutableStateOf("Auto") // "Auto" или "Other"
 }
 
 object ShieldStorage {

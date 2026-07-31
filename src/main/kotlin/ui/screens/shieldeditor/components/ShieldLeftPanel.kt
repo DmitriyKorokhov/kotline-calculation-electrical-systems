@@ -61,7 +61,12 @@ fun ShieldLeftPanel(
         HistoryAwareCompactTextField(
             label = "Наименование щита",
             value = data.shieldName,
-            onValueChange = { data.shieldName = it; onSave() },
+            onValueChange = {
+                data.shieldName = it
+                // Мгновенно пересчитываем нумерацию с новым именем щита
+                ui.screens.shieldeditor.calculation.ProtectionNumberingEngine.applyNumbering(data)
+                onSave()
+            },
             onPushHistory = onPushHistory,
             historyTrigger = historyTrigger,
             contentPadding = FIELD_CONTENT_PADDING,

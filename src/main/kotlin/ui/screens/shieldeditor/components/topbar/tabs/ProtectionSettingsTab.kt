@@ -1,6 +1,8 @@
 package ui.screens.shieldeditor.components.topbar.tabs
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,67 +24,39 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import ui.screens.shieldeditor.ShieldData
 import ui.utils.HistoryAwareOutlinedTextField
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.foundation.ExperimentalFoundationApi
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ProtectionSettingsTab(
-    data: ShieldData,
-    onSave: () -> Unit,
-    onPushHistory: (Boolean) -> Unit,
-    historyTrigger: Int
-) {
+fun ProtectionSettingsTab(data: ShieldData) {
     val scrollState = rememberScrollState()
     val fieldWidth = 350.dp
 
-    // Данные для выпадающих списков
     val standards = listOf("ГОСТ IEC 60898-1-2020", "ГОСТ IEC 60947-2-2021")
     val manufacturers = listOf("Nader", "Systeme electric", "DEKraft")
 
-    // Состояния раскрытия меню
     var stdMenuExpanded by remember { mutableStateOf(false) }
     var manufMenuExpanded by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(end = 8.dp)
+        modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(end = 8.dp)
     ) {
-        Text(
-            text = "Устройства защиты",
-            style = MaterialTheme.typography.h6,
-            color = MaterialTheme.colors.primary
-        )
+        Text("Устройства защиты", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.primary)
         Spacer(modifier = Modifier.height(24.dp))
 
         // --- Блок 1: Стандарт ---
         Text("Стандарт испытания", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Box {
-            OutlinedButton(
-                onClick = { stdMenuExpanded = true },
-                modifier = Modifier.width(fieldWidth)
-            ) {
-                Text(
-                    text = data.protectionStandard.ifBlank { "Выберите стандарт" },
-                    color = MaterialTheme.colors.onSurface
-                )
+            OutlinedButton(onClick = { stdMenuExpanded = true }, modifier = Modifier.width(fieldWidth)) {
+                Text(text = data.protectionStandard.ifBlank { "Выберите стандарт" }, color = MaterialTheme.colors.onSurface)
             }
-            DropdownMenu(
-                expanded = stdMenuExpanded,
-                onDismissRequest = { stdMenuExpanded = false },
-                modifier = Modifier.width(fieldWidth)
-            ) {
+            DropdownMenu(expanded = stdMenuExpanded, onDismissRequest = { stdMenuExpanded = false }, modifier = Modifier.width(fieldWidth)) {
                 standards.forEach { std ->
                     DropdownMenuItem(onClick = {
-                        onPushHistory(true)
                         data.protectionStandard = std
                         stdMenuExpanded = false
-                        onSave()
-                    }) {
-                        Text(std)
-                    }
+                    }) { Text(std) }
                 }
             }
         }
@@ -92,29 +67,15 @@ fun ProtectionSettingsTab(
         Text("Производитель устройств", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Box {
-            OutlinedButton(
-                onClick = { manufMenuExpanded = true },
-                modifier = Modifier.width(fieldWidth)
-            ) {
-                Text(
-                    text = data.protectionManufacturer.ifBlank { "Выберите производителя" },
-                    color = MaterialTheme.colors.onSurface
-                )
+            OutlinedButton(onClick = { manufMenuExpanded = true }, modifier = Modifier.width(fieldWidth)) {
+                Text(text = data.protectionManufacturer.ifBlank { "Выберите производителя" }, color = MaterialTheme.colors.onSurface)
             }
-            DropdownMenu(
-                expanded = manufMenuExpanded,
-                onDismissRequest = { manufMenuExpanded = false },
-                modifier = Modifier.width(fieldWidth)
-            ) {
+            DropdownMenu(expanded = manufMenuExpanded, onDismissRequest = { manufMenuExpanded = false }, modifier = Modifier.width(fieldWidth)) {
                 manufacturers.forEach { manuf ->
                     DropdownMenuItem(onClick = {
-                        onPushHistory(true)
                         data.protectionManufacturer = manuf
                         manufMenuExpanded = false
-                        onSave()
-                    }) {
-                        Text(manuf)
-                    }
+                    }) { Text(manuf) }
                 }
             }
         }
@@ -122,299 +83,110 @@ fun ProtectionSettingsTab(
         Spacer(modifier = Modifier.height(24.dp))
 
         // --- Блок 3: Защита от перегрузки ---
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Checkbox(
                 checked = data.hasOverloadProtection,
-                onCheckedChange = {
-                    onPushHistory(true)
-                    data.hasOverloadProtection = it
-                    onSave()
-                }
+                onCheckedChange = { data.hasOverloadProtection = it }
             )
-            Text(
-                text = "Наличие защиты от перегрузки",
-                modifier = Modifier.padding(start = 8.dp)
-            )
+            Text("Наличие защиты от перегрузки", modifier = Modifier.padding(start = 8.dp))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- Блок 4: Порядок нумерации ---
-        Text("Порядок нумерации", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // 1. Параллельный
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        onPushHistory(true)
-                        data.numberingOrder = "Parallel"
-                        onSave()
-                    }
-                    .padding(vertical = 4.dp)
-            ) {
-                RadioButton(
-                    selected = data.numberingOrder == "Parallel",
-                    onClick = {
-                        onPushHistory(true)
-                        data.numberingOrder = "Parallel"
-                        onSave()
-                    }
-                )
-                Column(modifier = Modifier.padding(start = 8.dp)) {
-                    Text("Параллельный", style = MaterialTheme.typography.body1)
-                    Text(
-                        text = "Разбивка осуществляется по типу устройств",
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-
-            // 2. Последовательный
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        onPushHistory(true)
-                        data.numberingOrder = "Sequential"
-                        onSave()
-                    }
-                    .padding(vertical = 4.dp)
-            ) {
-                RadioButton(
-                    selected = data.numberingOrder == "Sequential",
-                    onClick = {
-                        onPushHistory(true)
-                        data.numberingOrder = "Sequential"
-                        onSave()
-                    }
-                )
-                Column(modifier = Modifier.padding(start = 8.dp)) {
-                    Text("Последовательный", style = MaterialTheme.typography.body1)
-                    Text(
-                        text = "Единый поток без разбивки",
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-
-            // 3. Другой...
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        onPushHistory(true)
-                        data.numberingOrder = "Other"
-                        onSave()
-                    }
-                    .padding(vertical = 4.dp)
-            ) {
-                RadioButton(
-                    selected = data.numberingOrder == "Other",
-                    onClick = {
-                        onPushHistory(true)
-                        data.numberingOrder = "Other"
-                        onSave()
-                    }
-                )
-                Column(modifier = Modifier.padding(start = 8.dp)) {
-                    Text("Другой...", style = MaterialTheme.typography.body1)
-                    Text(
-                        text = "Автоматическая расстановка отключена",
-                        style = MaterialTheme.typography.caption,
-                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Блок 4.1: Направление нумерации ---
-        Text("Направление нумерации", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    onPushHistory(true)
-                    data.numberingLeftToRight = !data.numberingLeftToRight
-                    onSave()
-                }
-                .padding(vertical = 8.dp)
-        ) {
-            // Иконка "Слева направо" (Голубая, когда активна, иначе серая)
-            Icon(
-                imageVector = Icons.Default.ArrowForward,
-                contentDescription = "Слева направо",
-                tint = if (data.numberingLeftToRight) MaterialTheme.colors.primary else Color.Gray.copy(alpha = 0.4f),
-                modifier = Modifier.size(20.dp)
-            )
-
-            Spacer(Modifier.width(8.dp))
-
-            Switch(
-                checked = !data.numberingLeftToRight, // Выключен = Слева направо, Включен = Справа налево
-                onCheckedChange = { isRightToLeft ->
-                    onPushHistory(true)
-                    data.numberingLeftToRight = !isRightToLeft
-                    onSave()
-                },
-                colors = SwitchDefaults.colors(
-                    // Настройки для варианта "Справа налево" (checked = true)
-                    checkedThumbColor = Color(0xFF4CAF50), // Зеленый ползунок
-                    checkedTrackColor = Color(0xFF4CAF50).copy(alpha = 0.5f), // Зеленая дорожка
-
-                    // Настройки для варианта "Слева направо" (checked = false)
-                    uncheckedThumbColor = MaterialTheme.colors.primary, // Голубой/синий ползунок
-                    uncheckedTrackColor = MaterialTheme.colors.primary.copy(alpha = 0.5f) // Голубая дорожка
-                )
-            )
-
-            Spacer(Modifier.width(8.dp))
-
-            // Иконка "Справа налево" (Зеленая, когда активна, иначе серая)
-            Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = "Справа налево",
-                tint = if (!data.numberingLeftToRight) Color(0xFF4CAF50) else Color.Gray.copy(alpha = 0.4f),
-                modifier = Modifier.size(20.dp)
-            )
-
-            Spacer(Modifier.width(16.dp))
-
-            // Текстовое описание
-            Column {
-                Text(
-                    text = if (data.numberingLeftToRight) "Слева направо" else "Справа налево",
-                    style = MaterialTheme.typography.body1,
-                    color = if (data.numberingLeftToRight) MaterialTheme.colors.primary else Color(0xFF4CAF50),
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Блок 5: Условие выбора защиты (Новое) ---
-        // Кнопка "Дополнительные параметры"
+        // --- Блок 4: Условие выбора защиты ---
         var showAdvancedProtection by remember { mutableStateOf(false) }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .clickable { showAdvancedProtection = !showAdvancedProtection }
-                .padding(vertical = 8.dp, horizontal = 4.dp)
+            modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable { showAdvancedProtection = !showAdvancedProtection }.padding(vertical = 8.dp, horizontal = 4.dp)
         ) {
-            Icon(
-                imageVector = if (showAdvancedProtection) Icons.Default.KeyboardArrowUp else Icons.Default.Add,
-                contentDescription = null,
-                tint = Color(0xFF1976D2) // Синий цвет
-            )
+            Icon(if (showAdvancedProtection) Icons.Default.KeyboardArrowUp else Icons.Default.Add, null, tint = Color(0xFF1976D2))
             Spacer(Modifier.width(8.dp))
-            Text(
-                text = if (showAdvancedProtection) "Скрыть дополнительные параметры" else "Дополнительные параметры",
-                style = MaterialTheme.typography.body2,
-                color = Color(0xFF1976D2),
-                fontWeight = FontWeight.Medium
-            )
+            Text(if (showAdvancedProtection) "Скрыть дополнительные параметры" else "Дополнительные параметры", style = MaterialTheme.typography.body2, color = Color(0xFF1976D2), fontWeight = FontWeight.Medium)
         }
 
-        // Скрываемая секция
         AnimatedVisibility(visible = showAdvancedProtection) {
             Column(modifier = Modifier.fillMaxWidth()) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // --- СТРОКА С ПОДСКАЗКОЙ (TOOLTIP) ---
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Механизм выбора номинального тока аппарата защиты",
+                        style = MaterialTheme.typography.subtitle2,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    TooltipArea(
+                        tooltip = {
+                            // Дизайн самого всплывающего окна
+                            Surface(
+                                modifier = Modifier.widthIn(max = 350.dp),
+                                elevation = 4.dp,
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colors.surface,
+                                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f))
+                            ) {
+                                Text(
+                                    text = "Алгоритм выбора номинального тока учитывает условия взаимного теплового нагрева аппаратов в щите.\n\n" +
+                                            "Расчетный ток линии сравнивается с пороговым значением. " +
+                                            "В зависимости от результата применяется соответствующий понижающий коэффициент.\n\n" +
+                                            "Номинальный ток автомата выбирается из стандартного ряда так, чтобы:\n" +
+                                            "Iрасч ≤ Iном × Коэфф.",
+                                    style = MaterialTheme.typography.caption,
+                                    modifier = Modifier.padding(12.dp),
+                                    color = MaterialTheme.colors.onSurface
+                                )
+                            }
+                        },
+                        delayMillis = 300 // Задержка перед появлением подсказки (в миллисекундах)
+                    ) {
+                        // Сама иконка, при наведении на которую появится подсказка
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Справка по алгоритму",
+                            tint = Color.Gray.copy(alpha = 0.7f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Text(
-                    "Выбор номинального тока аппарата защиты",
-                    style = MaterialTheme.typography.subtitle2,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 1. Порог тока (40 А)
                 HistoryAwareOutlinedTextField(
                     value = data.protectionCurrentThreshold,
-                    onValueChange = {
-                        if (it.all { char -> char.isDigit() || char == '.' || char == ',' }) {
-                            data.protectionCurrentThreshold = it
-                            onSave()
-                        }
-                    },
-                    onPushHistory = onPushHistory,
-                    historyTrigger = historyTrigger,
+                    onValueChange = { if (it.all { char -> char.isDigit() || char == '.' || char == ',' }) data.protectionCurrentThreshold = it },
+                    onPushHistory = {}, historyTrigger = 0,
                     label = { Text("Пороговый расчетный ток (А)") },
                     modifier = Modifier.width(fieldWidth),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
-                Text(
-                    text = "Ток, при котором меняются коэффициенты",
-                    style = MaterialTheme.typography.caption,
-                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-                )
+                Text("Ток, при котором меняются коэффициенты", style = MaterialTheme.typography.caption, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
 
-                // 2. Коэффициент для тока < Порога (0.87)
                 HistoryAwareOutlinedTextField(
                     value = data.protectionFactorLow,
-                    onValueChange = {
-                        if (it.all { char -> char.isDigit() || char == '.' || char == ',' }) {
-                            data.protectionFactorLow = it
-                            onSave()
-                        }
-                    },
-                    onPushHistory = onPushHistory,
-                    historyTrigger = historyTrigger,
-                    label = { Text("Iрасч < порога") },
+                    onValueChange = { if (it.all { char -> char.isDigit() || char == '.' || char == ',' }) data.protectionFactorLow = it },
+                    onPushHistory = {}, historyTrigger = 0,
+                    label = { Text("Iрасч < Iпорога") },
                     modifier = Modifier.width(fieldWidth),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
+                Text("Отношение расчетного тока к номинальному току защиты", style = MaterialTheme.typography.caption, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 4.dp, bottom = 16.dp))
 
-                Text(
-                    text = "Отношение расчетного тока к номинальному току защиты",
-                    style = MaterialTheme.typography.caption,
-                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-                )
-
-                // 3. Коэффициент для тока >= Порога (0.93)
                 HistoryAwareOutlinedTextField(
                     value = data.protectionFactorHigh,
-                    onValueChange = {
-                        if (it.all { char -> char.isDigit() || char == '.' || char == ',' }) {
-                            data.protectionFactorHigh = it
-                            onSave()
-                        }
-                    },
-                    onPushHistory = onPushHistory,
-                    historyTrigger = historyTrigger,
-                    label = { Text("Iрасч ≥ порога") },
+                    onValueChange = { if (it.all { char -> char.isDigit() || char == '.' || char == ',' }) data.protectionFactorHigh = it },
+                    onPushHistory = {}, historyTrigger = 0,
+                    label = { Text("Iрасч ≥ Iпорога") },
                     modifier = Modifier.width(fieldWidth),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
-                Text(
-                    text = "Отношение расчетного тока к номинальному току защиты",
-                    style = MaterialTheme.typography.caption,
-                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                Text("Отношение расчетного тока к номинальному току защиты", style = MaterialTheme.typography.caption, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
 }
-

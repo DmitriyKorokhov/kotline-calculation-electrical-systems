@@ -6,6 +6,7 @@ import ui.screens.shieldeditor.protection.ProtectionType
 object ProtectionNumberingEngine {
 
     fun applyNumbering(data: ShieldData) {
+        // 1. Нумерация устройств защиты
         when (data.numberingOrder) {
             "Parallel" -> applyParallelNumbering(data)
             "Sequential" -> applySequentialNumbering(data)
@@ -13,6 +14,24 @@ object ProtectionNumberingEngine {
                 // Ничего не делаем, пользователь вводит номера вручную
             }
             else -> applyParallelNumbering(data)
+        }
+
+        // 2. Нумерация групп (линий)
+        applyGroupNumbering(data)
+    }
+
+    private fun applyGroupNumbering(data: ShieldData) {
+        if (data.groupNumberingOrder == "Auto") {
+            val shieldPrefix = data.shieldName.ifBlank { "Щит" }
+
+            // Определяем порядок обхода списка для групп
+            val consumersToProcess = if (data.numberingLeftToRight) data.consumers else data.consumers.reversed()
+
+            var groupIndex = 1
+            for (consumer in consumersToProcess) {
+                consumer.lineName = "$shieldPrefix.$groupIndex"
+                groupIndex++
+            }
         }
     }
 
