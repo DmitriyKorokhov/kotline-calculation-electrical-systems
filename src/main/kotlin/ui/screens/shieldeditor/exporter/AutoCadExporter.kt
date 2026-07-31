@@ -26,12 +26,23 @@ object AutoCadExporter {
             System.getenv("ProgramW6432")
         ).distinct()
 
+        // Добавим популярные диски для поиска нестандартных установок
+        val customDrives = listOf("C:", "D:", "E:")
+
         val candidates = mutableListOf<String>()
         listOf("2026", "2025", "2024", "2023", "2022", "2021", "2020", "2019").forEach { ver ->
+            // 1. Стандартный поиск по Program Files
             envProgFiles.forEach { base ->
                 candidates.add("$base/Autodesk/AutoCAD $ver/accoreconsole.exe")
             }
+
+            // 2. Поиск в корневых папках на других дисках
+            customDrives.forEach { drive ->
+                candidates.add("$drive/Autodesk/AutoCAD $ver/accoreconsole.exe")
+                candidates.add("$drive/Program Files/Autodesk/AutoCAD $ver/accoreconsole.exe")
+            }
         }
+
         // Частые «ручные» инсталляции
         candidates.add("C:/Program Files/Autodesk/AutoCAD 2022/accoreconsole.exe")
 
@@ -44,14 +55,9 @@ object AutoCadExporter {
     private fun toAcad(path: String): String = path.replace('\\', '/')
 
     // LISP: точная логика под Core Console — 2 аргумента, очистка Model Space, INSERT без диалогов, атрибут INFO
+// LISP: точная логика под Core Console (надежная AutoLISP версия без COM/ActiveX)
     private fun generateLispContent(): String = """
-;; auto_runner.lsp — финальная версия для AcCoreConsole
-;; - Очистка пространства модели через ssget/entdel.
-;; - Вставка блоков командой "_.-INSERT" с масштабом/углом (1,1,0).
-;; - ATTREQ=0, ATTDIA=0 на время вставок; затем восстановление.
-;; - Заполнение атрибута INFO через entmod.
-;; - Логирование OK/ERR по строкам CSV и DONE в конце.
-
+;; auto_runner.lsp — AutoLISP версия без зависаний
 (defun str-split (str delim / pos)
   (if (setq pos (vl-string-search delim str))
     (cons (substr str 1 pos) (str-split (substr str (+ pos 2)) delim))
@@ -67,16 +73,14 @@ object AutoCadExporter {
       (progn
         (setq key (substr item 1 eqpos))
         (setq val (substr item (+ eqpos 2)))
-        ;; храним TAG в верхнем регистре для надёжного сравнения
         (setq res (cons (cons (strcase key) val) res))
       )
-      ;; если нет '=', трактуем всю строку как INFO (для старых блоков)
       (if (> (strlen item) 0)
         (setq res (cons (cons "INFO" item) res))
       )
     )
   )
-res
+  res
 )
 
 (defun clear-modelspace-all ( / ss i en)
@@ -96,15 +100,20 @@ res
 
 (defun C:GENERATE-SCHEME (csv_path log_path /
   csv_file line parts log_file row block_name pt attr_text
-  new_insert e a old_attreq old_attdia
-  attr_map tag pair
+  new_insert e a old_attreq old_attdia old_cmddia old_filedia
+  attr_map tag pair xref_path
 )
   (princ "\n[LISP] Старт...")
   (setq log_file (open log_path "w"))
+  
   (setq old_attreq (getvar "ATTREQ"))
   (setq old_attdia (getvar "ATTDIA"))
+  (setq old_cmddia (getvar "CMDDIA"))
+  (setq old_filedia (getvar "FILEDIA"))
   (setvar "ATTREQ" 0)
   (setvar "ATTDIA" 0)
+  (setvar "CMDDIA" 0)
+  (setvar "FILEDIA" 0)
 
   (if log_file (write-line "INFO: clear modelspace" log_file))
   (clear-modelspace-all)
@@ -120,28 +129,24 @@ res
         (setq parts (str-split line ";"))
         (if (and parts (>= (length parts) 4))
           (progn
-            ;; === 1. ПАРСИНГ ДАННЫХ (ОСТАВЛЯЕМ КАК БЫЛО) ===
             (setq block_name (nth 0 parts))
             (setq pt (list (distof (nth 1 parts)) (distof (nth 2 parts)) 0.0))
-            ;; CSV хранит переносы как \n — превращаем в реальный перенос
             (setq attr_text (vl-string-subst "\n" "\\n" (nth 3 parts)))
             (setq attr_map (parse-attr-map attr_text))
             
-            ;; === 2. ВЫБОР ЛОГИКИ: XREF или BLOCK ===
             (if (wcmatch block_name "XREF=*")
-              ;; --- Ветка А: Вставка внешней ссылки (XREF) ---
               (progn
-                ;; Отрезаем префикс "XREF=" (5 символов), получаем путь
                 (setq xref_path (substr block_name 6))
-                ;; Вставляем XREF как Overlay
                 (command "_.-XREF" "_Overlay" xref_path pt 1.0 1.0 0.0)
                 (if log_file (write-line (strcat "OK row " (itoa row) ": XREF attached " xref_path) log_file))
               )
-              
-              ;; --- Ветка Б: Вставка обычного блока (BLOCK) ---
               (if (tblsearch "BLOCK" block_name)
                 (progn
-                  (command "_.-INSERT" block_name pt 1.0 1.0 0.0)
+                  ;; === ИДЕАЛЬНАЯ ВСТАВКА БЛОКА ===
+                  ;; Передаем масштаб и поворот ДО точки вставки.
+                  ;; Это жестко обходит все вариации запросов AutoCAD!
+                  (command "_.-INSERT" block_name "_Scale" 1.0 "_Rotate" 0.0 pt)
+                  
                   (setq new_insert (entlast))
                   (if (and new_insert (= "INSERT" (cdr (assoc 0 (entget new_insert)))))
                     (progn
@@ -165,7 +170,7 @@ res
                 )
                 (if log_file (write-line (strcat "ERR row " (itoa row) ": block not found " block_name) log_file))
               )
-            ) ;; Конец (if (wcmatch ...))
+            )
           )
           (if log_file (write-line (strcat "ERR row " (itoa row) ": bad csv format") log_file))
         )
@@ -181,6 +186,8 @@ res
 (defun goto-cleanup ( / )
   (if (boundp 'old_attreq) (setvar "ATTREQ" old_attreq))
   (if (boundp 'old_attdia) (setvar "ATTDIA" old_attdia))
+  (if (boundp 'old_cmddia) (setvar "CMDDIA" old_cmddia))
+  (if (boundp 'old_filedia) (setvar "FILEDIA" old_filedia))
   (if log_file (write-line "DONE" log_file))
   (if log_file (close log_file))
   (princ "\n[LISP] Готово.")
@@ -200,8 +207,7 @@ FILEDIA 0
 (C:GENERATE-SCHEME "${toAcad(csvAbs)}" "${toAcad(logAbs)}")
 _.SAVEAS
 2018
-${toAcad(outDwgAbs)}
-_.QSAVE
+"${toAcad(outDwgAbs)}"
 _.QUIT
 """.trimIndent()
     }
@@ -296,9 +302,10 @@ _.QUIT
             return AccoreRunResult(-6, "Failed to write CSV: ${ex.message}", staging.absolutePath, outDwgPath)
         }
 
-        // Генерация LISP и SCR (2 аргумента в вызове GENERATE-SCHEME)
+        // Генерация LISP и SCR
         try {
-            lspFile.writeText(generateLispContent(), StandardCharsets.UTF_8)
+            val win1251 = Charset.forName("windows-1251")
+            lspFile.writeText(generateLispContent(), win1251)
             scrFile.writeText(
                 generateScrContent(
                     lspFile.absolutePath,
@@ -306,7 +313,7 @@ _.QUIT
                     lispLogFile.absolutePath,
                     File(outDwgPath).absolutePath
                 ),
-                StandardCharsets.UTF_8
+                win1251
             )
         } catch (ex: Exception) {
             return AccoreRunResult(-7, "Failed to write LISP/SCR: ${ex.message}", staging.absolutePath, outDwgPath)
