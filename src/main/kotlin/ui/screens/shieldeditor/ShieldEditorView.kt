@@ -41,7 +41,7 @@ private data class DialogTarget(val colIndex: Int, val protectionIndex: Int)
 
 @OptIn(ExperimentalAnimationApi::class, ExperimentalComposeUiApi::class)
 @Composable
-fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
+fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit, onSaveProject: () -> Unit) {
     // данные щита (ShieldData поля уже mutableStateOf)
     val data = remember { ShieldStorage.loadOrCreate(shieldId) }
     // Менеджер истории
@@ -152,6 +152,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                 shieldId = shieldId,
                 onBack = onBack,
                 onSave = { saveNow() },
+                onSaveProject = onSaveProject,
                 onExportDwg = { showExportDialog = true },
                 onCalculationClick = { showCalculationWindow = !showCalculationWindow }
             )

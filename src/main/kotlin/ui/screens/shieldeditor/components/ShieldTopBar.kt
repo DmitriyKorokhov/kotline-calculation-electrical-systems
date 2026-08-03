@@ -18,6 +18,7 @@ fun ShieldTopBar(
     shieldId: Int?,
     onBack: () -> Unit,
     onSave: () -> Unit,
+    onSaveProject: () -> Unit,
     onExportDwg: () -> Unit,
     onCalculationClick: () -> Unit
 ) {
@@ -65,6 +66,7 @@ fun ShieldTopBar(
                 DropdownMenuItem(onClick = {
                     showFileMenu = false
                     onSave() // Вызываем сохранение (или оставьте пустым для заглушки)
+                    onSaveProject()
                 }) {
                     Text("Сохранить")
                 }

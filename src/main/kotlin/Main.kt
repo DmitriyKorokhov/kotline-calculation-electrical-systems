@@ -66,6 +66,9 @@ fun main() = application {
                             shieldId = screen.shieldId,
                             onBack = {
                                 currentScreen = Screen.ProjectEditor
+                            },
+                            onSaveProject = {
+                                data.storage.ProjectStorage.saveProject(ProjectRepository.canvasState)
                             }
                         )
                     }
