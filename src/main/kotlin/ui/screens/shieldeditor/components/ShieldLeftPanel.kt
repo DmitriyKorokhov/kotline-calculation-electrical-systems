@@ -31,7 +31,6 @@ private val BLOCK_WHITE = Color.White.copy(alpha = 0.15f)
 fun ShieldLeftPanel(
     data: ShieldData,
     onSave: () -> Unit,
-    onCalculate: () -> Unit,
     onOpenInputTypeDialog: () -> Unit,
     onPushHistory: (Boolean) -> Unit,
     historyTrigger: Int
@@ -215,15 +214,6 @@ fun ShieldLeftPanel(
             )
             Spacer(Modifier.height(8.dp))
         }
-
-        Button(
-            onClick = onCalculate,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Распределить нагрузку")
-        }
-
-        Spacer(Modifier.height(8.dp))
 
         // Блок коэффициентов
         BlockPanel(BLOCK_BLUE) {

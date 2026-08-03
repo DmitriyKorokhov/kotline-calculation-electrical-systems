@@ -81,6 +81,9 @@ class ShieldData(
 
     // Направление нумерации группы
     var groupNumberingOrder by mutableStateOf("Auto") // "Auto" или "Other"
+
+    // Режим распределения фаз
+    var phaseDistributionMode by mutableStateOf("Auto") // "Auto" или "Other"
 }
 
 object ShieldStorage {

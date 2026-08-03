@@ -29,7 +29,7 @@ import androidx.compose.ui.window.rememberWindowState
 import ui.screens.shieldeditor.ShieldData
 import ui.screens.shieldeditor.components.topbar.tabs.CableSettingsTab
 import ui.screens.shieldeditor.components.topbar.tabs.ProtectionSettingsTab
-import ui.screens.shieldeditor.components.topbar.tabs.NumberingSettingsTab
+import ui.screens.shieldeditor.components.topbar.tabs.GeneralSettingsTab
 import java.awt.Cursor
 
 private enum class CalculationTab {
@@ -76,8 +76,8 @@ fun CalculationWindow(
             reserveTier4 = data.reserveTier4
             singleCoreThreshold = data.singleCoreThreshold
 
-            // Новое поле для групп
             groupNumberingOrder = data.groupNumberingOrder
+            phaseDistributionMode = data.phaseDistributionMode
         }
     }
 
@@ -108,6 +108,10 @@ fun CalculationWindow(
         data.singleCoreThreshold = draftData.singleCoreThreshold
 
         data.groupNumberingOrder = draftData.groupNumberingOrder
+        data.phaseDistributionMode = draftData.phaseDistributionMode
+        // Принудительно запускаем пересчет нумерации и фаз с новыми примененными настройками
+        ui.screens.shieldeditor.calculation.ProtectionNumberingEngine.applyNumbering(data)
+        ui.screens.shieldeditor.calculation.PhaseDistributor.distributePhases(data)
 
         onSave()
     }
@@ -168,7 +172,7 @@ fun CalculationWindow(
                             onClick = { selectedTab = CalculationTab.CABLES }
                         )
                         SidebarItem(
-                            title = "Нумерация",
+                            title = "Общее",
                             isSelected = selectedTab == CalculationTab.NUMBERING,
                             onClick = { selectedTab = CalculationTab.NUMBERING }
                         )
@@ -178,7 +182,7 @@ fun CalculationWindow(
                         when (selectedTab) {
                             CalculationTab.PROTECTION -> ProtectionSettingsTab(draftData)
                             CalculationTab.CABLES -> CableSettingsTab(draftData)
-                            CalculationTab.NUMBERING -> NumberingSettingsTab(draftData)
+                            CalculationTab.NUMBERING -> GeneralSettingsTab(draftData)
                         }
                     }
                 }

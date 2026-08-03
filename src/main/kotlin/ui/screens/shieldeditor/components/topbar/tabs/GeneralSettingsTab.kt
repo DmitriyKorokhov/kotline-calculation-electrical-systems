@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import ui.screens.shieldeditor.ShieldData
 
 @Composable
-fun NumberingSettingsTab(data: ShieldData) {
+fun GeneralSettingsTab(data: ShieldData) {
     val scrollState = rememberScrollState()
 
     Column(
@@ -26,10 +26,45 @@ fun NumberingSettingsTab(data: ShieldData) {
             .verticalScroll(scrollState)
             .padding(end = 8.dp)
     ) {
-        Text("Нумерация", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.primary)
+        // Меняем главный заголовок вкладки
+        Text("Общие настройки", style = MaterialTheme.typography.h6, color = MaterialTheme.colors.primary)
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- Направление нумерации (Общее) ---
+        // ==========================================
+        // НОВЫЙ БЛОК: РАСПРЕДЕЛЕНИЕ ФАЗ
+        // ==========================================
+        Text("Распределение нагрузки по фазам", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { data.phaseDistributionMode = "Auto" }.padding(vertical = 4.dp)
+            ) {
+                RadioButton(selected = data.phaseDistributionMode == "Auto", onClick = { data.phaseDistributionMode = "Auto" })
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Автоматическое распределние", style = MaterialTheme.typography.body1)
+                    Text("Равномерное распределение по фазам", style = MaterialTheme.typography.caption, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f))
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { data.phaseDistributionMode = "Other" }.padding(vertical = 4.dp)
+            ) {
+                RadioButton(selected = data.phaseDistributionMode == "Other", onClick = { data.phaseDistributionMode = "Other" })
+                Column(modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Другой...", style = MaterialTheme.typography.body1)
+                    Text("Автоматическая расстановка отключена, токи суммируются по введенным значениям", style = MaterialTheme.typography.caption, color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ==========================================
+        // БЛОК: НУМЕРАЦИЯ (Из старого кода)
+        // ==========================================
         Text("Направление нумерации", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -58,7 +93,6 @@ fun NumberingSettingsTab(data: ShieldData) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- Устройства защиты ---
         Text("Порядок нумерации устройств защиты", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -97,7 +131,6 @@ fun NumberingSettingsTab(data: ShieldData) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- Группы (линии) ---
         Text("Порядок нумерации групп", style = MaterialTheme.typography.subtitle2, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Column(modifier = Modifier.fillMaxWidth()) {

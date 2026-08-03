@@ -194,15 +194,6 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                 ShieldLeftPanel(
                                     data = data,
                                     onSave = { saveNow() },
-                                    onCalculate = {
-                                        CalculationEngine.calculateAll(data)
-                                        PhaseDistributor.distributePhases(data)
-                                        data.consumers.forEach { consumer ->
-                                            CableCalculator.calculateVoltageDrop(consumer, data)
-                                            CableCalculator.calculateShortCircuitCurrent(consumer, data)
-                                        }
-                                        saveNow()
-                                    },
                                     onOpenInputTypeDialog = { showInputTypeDialog = true },
                                     onPushHistory = { isDiscrete -> pushHistory(isDiscrete) },
                                     historyTrigger = historyTrigger
@@ -306,6 +297,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
                                                         CableCalculator.calculateCable(consumer, data)
                                                         CableCalculator.calculateVoltageDrop(consumer, data)
                                                         CableCalculator.calculateShortCircuitCurrent(consumer, data)
+                                                        PhaseDistributor.distributePhases(data)
                                                     }
                                                     saveNow()
                                                 },
@@ -467,6 +459,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit) {
     // Эффект для автоматического перерасчёта данных щита
     LaunchedEffect(data.consumers.toList(), data.demandFactor, data.simultaneityFactor) {
         CalculationEngine.calculateAll(data)
+        PhaseDistributor.distributePhases(data)
         data.consumers.forEach { consumer ->
             CableCalculator.calculateCable(consumer, data)
         }

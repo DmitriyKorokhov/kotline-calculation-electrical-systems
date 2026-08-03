@@ -5,20 +5,6 @@ import ui.screens.shieldeditor.ShieldData
 import view.NumberUtils
 import kotlin.math.abs
 
-/**
- * Логика распределения фаз:
- *
- * Правила:
- * 1) Если у потребителя U ≈ 400 -> пометить "L1, L2, L3" и добавить его ток (currentA) ко всем трем суммарным фазам.
- * 2) Если U ≈ 230 -> потребитель однофазный. Для распределения:
- *    - Для первых трех однофазных подряд потребителей применяем последовательность L1, L2, L3.
- *    - Для всех последующих однофазных потребителей выбираем фазу с минимальной текущей нагрузкой (L1/L2/L3)
- *      и добавляем туда ток.
- * 3) После распределения заполняем в ShieldData суммарные поля phaseL1/phaseL2/phaseL3 (строки, два знака).
- *
- * Требует, чтобы CalculationEngine.calculateAll() уже заполнил consumer.currentA.
- */
-
 object PhaseDistributor {
     private fun nearlyEquals(a: Double, b: Double, eps: Double = 1.0): Boolean {
         return abs(a - b) <= eps
@@ -29,57 +15,72 @@ object PhaseDistributor {
         var totalL2 = 0.0
         var totalL3 = 0.0
 
-        var singleIndex = 0 // счетчик однофазных встреченных для применения правила первых 3
-
-        // helper to parse consumer.currentA
         fun parseCurrent(c: ConsumerModel): Double {
             return NumberUtils.parseDouble(c.currentA) ?: 0.0
         }
 
-        // сначала сбросим назначения (на случай повторных вызовов)
-        shieldData.consumers.forEach { it.phaseNumber = "" }
+        if (shieldData.phaseDistributionMode == "Auto") {
+            // ==========================================
+            // РЕЖИМ 1: АВТОМАТИЧЕСКАЯ БАЛАНСИРОВКА
+            // ==========================================
+            shieldData.consumers.forEach { it.phaseNumber = "" }
 
-        shieldData.consumers.forEach { c ->
-            val u = NumberUtils.parseDouble(c.voltage) ?: 0.0
-            val current = parseCurrent(c)
+            // 1. Сначала распределяем все трехфазные потребители
+            shieldData.consumers.forEach { c ->
+                val u = NumberUtils.parseDouble(c.voltage) ?: 0.0
+                if (nearlyEquals(u, 400.0)) {
+                    val current = parseCurrent(c)
+                    c.phaseNumber = "L1, L2, L3"
+                    totalL1 += current
+                    totalL2 += current
+                    totalL3 += current
+                }
+            }
 
-            if (nearlyEquals(u, 400.0)) {
-                // Трехфазный — присвоим все фазы
-                c.phaseNumber = "L1, L2, L3"
-                // добавляем ток в каждую фазу (для трехфазной формулы current это фазный/линейный ток — его несут все фазы)
-                totalL1 += current
-                totalL2 += current
-                totalL3 += current
-            } else {
-                // Однофазный — распределяем
-                when (singleIndex) {
-                    0 -> {
+            // 2. Отбираем однофазные потребители и сортируем их по убыванию тока
+            val singlePhaseConsumers = shieldData.consumers.filter { c ->
+                val u = NumberUtils.parseDouble(c.voltage) ?: 0.0
+                !nearlyEquals(u, 400.0)
+            }.sortedByDescending { parseCurrent(it) }
+
+            // 3. Распределяем однофазные потребители
+            singlePhaseConsumers.forEach { c ->
+                val current = parseCurrent(c)
+                val minPhase = minOf(totalL1, totalL2, totalL3)
+
+                when (minPhase) {
+                    totalL1 -> {
                         c.phaseNumber = "L1"
                         totalL1 += current
                     }
-                    1 -> {
+                    totalL2 -> {
                         c.phaseNumber = "L2"
                         totalL2 += current
                     }
-                    2 -> {
+                    else -> {
                         c.phaseNumber = "L3"
                         totalL3 += current
                     }
-                    else -> {
-                        // выбираем фазу с минимальной нагрузки
-                        val minPhase = minOf(totalL1, totalL2, totalL3)
-                        when (minPhase) {
-                            totalL1 -> { c.phaseNumber = "L1"; totalL1 += current }
-                            totalL2 -> { c.phaseNumber = "L2"; totalL2 += current }
-                            else -> { c.phaseNumber = "L3"; totalL3 += current }
-                        }
-                    }
                 }
-                singleIndex++
+            }
+        } else {
+            // ==========================================
+            // РЕЖИМ 2: РУЧНОЙ ВВОД ("Other")
+            // ==========================================
+            // Не перезаписываем фазы, а просто суммируем токи на основе пользовательского ввода
+            shieldData.consumers.forEach { c ->
+                val current = parseCurrent(c)
+                val phaseStr = c.phaseNumber.uppercase()
+
+                // Проверяем наличие подстрок "L1", "L2", "L3" во введенном тексте
+                // Если потребитель трехфазный и пользователь ввел "L1, L2, L3", ток добавится ко всем трем
+                if (phaseStr.contains("L1")) totalL1 += current
+                if (phaseStr.contains("L2")) totalL2 += current
+                if (phaseStr.contains("L3")) totalL3 += current
             }
         }
 
-        // записываем суммарные значения в ShieldData в виде строк (2 знака)
+        // Записываем итоговые значения суммарных токов в ShieldData для отображения в левой панели
         shieldData.phaseL1 = NumberUtils.formatDoubleTwoDecimals(totalL1)
         shieldData.phaseL2 = NumberUtils.formatDoubleTwoDecimals(totalL2)
         shieldData.phaseL3 = NumberUtils.formatDoubleTwoDecimals(totalL3)

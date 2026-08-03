@@ -401,7 +401,7 @@ fun ShieldTableColumn(
                 HistoryAwareCompactTextField(
                     label = "Номер фазы",
                     value = consumer.phaseNumber,
-                    onValueChange = { consumer.phaseNumber = it; onDataChanged() },
+                    onValueChange = { consumer.phaseNumber = it; onCalculationRequired() },
                     onPushHistory = { onPushHistory(false) },
                     historyTrigger = historyTrigger,
                     contentPadding = FIELDCONTENTPADDING,
