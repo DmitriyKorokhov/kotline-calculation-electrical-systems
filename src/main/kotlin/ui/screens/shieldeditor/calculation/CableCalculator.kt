@@ -140,7 +140,7 @@ object CableCalculator {
 
         // 2. Параметры нагрузки
         val U_nom = consumer.voltage.toDoubleOrNull() ?: 230.0
-        val cosPhi = consumer.cosPhi.replace(",", ".").toDoubleOrNull() ?: 0.95
+        val cosPhi = consumer.cosPhi.replace(",", ".").toDoubleOrNull() ?: 1.0
         val sinPhi = Math.sqrt(1 - cosPhi * cosPhi)
         val I = consumer.currentA.replace(",", ".").toDoubleOrNull() ?: 0.0
 
@@ -184,13 +184,11 @@ object CableCalculator {
         }
 
         // 8. Проверка на допустимый %
+        // 8. Расчет %
         val dU_Percent = (dU / U_nom) * 100
-        val maxDrop = data.maxVoltageDropPercent.toDoubleOrNull() ?: 5.0
-
-        val warning = if (dU_Percent > maxDrop) " (!)" else ""
-
         // Форматирование: "5.2 В (2.1%)"
-        consumer.voltageDropV = String.format("%.2f В (%.2f%%)%s", dU, dU_Percent, warning)
+        // Запятые меняем на точки для единообразия парсинга, если локаль русская
+        consumer.voltageDropV = String.format(java.util.Locale.US, "%.2f В (%.2f%%)", dU, dU_Percent)
     }
 
     fun calculateShortCircuitCurrent(consumer: ConsumerModel, data: ShieldData) {

@@ -90,15 +90,26 @@ fun ShieldTableColumn(
         targetValue = targetScale,
         animationSpec = spring(stiffness = 400f)
     )
-
     val pInst = consumer.installedPowerW.toDoubleOrNull() ?: 0.0
     val pCalc = consumer.powerKw.toDoubleOrNull() ?: 0.0
     // Ошибка, если Установленная строго меньше Расчетной
     val isPowerError = pInst < pCalc
-
     // Определяем цвета на основе ошибки
     val currentUnfocusedBorder = if (isPowerError) Color.Red else Color.LightGray
     val currentFocusedBorder = if (isPowerError) Color.Red else borderColor
+    // Падение напряжения
+    val dropRegex = Regex("""\(([\d.]+)\%\)""")
+    val matchDrop = dropRegex.find(consumer.voltageDropV.replace(",", "."))
+    val currentVoltageDropPercent = matchDrop?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+    val maxAllowedDrop = data.maxVoltageDropPercent.replace(",", ".").toDoubleOrNull() ?: 5.0
+    val isVoltageDropError = currentVoltageDropPercent > maxAllowedDrop
+    val vDropUnfocusedBorder = if (isVoltageDropError) Color.Red else Color.LightGray
+    val vDropFocusedBorder = if (isVoltageDropError) Color.Red else borderColor
+    // Ошибка, если cos(f) больше 1.0. Пустое поле считаем как 1.0
+    val parsedCosPhi = consumer.cosPhi.replace(",", ".").toDoubleOrNull() ?: 1.0
+    val isCosPhiError = parsedCosPhi > 1.0
+    val cosPhiUnfocusedBorder = if (isCosPhiError) Color.Red else Color.LightGray
+    val cosPhiFocusedBorder = if (isCosPhiError) Color.Red else borderColor
 
     Box(
         modifier = Modifier
@@ -251,7 +262,6 @@ fun ShieldTableColumn(
                 Box(modifier = Modifier.fillMaxWidth()) {
                     var voltageMenuExpanded by remember { mutableStateOf(false) }
                     val voltageOptions = listOf("230", "400")
-
                     // Используем текстовое поле для отображения, но блокируем ручной ввод
                     // Перекрываем его прозрачным Box с clickable, чтобы клик открывал меню
                     Box {
@@ -314,19 +324,30 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Cos Phi
-                HistoryAwareCompactTextField(
-                    label = "cos(ϕ)",
-                    value = consumer.cosPhi,
-                    onValueChange = { consumer.cosPhi = it; onCalculationRequired() },
-                    onPushHistory = { onPushHistory(false) },
-                    historyTrigger = historyTrigger,
-                    contentPadding = FIELDCONTENTPADDING,
-                    fontSizeSp = FIELDFONT,
-                    textColor = textColor,
-                    focusedBorderColor = borderColor,
-                    unfocusedBorderColor = Color.LightGray,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    HistoryAwareCompactTextField(
+                        label = "cos(ϕ)",
+                        value = consumer.cosPhi,
+                        onValueChange = { consumer.cosPhi = it; onCalculationRequired() },
+                        onPushHistory = { onPushHistory(false) },
+                        historyTrigger = historyTrigger,
+                        contentPadding = FIELDCONTENTPADDING,
+                        fontSizeSp = FIELDFONT,
+                        textColor = textColor,
+                        focusedBorderColor = cosPhiFocusedBorder,
+                        unfocusedBorderColor = cosPhiUnfocusedBorder,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (isCosPhiError) {
+                        Text(
+                            text = "Внимание: cos(φ)>1",
+                            color = textColor,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                        )
+                    }
+                }
+
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Установленная мощность
@@ -567,72 +588,6 @@ fun ShieldTableColumn(
 
                 Spacer(Modifier.height(FIELDVSPACE))
 
-                // --- Направление выход КЛ ---
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    // Меню выбора направления
-                    var directionMenuExpanded by remember { mutableStateOf(false) }
-
-                    // Используем TextField, но блокируем ввод (только выбор из списка)
-                    // Перекрываем прозрачным Box для клика по всей области
-                    Box {
-                        HistoryAwareCompactTextField(
-                            label = "Направление выхода КЛ",
-                            value = consumer.cableDirection,
-                            onValueChange = {}, // Игнорируем прямой ввод
-                            onPushHistory = { }, // История обрабатывается при выборе
-                            historyTrigger = historyTrigger,
-                            contentPadding = FIELDCONTENTPADDING,
-                            fontSizeSp = FIELDFONT,
-                            textColor = textColor,
-                            focusedBorderColor = borderColor,
-                            unfocusedBorderColor = Color.LightGray,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clickable { directionMenuExpanded = true }
-                        )
-                    }
-
-                    // Иконка стрелочки
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = "Выбрать направление",
-                        tint = textColor,
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 4.dp)
-                            .size(24.dp)
-                            .clickable { directionMenuExpanded = true }
-                    )
-
-                    // Выпадающее меню
-                    DropdownMenu(
-                        expanded = directionMenuExpanded,
-                        onDismissRequest = { directionMenuExpanded = false },
-                        modifier = Modifier.background(Color.White)
-                    ) {
-                        listOf("Снизу", "Сверху").forEach { direction ->
-                            DropdownMenuItem(
-                                onClick = {
-                                    if (consumer.cableDirection != direction) {
-                                        onPushHistory(true) // Сохраняем в историю
-                                        consumer.cableDirection = direction
-                                        onDataChanged() // Триггер сохранения
-                                    }
-                                    directionMenuExpanded = false
-                                }
-                            ) {
-                                Text(text = direction, color = Color.Black)
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(FIELDVSPACE))
-
                 // --- Ячейка 13: Способ прокладки и Длина ---
                 BlockPanel(color = BLOCKWHITE) { // Можно выделить отдельным цветом
                     Box(modifier = Modifier.fillMaxWidth()) {
@@ -749,19 +704,29 @@ fun ShieldTableColumn(
                 Spacer(Modifier.height(FIELDVSPACE))
 
                 // Падение напряжения
-                HistoryAwareCompactTextField(
-                    label = "Падение напряжения, В",
-                    value = consumer.voltageDropV,
-                    onValueChange = {},
-                    onPushHistory = { onPushHistory(false) },
-                    historyTrigger = historyTrigger,
-                    contentPadding = FIELDCONTENTPADDING,
-                    fontSizeSp = FIELDFONT,
-                    textColor = textColor,
-                    focusedBorderColor = borderColor,
-                    unfocusedBorderColor = Color.LightGray,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    HistoryAwareCompactTextField(
+                        label = "Падение напряжения, В",
+                        value = consumer.voltageDropV,
+                        onValueChange = {},
+                        onPushHistory = { onPushHistory(false) },
+                        historyTrigger = historyTrigger,
+                        contentPadding = FIELDCONTENTPADDING,
+                        fontSizeSp = FIELDFONT,
+                        textColor = textColor,
+                        focusedBorderColor = vDropFocusedBorder,
+                        unfocusedBorderColor = vDropUnfocusedBorder,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (isVoltageDropError) {
+                        Text(
+                            text = "Внимание: ΔU>($maxAllowedDrop%)",
+                            color = textColor,
+                            style = MaterialTheme.typography.caption,
+                            modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                        )
+                    }
+                }
 
                 Spacer(Modifier.height(FIELDVSPACE))
 

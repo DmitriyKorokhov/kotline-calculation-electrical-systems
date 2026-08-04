@@ -138,7 +138,6 @@ private fun ProjectCanvasState.loadFromProjectFile(file: ProjectFile) {
         shieldData.averageCosPhi = sData.averageCosPhi
         shieldData.totalCurrent = sData.totalCurrent
         shieldData.shieldDemandFactor = sData.shieldDemandFactor
-        shieldData.inputCableDirection = sData.inputCableDirection
 
         // Потребители
         shieldData.consumers.clear()
@@ -162,8 +161,7 @@ private fun ProjectCanvasState.loadFromProjectFile(file: ProjectFile) {
                 cableType = c.cableType,
                 voltageDropV = c.voltageDropV,
                 cableLength = c.cableLength,
-                shortCircuitCurrentkA = c.shortCircuitCurrentkA,
-                cableDirection = c.cableDirection
+                shortCircuitCurrentkA = c.shortCircuitCurrentkA
             )
             c.additionalProtections.forEach { ap ->
                 consumer.additionalProtections.add(
@@ -208,8 +206,7 @@ private fun ShieldData.toSerializable(): SerializableShieldData {
         totalCalculatedPower = this.totalCalculatedPower,
         averageCosPhi = this.averageCosPhi,
         totalCurrent = this.totalCurrent,
-        shieldDemandFactor = this.shieldDemandFactor,
-        inputCableDirection = this.inputCableDirection
+        shieldDemandFactor = this.shieldDemandFactor
     )
 }
 
@@ -240,7 +237,6 @@ private fun ConsumerModel.toSerializable(): SerializableConsumerModel {
                 protectionDevice = it.protectionDevice,
                 protectionPoles = it.protectionPoles
             )
-        },
-        cableDirection = this.cableDirection
+        }
     )
 }
