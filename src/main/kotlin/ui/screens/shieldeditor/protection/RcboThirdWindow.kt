@@ -67,7 +67,6 @@ fun RcboThirdWindow(
 
     var showAllSeriesDevices by remember { mutableStateOf(false) }
 
-    // Функция для подтверждения выбора
     val confirmSelection = { item: RcboUiItem ->
         val curveText = selectedCurve ?: item.curve ?: ""
         val ratedText = "${formatRated(item.ratedCurrentA)} A"
@@ -113,7 +112,6 @@ fun RcboThirdWindow(
         }
     }
 
-    // Фильтрация
     fun passesAll(item: RcboUiItem): Boolean {
         val passKZ = if (standard.contains("60898", ignoreCase = true)) {
             (item.breakingCapacityKa ?: 0f) >= maxKA
@@ -166,12 +164,11 @@ fun RcboThirdWindow(
     ) {
         if (showAllSeriesDevices) {
             passing
-                // схлопывание до уникальных строк (как у вас в else-ветке)
                 .distinctBy {
                     DataClassKey(
                         current = it.ratedCurrentA,
                         residual = it.ratedResidualCurrent,
-                        cap = it.breakingCapacityKa, // можно оставить так же, как у вас сейчас
+                        cap = it.breakingCapacityKa,
                         curve = it.curve,
                         poles = it.polesText
                     )
@@ -215,139 +212,141 @@ fun RcboThirdWindow(
         }
     }
 
-
-    // UI Content
-    Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-        Text("Подбор АВДТ — подходящие варианты", style = MaterialTheme.typography.h6)
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Серия: ${selectedSeries ?: "—"}")
-            Spacer(Modifier.width(12.dp))
-            Text("Ток КЗ: ${maxShortCircuitCurrentStr.ifBlank { "—" }} кА")
-            Spacer(Modifier.width(12.dp))
-            Text("Iрасч: ${consumerCurrentAStr.ifBlank { "—" }} A")
-            Spacer(Modifier.weight(1f))
-            Text("U: ${consumerVoltageStr ?: "—"}")
-
+    Column(modifier = Modifier.fillMaxSize()) {
+        // --- Основной контент таблицы ---
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(16.dp)
+        ) {
+            Text("Подбор АВДТ — подходящие варианты", style = MaterialTheme.typography.h6)
+            Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = showAllSeriesDevices,
-                    onCheckedChange = { showAllSeriesDevices = it }
-                )
-                Spacer(Modifier.width(4.dp))
-                Text("Все устройства серии", style = MaterialTheme.typography.body2)
-            }
+                Text("Серия: ${selectedSeries ?: "—"}")
+                Spacer(Modifier.width(12.dp))
+                Text("Ток КЗ: ${maxShortCircuitCurrentStr.ifBlank { "—" }} кА")
+                Spacer(Modifier.width(12.dp))
+                Text("Iрасч: ${consumerCurrentAStr.ifBlank { "—" }} A")
+                Spacer(Modifier.weight(1f))
+                Text("U: ${consumerVoltageStr ?: "—"}")
 
-        }
-        Spacer(Modifier.height(8.dp))
-
-        if (loading) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (errorMsg != null) {
-            Text("Ошибка: $errorMsg", color = MaterialTheme.colors.error)
-        } else {
-            if (finalList.isEmpty()) {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text("Нет подходящих АВДТ (по всем параметрам).", color = MaterialTheme.colors.onSurface)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = showAllSeriesDevices,
+                        onCheckedChange = { showAllSeriesDevices = it }
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("Все устройства серии", style = MaterialTheme.typography.body2)
                 }
+
+            }
+            Spacer(Modifier.height(8.dp))
+
+            if (loading) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (errorMsg != null) {
+                Text("Ошибка: $errorMsg", color = MaterialTheme.colors.error)
             } else {
-                // --- Таблица ---
-                val wManuf = 1.0f
-                val wModel = 1.0f
-                val wCap = 0.6f
-                val wCurve = 0.5f
-                val wAmp = 0.5f
-                val wRes = 0.7f
-                val wPoles = 0.6f
+                if (finalList.isEmpty()) {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Text("Нет подходящих АВДТ (по всем параметрам).", color = MaterialTheme.colors.onSurface)
+                    }
+                } else {
+                    val wManuf = 1.0f
+                    val wModel = 1.0f
+                    val wCap = 0.6f
+                    val wCurve = 0.5f
+                    val wAmp = 0.5f
+                    val wRes = 0.7f
+                    val wPoles = 0.6f
 
-                val borderColor = Color.LightGray
+                    val borderColor = Color.LightGray
 
-                // Заголовки
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min)
-                        .border(1.dp, borderColor)
-                        .background(Color.LightGray.copy(alpha = 0.2f)),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    HeaderCell("Произв.", wManuf)
-                    VerticalDivider(borderColor)
-                    HeaderCell("Модель", wModel)
-                    VerticalDivider(borderColor)
-                    HeaderCell(if (standard.contains("60898", ignoreCase = true)) "Icn" else "Ics", wCap)
-
-                    if (!selectedCurve.isNullOrBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min)
+                            .border(1.dp, borderColor)
+                            .background(Color.LightGray.copy(alpha = 0.2f)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HeaderCell("Произв.", wManuf)
                         VerticalDivider(borderColor)
-                        HeaderCell("Кривая", wCurve)
+                        HeaderCell("Модель", wModel)
+                        VerticalDivider(borderColor)
+                        HeaderCell(if (standard.contains("60898", ignoreCase = true)) "Icn" else "Ics", wCap)
+
+                        if (!selectedCurve.isNullOrBlank()) {
+                            VerticalDivider(borderColor)
+                            HeaderCell("Кривая", wCurve)
+                        }
+
+                        VerticalDivider(borderColor)
+                        HeaderCell("In, A", wAmp)
+                        VerticalDivider(borderColor)
+                        HeaderCell("Утечка", wRes)
+                        VerticalDivider(borderColor)
+                        HeaderCell("Полюса", wPoles)
                     }
 
-                    VerticalDivider(borderColor)
-                    HeaderCell("In, A", wAmp)
-                    VerticalDivider(borderColor)
-                    HeaderCell("Утечка", wRes)
-                    VerticalDivider(borderColor)
-                    HeaderCell("Полюса", wPoles)
-                }
+                    LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        items(finalList, key = { it.variantId }) { item ->
+                            val isSelected = item.variantId == selectedVariantId
 
-                // Список строк
-                LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    items(finalList, key = { it.variantId }) { item ->
-                        val isSelected = item.variantId == selectedVariantId
+                            val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
+                            val borderStroke = if (isSelected)
+                                BorderStroke(2.dp, MaterialTheme.colors.primary)
+                            else
+                                BorderStroke(1.dp, borderColor)
 
-                        val bg = if (isSelected) MaterialTheme.colors.primary.copy(alpha = 0.12f) else MaterialTheme.colors.surface
-                        val borderStroke = if (isSelected)
-                            BorderStroke(2.dp, MaterialTheme.colors.primary)
-                        else
-                            BorderStroke(1.dp, borderColor)
-
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .offset(y = (-1).dp)
-                                .combinedClickable(
-                                    onClick = { selectedVariantId = item.variantId },
-                                    onDoubleClick = {
-                                        selectedVariantId = item.variantId
-                                        confirmSelection(item)
-                                    }
-                                ),
-                            border = borderStroke,
-                            color = bg,
-                            elevation = 0.dp
-                        ) {
-                            Row(
+                            Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(IntrinsicSize.Min),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .offset(y = (-1).dp)
+                                    .combinedClickable(
+                                        onClick = { selectedVariantId = item.variantId },
+                                        onDoubleClick = {
+                                            selectedVariantId = item.variantId
+                                            confirmSelection(item)
+                                        }
+                                    ),
+                                border = borderStroke,
+                                color = bg,
+                                elevation = 0.dp
                             ) {
-                                TableCell(item.manufacturer, wManuf)
-                                VerticalDivider(borderColor)
-
-                                TableCell(item.modelName, wModel)
-                                VerticalDivider(borderColor)
-
-                                val capVal = if (standard.contains("60898", ignoreCase = true))
-                                    item.breakingCapacityKa?.toString() ?: "-"
-                                else item.serviceBreakingCapacityKa?.toString() ?: "-"
-                                TableCell(capVal, wCap)
-
-                                if (!selectedCurve.isNullOrBlank()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TableCell(item.manufacturer, wManuf)
                                     VerticalDivider(borderColor)
-                                    TableCell(selectedCurve, wCurve)
+
+                                    TableCell(item.modelName, wModel)
+                                    VerticalDivider(borderColor)
+
+                                    val capVal = if (standard.contains("60898", ignoreCase = true))
+                                        item.breakingCapacityKa?.toString() ?: "-"
+                                    else item.serviceBreakingCapacityKa?.toString() ?: "-"
+                                    TableCell(capVal, wCap)
+
+                                    if (!selectedCurve.isNullOrBlank()) {
+                                        VerticalDivider(borderColor)
+                                        TableCell(selectedCurve, wCurve)
+                                    }
+
+                                    VerticalDivider(borderColor)
+                                    TableCell(formatRated(item.ratedCurrentA), wAmp)
+                                    VerticalDivider(borderColor)
+
+                                    TableCell(item.ratedResidualCurrent, wRes)
+                                    VerticalDivider(borderColor)
+
+                                    TableCell(item.polesText, wPoles)
                                 }
-
-                                VerticalDivider(borderColor)
-                                TableCell(formatRated(item.ratedCurrentA), wAmp)
-                                VerticalDivider(borderColor)
-
-                                TableCell(item.ratedResidualCurrent, wRes)
-                                VerticalDivider(borderColor)
-
-                                TableCell(item.polesText, wPoles)
                             }
                         }
                     }
@@ -355,17 +354,34 @@ fun RcboThirdWindow(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = { onBack() }) { Text("Назад к параметрам") }
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = {
-                val chosen = finalList.firstOrNull { it.variantId == selectedVariantId }
-                if (chosen != null) {
-                    confirmSelection(chosen)
-                }
-            }) { Text("Выбрать") }
+        // --- Закрепленная нижняя панель ---
+        Divider(color = Color.Gray.copy(alpha = 0.2f))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .background(MaterialTheme.colors.primary.copy(alpha = 0.08f))
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
+            OutlinedButton(onClick = onDismiss) { Text("Отмена") }
+            Spacer(modifier = Modifier.width(12.dp))
+            OutlinedButton(onClick = onBack) { Text("Назад к параметрам") }
+            Spacer(modifier = Modifier.width(12.dp))
+            Button(
+                onClick = {
+                    val chosen = finalList.firstOrNull { it.variantId == selectedVariantId }
+                    if (chosen != null) {
+                        confirmSelection(chosen)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    backgroundColor = MaterialTheme.colors.primary,
+                    contentColor = Color.White
+                )
+            ) { Text("Выбрать") }
+            Spacer(modifier = Modifier.width(24.dp))
         }
     }
 }
@@ -386,7 +402,6 @@ private fun formatRated(v: Float): String {
     val i = v.toInt()
     return if (abs(v - i) < 0.001f) "$i" else String.format("%.1f", v)
 }
-
 
 @Composable
 private fun RowScope.HeaderCell(text: String, weight: Float) {

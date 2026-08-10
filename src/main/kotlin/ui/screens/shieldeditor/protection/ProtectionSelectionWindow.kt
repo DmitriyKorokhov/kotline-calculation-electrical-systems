@@ -40,12 +40,11 @@ fun ProtectionSelectionWindow(
     onDismiss: () -> Unit
 ) {
     val density = LocalDensity.current
-    val windowState = rememberWindowState(width = 800.dp, height = 600.dp) // Немного увеличил размер по умолчанию
+    val windowState = rememberWindowState(width = 800.dp, height = 600.dp)
 
     val minWidth = 600.dp
     val minHeight = 450.dp
 
-    // --- Состояния (перенесены из вашего старого кода) ---
     var selectedType by remember { mutableStateOf(initialType) }
 
     var breakerStep by remember { mutableStateOf(1) }
@@ -56,7 +55,6 @@ fun ProtectionSelectionWindow(
 
     var rcdStep by remember { mutableStateOf(1) }
     var rcdParams by remember { mutableStateOf<RcdSelectionResult?>(null) }
-    // -----------------------------------------------------
 
     Window(
         onCloseRequest = onDismiss,
@@ -121,12 +119,11 @@ fun ProtectionSelectionWindow(
                         }
                     }
 
-                    // Content (Right Side)
+                    // Content (Right Side) - убран padding для закрепления нижней панели
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .padding(8.dp)
                     ) {
                         when (selectedType) {
                             ProtectionType.CIRCUIT_BREAKER -> {
@@ -233,7 +230,7 @@ fun ProtectionSelectionWindow(
                 }
             }
 
-            // 3. Элемент для изменения размера окна (в правом нижнем углу)
+            // 3. Элемент для изменения размера окна
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)

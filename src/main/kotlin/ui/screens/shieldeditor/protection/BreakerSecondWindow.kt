@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -116,144 +117,163 @@ fun BreakerSecondWindow(
         }
     }
 
-    // ДОБАВЛЕН verticalScroll
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Text("Параметры автоматического выключателя", style = MaterialTheme.typography.h6)
-        Spacer(Modifier.height(16.dp))
+    Column(modifier = Modifier.fillMaxSize()) {
+        // --- Основной скроллируемый контент ---
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Text("Параметры автоматического выключателя", style = MaterialTheme.typography.h6)
+            Spacer(Modifier.height(16.dp))
 
-        Text("Серия", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(6.dp))
-        var expanded by remember { mutableStateOf(false) }
-        var textFieldSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+            Text("Серия", style = MaterialTheme.typography.subtitle2)
+            Spacer(Modifier.height(6.dp))
+            var expanded by remember { mutableStateOf(false) }
+            var textFieldSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
 
-        Box {
-            OutlinedTextField(
-                value = selectedSeries,
-                onValueChange = {},
-                readOnly = true,
-                modifier = Modifier
-                    .width(300.dp)
-                    .onGloballyPositioned { coordinates -> textFieldSize = coordinates.size.toSize() }
-                    .clickable { expanded = true },
-                trailingIcon = {
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
+            Box {
+                OutlinedTextField(
+                    value = selectedSeries,
+                    onValueChange = {},
+                    readOnly = true,
+                    modifier = Modifier
+                        .width(300.dp)
+                        .onGloballyPositioned { coordinates -> textFieldSize = coordinates.size.toSize() }
+                        .clickable { expanded = true },
+                    trailingIcon = {
+                        IconButton(onClick = { expanded = !expanded }) {
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
+                        }
                     }
-                }
-            )
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.width(with(LocalDensity.current) { textFieldSize.width.toDp() }),
-                properties = PopupProperties(focusable = true)
-            ) {
-                seriesList.forEach { s ->
-                    DropdownMenuItem(onClick = {
-                        selectedSeries = s
-                        expanded = false
-                    }) {
-                        Text(s)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Text("Дополнения (можно несколько)", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(6.dp))
-        if (additionsOptions.isEmpty()) {
-            Text("Нет доступных дополнений", style = MaterialTheme.typography.body2, color = Color.Gray)
-        } else {
-            Column {
-                additionsOptions.forEach { add ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .toggleable(
-                                value = selectedAdditions.contains(add),
-                                onValueChange = { checked ->
-                                    selectedAdditions = if (checked) selectedAdditions + add else selectedAdditions - add
-                                }
-                            )
-                    ) {
-                        Checkbox(checked = selectedAdditions.contains(add), onCheckedChange = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(add)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Text("Количество полюсов", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(6.dp))
-        if (polesOptions.isEmpty()) {
-            Text("Нет данных по полюсам", style = MaterialTheme.typography.body2, color = Color.Gray)
-        } else {
-            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                polesOptions.forEach { p ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp).clickable { selectedPoles = p }
-                    ) {
-                        RadioButton(selected = selectedPoles == p, onClick = { selectedPoles = p })
-                        Spacer(Modifier.width(6.dp))
-                        Text(p)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Text("Кривая отключения", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(6.dp))
-        if (curvesOptions.isEmpty()) {
-            Text("Нет данных по кривым", style = MaterialTheme.typography.body2, color = Color.Gray)
-        } else {
-            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                curvesOptions.forEach { c ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp).clickable { selectedCurve = c }
-                    ) {
-                        RadioButton(selected = selectedCurve == c, onClick = { selectedCurve = c })
-                        Spacer(Modifier.width(6.dp))
-                        Text(c)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Button(onClick = {
-                val poles = selectedPoles ?: polesOptions.firstOrNull() ?: ""
-                val res = BreakerSelectionResult(
-                    series = selectedSeries,
-                    selectedAdditions = selectedAdditions.toList(),
-                    selectedPoles = poles,
-                    selectedCurve = selectedCurve
                 )
-                onConfirm(res)
-            }) {
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.width(with(LocalDensity.current) { textFieldSize.width.toDp() }),
+                    properties = PopupProperties(focusable = true)
+                ) {
+                    seriesList.forEach { s ->
+                        DropdownMenuItem(onClick = {
+                            selectedSeries = s
+                            expanded = false
+                        }) {
+                            Text(s)
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Text("Дополнения (можно несколько)", style = MaterialTheme.typography.subtitle2)
+            Spacer(Modifier.height(6.dp))
+            if (additionsOptions.isEmpty()) {
+                Text("Нет доступных дополнений", style = MaterialTheme.typography.body2, color = Color.Gray)
+            } else {
+                Column {
+                    additionsOptions.forEach { add ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .toggleable(
+                                    value = selectedAdditions.contains(add),
+                                    onValueChange = { checked ->
+                                        selectedAdditions = if (checked) selectedAdditions + add else selectedAdditions - add
+                                    }
+                                )
+                        ) {
+                            Checkbox(checked = selectedAdditions.contains(add), onCheckedChange = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(add)
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Text("Количество полюсов", style = MaterialTheme.typography.subtitle2)
+            Spacer(Modifier.height(6.dp))
+            if (polesOptions.isEmpty()) {
+                Text("Нет данных по полюсам", style = MaterialTheme.typography.body2, color = Color.Gray)
+            } else {
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    polesOptions.forEach { p ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 12.dp).clickable { selectedPoles = p }
+                        ) {
+                            RadioButton(selected = selectedPoles == p, onClick = { selectedPoles = p })
+                            Spacer(Modifier.width(6.dp))
+                            Text(p)
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Text("Кривая отключения", style = MaterialTheme.typography.subtitle2)
+            Spacer(Modifier.height(6.dp))
+            if (curvesOptions.isEmpty()) {
+                Text("Нет данных по кривым", style = MaterialTheme.typography.body2, color = Color.Gray)
+            } else {
+                Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    curvesOptions.forEach { c ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 12.dp).clickable { selectedCurve = c }
+                        ) {
+                            RadioButton(selected = selectedCurve == c, onClick = { selectedCurve = c })
+                            Spacer(Modifier.width(6.dp))
+                            Text(c)
+                        }
+                    }
+                }
+            }
+
+            seriesLoadingError?.let { err ->
+                Spacer(Modifier.height(8.dp))
+                Text("Ошибка: $err", color = MaterialTheme.colors.error)
+            }
+        }
+
+        // --- Закрепленная нижняя панель ---
+        Divider(color = Color.Gray.copy(alpha = 0.2f))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .background(MaterialTheme.colors.primary.copy(alpha = 0.08f))
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
+            OutlinedButton(onClick = onDismiss) { Text("Отмена") }
+            Spacer(modifier = Modifier.width(12.dp))
+            Button(
+                onClick = {
+                    val poles = selectedPoles ?: polesOptions.firstOrNull() ?: ""
+                    val res = BreakerSelectionResult(
+                        series = selectedSeries,
+                        selectedAdditions = selectedAdditions.toList(),
+                        selectedPoles = poles,
+                        selectedCurve = selectedCurve
+                    )
+                    onConfirm(res)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    backgroundColor = MaterialTheme.colors.primary,
+                    contentColor = Color.White
+                )
+            ) {
                 Text("Далее")
             }
-        }
-
-        seriesLoadingError?.let { err ->
-            Spacer(Modifier.height(8.dp))
-            Text("Ошибка: $err", color = MaterialTheme.colors.error)
+            Spacer(modifier = Modifier.width(24.dp)) // Отступ для треугольника изменения размера окна
         }
     }
 }

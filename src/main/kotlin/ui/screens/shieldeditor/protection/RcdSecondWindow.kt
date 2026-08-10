@@ -5,6 +5,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -26,10 +27,6 @@ data class RcdSelectionResult(
     val selectedResidualCurrent: String
 )
 
-/**
- * Второе окно — выбор параметров УЗО (RCD).
- * Поля: Серия, Количество полюсов, Остаточный ток.
- */
 @Composable
 fun RcdSecondWindow(
     initialManufacturer: String? = null,
@@ -45,26 +42,22 @@ fun RcdSecondWindow(
     var seriesLoadingError by remember { mutableStateOf<String?>(null) }
     var selectedSeries by remember { mutableStateOf(initialSeries ?: "") }
 
-    // Опции
     var polesOptions by remember { mutableStateOf<List<String>>(emptyList()) }
     var residualCurrentOptions by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // Выбранные значения
     var selectedPoles by remember { mutableStateOf(initialSelectedPoles) }
     var selectedResidualCurrent by remember { mutableStateOf(initialSelectedResidualCurrent) }
 
-    // Фильтр полюсов по напряжению
     fun allowedPolesForVoltage(voltage: String?): Set<String>? {
         if (voltage.isNullOrBlank()) return null
         val v = voltage.filter { it.isDigit() }
         return when {
-            v.startsWith("230") -> setOf("2P") // Для 1 фазы УЗО обычно 2P
-            v.startsWith("400") -> setOf("4P") // Для 3 фаз УЗО обычно 4P
+            v.startsWith("230") -> setOf("2P")
+            v.startsWith("400") -> setOf("4P")
             else -> null
         }
     }
 
-    // 1. Загрузка серий
     LaunchedEffect(initialManufacturer) {
         try {
             seriesList = if (!initialManufacturer.isNullOrBlank()) {
@@ -72,7 +65,6 @@ fun RcdSecondWindow(
             } else {
                 getDistinctRcdSeries()
             }
-            // Предвыбор серии
             if (initialSeries != null && seriesList.contains(initialSeries)) {
                 selectedSeries = initialSeries
             } else if (selectedSeries.isBlank() && seriesList.isNotEmpty()) {
@@ -83,7 +75,6 @@ fun RcdSecondWindow(
         }
     }
 
-    // 2. Загрузка вариантов при выборе серии
     LaunchedEffect(selectedSeries, consumerVoltageStr) {
         if (selectedSeries.isBlank()) return@LaunchedEffect
         try {
@@ -117,110 +108,125 @@ fun RcdSecondWindow(
         }
     }
 
-    // UI Content
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Text("Параметры УЗО", style = MaterialTheme.typography.h6)
-        Spacer(Modifier.height(12.dp))
+    Column(modifier = Modifier.fillMaxSize()) {
+        // --- Основной скроллируемый контент ---
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Text("Параметры УЗО", style = MaterialTheme.typography.h6)
+            Spacer(Modifier.height(12.dp))
 
-        // --- Серия ---
-        Text("Серия", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(4.dp))
-        var expanded by remember { mutableStateOf(false) }
-        var textFieldSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+            Text("Серия", style = MaterialTheme.typography.subtitle2)
+            Spacer(Modifier.height(4.dp))
+            var expanded by remember { mutableStateOf(false) }
+            var textFieldSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
 
-        Box {
-            OutlinedTextField(
-                value = selectedSeries,
-                onValueChange = {},
-                readOnly = true,
-                modifier = Modifier
-                    .width(300.dp)
-                    .onGloballyPositioned { coordinates -> textFieldSize = coordinates.size.toSize() }
-                    .clickable { expanded = true },
-                trailingIcon = {
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
+            Box {
+                OutlinedTextField(
+                    value = selectedSeries,
+                    onValueChange = {},
+                    readOnly = true,
+                    modifier = Modifier
+                        .width(300.dp)
+                        .onGloballyPositioned { coordinates -> textFieldSize = coordinates.size.toSize() }
+                        .clickable { expanded = true },
+                    trailingIcon = {
+                        IconButton(onClick = { expanded = !expanded }) {
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать")
+                        }
                     }
-                }
-            )
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.width(with(LocalDensity.current) { textFieldSize.width.toDp() })
-            ) {
-                seriesList.forEach { s ->
-                    DropdownMenuItem(onClick = {
-                        selectedSeries = s
-                        expanded = false
-                    }) { Text(s) }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // Полюса
-        Text("Количество полюсов", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(4.dp))
-        if (polesOptions.isEmpty()) {
-            Text("Нет данных", style = MaterialTheme.typography.body2, color = Color.Gray)
-        } else {
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                polesOptions.forEach { p ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp).clickable { selectedPoles = p }
-                    ) {
-                        RadioButton(selected = selectedPoles == p, onClick = { selectedPoles = p })
-                        Text(p)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // Остаточный ток
-        Text("Остаточный ток (Утечка)", style = MaterialTheme.typography.subtitle2)
-        Spacer(Modifier.height(4.dp))
-        if (residualCurrentOptions.isEmpty()) {
-            Text("Нет данных", style = MaterialTheme.typography.body2, color = Color.Gray)
-        } else {
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                residualCurrentOptions.forEach { res ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp).clickable { selectedResidualCurrent = res }
-                    ) {
-                        RadioButton(selected = selectedResidualCurrent == res, onClick = { selectedResidualCurrent = res })
-                        Text(res)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        // Кнопки
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Button(onClick = {
-                val res = RcdSelectionResult(
-                    series = selectedSeries,
-                    selectedPoles = selectedPoles ?: polesOptions.firstOrNull() ?: "",
-                    selectedResidualCurrent = selectedResidualCurrent ?: ""
                 )
-                onConfirm(res)
-            }) { Text("Далее") }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.width(with(LocalDensity.current) { textFieldSize.width.toDp() })
+                ) {
+                    seriesList.forEach { s ->
+                        DropdownMenuItem(onClick = {
+                            selectedSeries = s
+                            expanded = false
+                        }) { Text(s) }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Text("Количество полюсов", style = MaterialTheme.typography.subtitle2)
+            Spacer(Modifier.height(4.dp))
+            if (polesOptions.isEmpty()) {
+                Text("Нет данных", style = MaterialTheme.typography.body2, color = Color.Gray)
+            } else {
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    polesOptions.forEach { p ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 12.dp).clickable { selectedPoles = p }
+                        ) {
+                            RadioButton(selected = selectedPoles == p, onClick = { selectedPoles = p })
+                            Text(p)
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Text("Остаточный ток (Утечка)", style = MaterialTheme.typography.subtitle2)
+            Spacer(Modifier.height(4.dp))
+            if (residualCurrentOptions.isEmpty()) {
+                Text("Нет данных", style = MaterialTheme.typography.body2, color = Color.Gray)
+            } else {
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    residualCurrentOptions.forEach { res ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 12.dp).clickable { selectedResidualCurrent = res }
+                        ) {
+                            RadioButton(selected = selectedResidualCurrent == res, onClick = { selectedResidualCurrent = res })
+                            Text(res)
+                        }
+                    }
+                }
+            }
+
+            if (seriesLoadingError != null) {
+                Spacer(Modifier.height(8.dp))
+                Text("Ошибка: $seriesLoadingError", color = MaterialTheme.colors.error)
+            }
         }
 
-        if (seriesLoadingError != null) {
-            Spacer(Modifier.height(8.dp))
-            Text("Ошибка: $seriesLoadingError", color = MaterialTheme.colors.error)
+        // --- Закрепленная нижняя панель ---
+        Divider(color = Color.Gray.copy(alpha = 0.2f))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .background(MaterialTheme.colors.primary.copy(alpha = 0.08f))
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
+            OutlinedButton(onClick = onDismiss) { Text("Отмена") }
+            Spacer(modifier = Modifier.width(12.dp))
+            Button(
+                onClick = {
+                    val res = RcdSelectionResult(
+                        series = selectedSeries,
+                        selectedPoles = selectedPoles ?: polesOptions.firstOrNull() ?: "",
+                        selectedResidualCurrent = selectedResidualCurrent ?: ""
+                    )
+                    onConfirm(res)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    backgroundColor = MaterialTheme.colors.primary,
+                    contentColor = Color.White
+                )
+            ) { Text("Далее") }
+            Spacer(modifier = Modifier.width(24.dp))
         }
     }
 }
