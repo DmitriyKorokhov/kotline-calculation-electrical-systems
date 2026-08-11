@@ -9,13 +9,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextMeasurer
-import feature.projecteditor.domain.Connection
-import feature.projecteditor.domain.GeneratorNode
-import feature.projecteditor.domain.LevelLine
-import feature.projecteditor.domain.PowerSourceNode
-import feature.projecteditor.domain.ProjectNode
-import feature.projecteditor.domain.ShieldNode
-import feature.projecteditor.domain.TransformerNode
+import feature.projecteditor.domain.*
 import feature.projecteditor.state.ProjectCanvasState
 import feature.projecteditor.state.getNodeHeight
 
@@ -31,11 +25,13 @@ fun DrawScope.drawProjectCanvas(textMeasurer: TextMeasurer, state: ProjectCanvas
         translate(left = state.offset.x, top = state.offset.y)
         scale(scale = state.scale, pivot = Offset.Zero)
     }) {
-        val topLeftWorld = state.screenToWorld(Offset.Zero)
-        val bottomRightWorld = state.screenToWorld(Offset(size.width, size.height))
+        // Конвертируем Offset Compose в наш Point для запроса к стейту
+        val topLeftWorld = state.screenToWorld(Offset.Zero.toPoint())
+        val bottomRightWorld = state.screenToWorld(Offset(size.width, size.height).toPoint())
 
-        drawGrid(topLeftWorld, bottomRightWorld)
-        drawLevels(state.levels, topLeftWorld, bottomRightWorld, state.scale)
+        // Для отрисовки переводим обратно в Offset
+        drawGrid(topLeftWorld.toOffset(), bottomRightWorld.toOffset())
+        drawLevels(state.levels, topLeftWorld.toOffset(), bottomRightWorld.toOffset(), state.scale)
         drawConnections(state.connections, state.nodes, state.scale)
         drawNodes(textMeasurer, state.nodes, state.connectingFromNodeId, state.scale)
     }
@@ -87,29 +83,19 @@ private fun DrawScope.drawConnections(connections: List<Connection>, nodes: List
             val startOffset = when (fromNode) {
                 is TransformerNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + 1.5f * fromNode.radiusOuter else fromNode.position.y - 1.5f * fromNode.radiusOuter)
                 is GeneratorNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + fromNode.radius else fromNode.position.y - fromNode.radius)
-                else -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + getNodeHeight(fromNode) / 2 else fromNode.position.y - getNodeHeight(
-                    fromNode
-                ) / 2)
+                else -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + getNodeHeight(fromNode) / 2 else fromNode.position.y - getNodeHeight(fromNode) / 2)
             }
 
             val endOffset = when (toNode) {
                 is TransformerNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - 1.5f * toNode.radiusOuter else toNode.position.y + 1.5f * toNode.radiusOuter)
                 is GeneratorNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - toNode.radius else toNode.position.y + toNode.radius)
-                else -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - getNodeHeight(toNode) / 2 else toNode.position.y + getNodeHeight(
-                    toNode
-                ) / 2)
+                else -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - getNodeHeight(toNode) / 2 else toNode.position.y + getNodeHeight(toNode) / 2)
             }
 
             val midY = (startOffset.y + endOffset.y) / 2
-            val point1 = startOffset
-            val point2 = Offset(startOffset.x, midY)
-            val point3 = Offset(endOffset.x, midY)
-            val point4 = endOffset
-
-            val strokeWidth = 2f / scale
-            drawLine(color = Color.Gray, start = point1, end = point2, strokeWidth = strokeWidth)
-            drawLine(color = Color.Gray, start = point2, end = point3, strokeWidth = strokeWidth)
-            drawLine(color = Color.Gray, start = point3, end = point4, strokeWidth = strokeWidth)
+            drawLine(color = Color.Gray, start = startOffset, end = Offset(startOffset.x, midY), strokeWidth = 2f / scale)
+            drawLine(color = Color.Gray, start = Offset(startOffset.x, midY), end = Offset(endOffset.x, midY), strokeWidth = 2f / scale)
+            drawLine(color = Color.Gray, start = Offset(endOffset.x, midY), end = endOffset, strokeWidth = 2f / scale)
         }
     }
 }
@@ -120,45 +106,25 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectN
         val isSelected = node.id == connectingFromNodeId
         when (node) {
             is PowerSourceNode -> {
-                val width = POWER_SOURCE_WIDTH
                 val height = getNodeHeight(node)
-                val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
-                drawPowerSourceShape(topLeft, Size(width, height), isSelected)
+                drawPowerSourceShape(Offset(node.position.x - POWER_SOURCE_WIDTH / 2, node.position.y - height / 2), Size(POWER_SOURCE_WIDTH, height), isSelected)
             }
             is ShieldNode -> {
-                val width = NODE_WIDTH
                 val height = getNodeHeight(node)
-                val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
-                drawShieldShape(topLeft, Size(width, height), isSelected)
+                drawShieldShape(Offset(node.position.x - NODE_WIDTH / 2, node.position.y - height / 2), Size(NODE_WIDTH, height), isSelected)
             }
-            is TransformerNode -> {
-                drawTransformerShape(node.position, node.radiusOuter, isSelected)
-            }
-            is GeneratorNode -> {
-                drawGeneratorShape(textMeasurer, node.position, node.radius, isSelected)
-            }
-            else -> {
-                val width = NODE_WIDTH
-                val height = getNodeHeight(node)
-                val topLeft = Offset(node.position.x - width / 2, node.position.y - height / 2)
-                drawRect(Color.LightGray, topLeft, Size(width, height))
-            }
+            is TransformerNode -> drawTransformerShape(node.position.toOffset(), node.radiusOuter, isSelected)
+            is GeneratorNode -> drawGeneratorShape(textMeasurer, node.position.toOffset(), node.radius, isSelected)
         }
     }
 }
 
 private fun calculateConnectionX(node: ProjectNode, connectionIndex: Int, totalConnections: Int): Float {
-    if (totalConnections <= 1) {
-        return node.position.x
-    }
-
+    if (totalConnections <= 1) return node.position.x
     val span = when (node) {
         is TransformerNode -> node.radiusOuter * 1.5f
         is GeneratorNode -> node.radius * 1.5f
         else -> NODE_WIDTH * 0.8f
     }
-
-    val step = span / (totalConnections - 1)
-    val startX = node.position.x - span / 2
-    return startX + connectionIndex * step
+    return (node.position.x - span / 2) + connectionIndex * (span / (totalConnections - 1))
 }

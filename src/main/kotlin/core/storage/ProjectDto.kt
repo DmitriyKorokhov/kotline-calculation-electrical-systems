@@ -1,4 +1,4 @@
-package feature.projecteditor.storage
+package core.storage
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

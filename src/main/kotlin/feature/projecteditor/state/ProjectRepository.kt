@@ -1,7 +1,5 @@
 package feature.projecteditor.state
 
-import kotlin.text.clear
-
 /**
  * Singleton object (единый экземпляр) для хранения состояния проекта.
  * Это гарантирует, что состояние холста сохраняется при переключении между экранами.

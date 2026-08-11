@@ -32,7 +32,7 @@ import feature.shieldeditor.exporter.ExportEditor
 import feature.shieldeditor.ui.infeed.InputTypePopup
 import feature.shieldeditor.ui.protection.ProtectionSelectionWindow
 import feature.shieldeditor.ui.protection.ProtectionType
-import core.utils.HistoryManager
+import core.utils.ShieldHistoryManager
 import feature.shieldeditor.domain.ConsumerModel
 import feature.shieldeditor.state.ShieldData
 import feature.shieldeditor.state.ShieldStorage
@@ -49,12 +49,12 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit, onSaveProject: () -> Un
     // данные щита (ShieldData поля уже mutableStateOf)
     val data = remember { ShieldStorage.loadOrCreate(shieldId) }
     // Менеджер истории
-    val historyManager = remember { HistoryManager() }
+    val shieldHistoryManager = remember { ShieldHistoryManager() }
     // Триггер для сброса флагов в текстовых полях
     var historyTrigger by remember { mutableStateOf(0) }
 
     fun pushHistory(isDiscrete: Boolean = false) {
-        historyManager.pushState(data)
+        shieldHistoryManager.pushState(data)
         if (isDiscrete) {
             historyTrigger++
         }
@@ -124,7 +124,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit, onSaveProject: () -> Un
                 if (event.key == Key.Z && event.type == KeyEventType.KeyDown) {
                     if (event.isCtrlPressed) {
                         if (event.isShiftPressed) {
-                            historyManager.redo(data)
+                            shieldHistoryManager.redo(data)
                             historyTrigger++
                             CalculationEngine.calculateAll(data)
                             data.consumers.forEach {
@@ -134,7 +134,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit, onSaveProject: () -> Un
                             }
                             saveNow()
                         } else {
-                            historyManager.undo(data)
+                            shieldHistoryManager.undo(data)
                             historyTrigger++
                             CalculationEngine.calculateAll(data)
                             data.consumers.forEach {

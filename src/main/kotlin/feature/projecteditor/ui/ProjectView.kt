@@ -23,14 +23,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import feature.projecteditor.domain.GeneratorNode
-import feature.projecteditor.domain.PowerSourceNode
-import feature.projecteditor.domain.ShieldNode
-import feature.projecteditor.domain.TransformerNode
+import feature.projecteditor.domain.*
 import feature.projecteditor.state.ProjectCanvasState
 import feature.projecteditor.state.getNodeHeight
 import feature.shieldeditor.state.ShieldStorage
-import feature.projecteditor.storage.ProjectStorage
+import core.storage.ProjectStorage
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
@@ -51,14 +52,35 @@ fun ProjectView(
 ) {
     val textMeasurer = rememberTextMeasurer()
     var paletteDragType by remember { mutableStateOf<PaletteNodeType?>(null) }
-    var palettePreviewWorldPos by remember { mutableStateOf<Offset?>(null) }
     var canvasTopLeft by remember { mutableStateOf(Offset.Zero) }
     var dragTarget by remember { mutableStateOf<Any?>(null) }
-    var nodeDragStartOffset by remember { mutableStateOf(Offset.Zero) }
     var showFileMenu by remember { mutableStateOf(false) }
-    LocalDensity.current
+    var nodeDragStartOffset by remember { mutableStateOf(Point.Zero) }
+    var palettePreviewWorldPos by remember { mutableStateOf<Point?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .focusRequester(focusRequester)
+        .focusable()
+        .onPreviewKeyEvent { event ->
+            // Ctrl+Z и Ctrl+Shift+Z
+            if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.Z) {
+                if (event.isShiftPressed) {
+                    state.redo()
+                } else {
+                    state.undo()
+                }
+                return@onPreviewKeyEvent true
+            }
+            false
+        }
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -110,7 +132,7 @@ fun ProjectView(
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onDoubleTap = { offset ->
-                                    val node = state.findNodeAtScreenPosition(offset)
+                                    val node = state.findNodeAtScreenPosition(offset.toPoint())
                                     if (node is ShieldNode) {
                                         onOpenShield(node.id)
                                     }
@@ -124,14 +146,14 @@ fun ProjectView(
                                     val position = event.changes.first().position
                                     if (event.type == PointerEventType.Scroll) {
                                         val scrollDelta = event.changes.first().scrollDelta.y
-                                        state.onZoom(scrollDelta, position)
+                                        state.onZoom(scrollDelta, position.toPoint())
                                         event.changes.first().consume()
                                     }
 
                                     if (event.type == PointerEventType.Press) {
-                                        val pressedNode = state.findNodeAtScreenPosition(position)
+                                        val pressedNode = state.findNodeAtScreenPosition(position.toPoint())
                                         if (event.buttons.isSecondaryPressed) {
-                                            state.contextMenuPosition = position
+                                            state.contextMenuPosition = position.toPoint()
                                             state.selectedNode = pressedNode
                                             if (pressedNode != null) {
                                                 state.showNodeContextMenu = true
@@ -150,10 +172,11 @@ fun ProjectView(
                         .pointerInput(Unit) {
                             detectDragGestures(
                                 onDragStart = { position ->
-                                    val node = state.findNodeAtScreenPosition(position)
+                                    val node = state.findNodeAtScreenPosition(position.toPoint())
                                     if (node != null) {
+                                        state.saveHistory()
                                         dragTarget = node.id
-                                        nodeDragStartOffset = node.position - state.screenToWorld(position)
+                                        nodeDragStartOffset = node.position - state.screenToWorld(position.toPoint())
                                     } else {
                                         dragTarget = "Canvas"
                                     }
@@ -168,13 +191,10 @@ fun ProjectView(
                                     change.consume()
                                     when (val target = dragTarget) {
                                         is Int -> {
-                                            val newWorldPos = state.screenToWorld(change.position) + nodeDragStartOffset
+                                            val newWorldPos = state.screenToWorld(change.position.toPoint()) + nodeDragStartOffset
                                             state.updateNodePosition(target, newWorldPos)
                                         }
-
-                                        is String -> {
-                                            state.onPan(dragAmount)
-                                        }
+                                        is String -> state.onPan(dragAmount.toPoint())
                                     }
                                 }
                             )
@@ -186,7 +206,7 @@ fun ProjectView(
 
                     state.nodes.forEach { node ->
                         if (node.name.isNotBlank() || node is ShieldNode) {
-                            val screenPos = state.worldToScreen(node.position)
+                            val screenPos = state.worldToScreen(node.position).toOffset()
                             val scale = state.scale
                             val nodeHeight =
                                 if (node is PowerSourceNode) getNodeHeight(node) * scale else NODE_HEIGHT * scale
@@ -208,13 +228,13 @@ fun ProjectView(
                                 is TransformerNode -> {
                                     val screenCenter = state.worldToScreen(node.position)
                                     val r = node.radiusOuter * state.scale
-                                    TransformerNameText(node.name, screenCenter, r)
+                                    TransformerNameText(node.name, screenCenter.toOffset(), r)
                                 }
 
                                 is GeneratorNode -> {
                                     val screenCenter = state.worldToScreen(node.position)
                                     val r = node.radius * state.scale
-                                    GeneratorNameText(node.name, screenCenter, r)
+                                    GeneratorNameText(node.name, screenCenter.toOffset(), r)
                                 }
                             }
                         }
@@ -222,7 +242,7 @@ fun ProjectView(
 
 
                     if (paletteDragType != null && palettePreviewWorldPos != null) {
-                        val previewScreen = state.worldToScreen(palettePreviewWorldPos!!)
+                        val previewScreen = state.worldToScreen(palettePreviewWorldPos!!).toOffset()
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             when (paletteDragType) {
                                 PaletteNodeType.SHIELD -> {
@@ -236,7 +256,7 @@ fun ProjectView(
 
                                 PaletteNodeType.POWER_SOURCE -> {
                                     val width = POWER_SOURCE_WIDTH * state.scale
-                                    val height = getNodeHeight(PowerSourceNode(0, "", Offset.Zero)) * state.scale
+                                    val height = getNodeHeight(PowerSourceNode(0, "", Point.Zero)) * state.scale
                                     drawPowerSourceShape(
                                         Offset(previewScreen.x - width / 2, previewScreen.y - height / 2),
                                         Size(width, height)
@@ -252,7 +272,6 @@ fun ProjectView(
                                     val radius = GENERATOR_RADIUS * state.scale
                                     drawGeneratorShape(textMeasurer, previewScreen, radius)
                                 }
-
                                 null -> {}
                             }
                         }
@@ -277,15 +296,15 @@ fun ProjectView(
                         onStartDrag = { type, globalPos ->
                             paletteDragType = type
                             val local = globalPos - canvasTopLeft
-                            palettePreviewWorldPos = state.screenToWorld(local)
+                            palettePreviewWorldPos = state.screenToWorld(local.toPoint())
                         },
                         onDrag = { globalPos ->
                             val local = globalPos - canvasTopLeft
-                            palettePreviewWorldPos = state.screenToWorld(local)
+                            palettePreviewWorldPos = state.screenToWorld(local.toPoint())
                         },
                         onEndDrag = { globalPos ->
                             val local = globalPos - canvasTopLeft
-                            val worldPos = state.screenToWorld(local)
+                            val worldPos = state.screenToWorld(local.toPoint())
                             when (paletteDragType) {
                                 PaletteNodeType.SHIELD -> state.addShieldNode(worldPos)
                                 PaletteNodeType.POWER_SOURCE -> state.addPowerSourceNode(worldPos)

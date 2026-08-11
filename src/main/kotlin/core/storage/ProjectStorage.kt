@@ -1,13 +1,6 @@
-package feature.projecteditor.storage
+package core.storage
 
-import androidx.compose.ui.geometry.Offset
-import feature.projecteditor.domain.Connection
-import feature.projecteditor.domain.GeneratorNode
-import feature.projecteditor.domain.LevelLine
-import feature.projecteditor.domain.PowerSourceNode
-import feature.projecteditor.domain.ProjectNode
-import feature.projecteditor.domain.ShieldNode
-import feature.projecteditor.domain.TransformerNode
+import feature.projecteditor.domain.*
 import kotlinx.serialization.json.Json
 import feature.projecteditor.state.ProjectCanvasState
 import feature.shieldeditor.domain.ConsumerModel
@@ -85,8 +78,21 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
         when (node) {
             is ShieldNode -> SerializableShieldNode(node.id, node.name, node.position.x, node.position.y)
             is PowerSourceNode -> SerializablePowerSourceNode(node.id, node.name, node.position.x, node.position.y)
-            is TransformerNode -> SerializableTransformerNode(node.id, node.name, node.position.x, node.position.y, node.radiusOuter, node.radiusInner)
-            is GeneratorNode -> SerializableGeneratorNode(node.id, node.name, node.position.x, node.position.y, node.radius)
+            is TransformerNode -> SerializableTransformerNode(
+                node.id,
+                node.name,
+                node.position.x,
+                node.position.y,
+                node.radiusOuter,
+                node.radiusInner
+            )
+            is GeneratorNode -> SerializableGeneratorNode(
+                node.id,
+                node.name,
+                node.position.x,
+                node.position.y,
+                node.radius
+            )
         }
     }
 
@@ -114,7 +120,7 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
 /** Загрузка: DTO -> State */
 private fun ProjectCanvasState.loadFromProjectFile(file: ProjectFile) {
     this.scale = file.scale
-    this.offset = Offset(file.offsetX, file.offsetY)
+    this.offset = Point(file.offsetX, file.offsetY)
 
     nodes.clear()
     connections.clear()
@@ -187,7 +193,7 @@ private fun ProjectCanvasState.loadFromProjectFile(file: ProjectFile) {
 
 // Вспомогательные функции конвертации
 private fun SerializableNode.toDomainNode(): ProjectNode {
-    val pos = Offset(x, y)
+    val pos = Point(x, y)
     return when (this) {
         is SerializableShieldNode -> ShieldNode(id, name, pos)
         is SerializablePowerSourceNode -> PowerSourceNode(id, name, pos)

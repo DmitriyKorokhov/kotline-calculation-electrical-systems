@@ -4,7 +4,7 @@ import androidx.compose.runtime.mutableStateListOf
 import feature.shieldeditor.domain.ConsumerModel
 import feature.shieldeditor.state.ShieldData
 
-class HistoryManager(private val maxHistorySize: Int = 50) {
+class ShieldHistoryManager(private val maxHistorySize: Int = 50) {
     private val undoStack = ArrayDeque<ShieldData>()
     private val redoStack = ArrayDeque<ShieldData>()
 

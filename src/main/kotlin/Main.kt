@@ -14,7 +14,7 @@ import feature.home.HomeScreen
 import feature.projecteditor.ui.ProjectView
 import feature.shieldeditor.ui.ShieldEditorView
 import core.theme.AppDarkColors
-import feature.projecteditor.storage.ProjectStorage
+import core.storage.ProjectStorage
 
 sealed class Screen {
     object Home : Screen()
