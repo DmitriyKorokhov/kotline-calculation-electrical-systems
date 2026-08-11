@@ -7,13 +7,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import data.ProjectRepository
-import data.database.DatabaseFactory
+import feature.projecteditor.state.ProjectRepository
+import data.DatabaseFactory
 import kotlinx.coroutines.runBlocking
-import ui.screens.home.HomeScreen
-import ui.screens.projecteditor.ProjectView
-import ui.screens.shieldeditor.ShieldEditorView
-import ui.theme.AppDarkColors
+import feature.home.HomeScreen
+import feature.projecteditor.ui.ProjectView
+import feature.shieldeditor.ui.ShieldEditorView
+import core.theme.AppDarkColors
+import feature.projecteditor.storage.ProjectStorage
 
 sealed class Screen {
     object Home : Screen()
@@ -68,7 +69,7 @@ fun main() = application {
                                 currentScreen = Screen.ProjectEditor
                             },
                             onSaveProject = {
-                                data.storage.ProjectStorage.saveProject(ProjectRepository.canvasState)
+                                ProjectStorage.saveProject(ProjectRepository.canvasState)
                             }
                         )
                     }
