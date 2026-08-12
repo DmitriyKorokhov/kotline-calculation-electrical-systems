@@ -3,621 +3,135 @@ package feature.projecteditor.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.*
-import androidx.compose.ui.input.pointer.*
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.ExperimentalTextApi
-import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import feature.projecteditor.domain.*
-import feature.projecteditor.state.ProjectCanvasState
-import feature.projecteditor.state.getNodeHeight
-import feature.shieldeditor.state.ShieldStorage
-import core.storage.ProjectStorage
-import androidx.compose.ui.input.key.*
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.dp
+import feature.projecteditor.domain.Point
+import feature.projecteditor.state.ProjectCanvasState
+import core.storage.ProjectStorage
+import feature.projecteditor.ui.canvas.InteractiveCanvas
+import feature.projecteditor.ui.components.NodesPalette
+import feature.projecteditor.ui.components.PaletteNodeType
+import feature.projecteditor.ui.drawing.*
+import feature.projecteditor.ui.menus.CanvasContextMenu
+import feature.projecteditor.ui.menus.NodeContextMenu
+import feature.projecteditor.ui.menus.RenameNodeDialog
 
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
-private const val TRANSFORMER_RADIUS = 40f
-internal const val GENERATOR_RADIUS = 50f
-
 private val PALETTE_HEIGHT_DP = 128.dp
-private val PALETTE_CELL_HEIGHT_DP = 110.dp
-
-private enum class PaletteNodeType {
-    SHIELD, TRANSFORMER, GENERATOR, UPS, BATTERY, SOLAR_PANEL, INVERTER
-}
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
 fun ProjectView(
     state: ProjectCanvasState,
-    onOpenShield: (shieldId: Int) -> Unit
+    onOpenShield: (Int) -> Unit
 ) {
     val textMeasurer = rememberTextMeasurer()
     var paletteDragType by remember { mutableStateOf<PaletteNodeType?>(null) }
-    var canvasTopLeft by remember { mutableStateOf(Offset.Zero) }
-    var dragTarget by remember { mutableStateOf<Any?>(null) }
-    var showFileMenu by remember { mutableStateOf(false) }
-    var nodeDragStartOffset by remember { mutableStateOf(Point.Zero) }
     var palettePreviewWorldPos by remember { mutableStateOf<Point?>(null) }
+    var canvasTopLeft by remember { mutableStateOf(Offset.Zero) }
+    var showFileMenu by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .focusRequester(focusRequester)
-        .focusable()
-        .onPreviewKeyEvent { event ->
-            // Ctrl+Z и Ctrl+Shift+Z
-            if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.Z) {
-                if (event.isShiftPressed) {
-                    state.redo()
-                } else {
-                    state.undo()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.Z) {
+                    if (event.isShiftPressed) state.redo() else state.undo()
+                    return@onPreviewKeyEvent true
                 }
-                return@onPreviewKeyEvent true
+                false
             }
-            false
-        }
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(40.dp)
-                .background(MaterialTheme.colors.surface),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        // МЕНЮ ФАЙЛ
+        Row(modifier = Modifier.fillMaxWidth().height(40.dp).background(MaterialTheme.colors.surface), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.padding(start = 8.dp)) {
-                Text(
-                    text = "Файл",
-                    modifier = Modifier
-                        .clickable { showFileMenu = true }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.body2,
-                    color = MaterialTheme.colors.onSurface
-                )
-
-                // Меню
-                DropdownMenu(
-                    expanded = showFileMenu,
-                    onDismissRequest = { showFileMenu = false }
-                ) {
-                    DropdownMenuItem(onClick = {
-                        showFileMenu = false
-                        ProjectStorage.saveProject(state)
-                    }) {
-                        Text("Сохранить как..")
-                    }
-
-                    DropdownMenuItem(onClick = {
-                        showFileMenu = false
-                        ProjectStorage.saveProject(state)
-                        ProjectStorage.loadProject(state)
-                    }) {
-                        Text("Открыть")
-                    }
+                Text(text = "Файл", modifier = Modifier.clickable { showFileMenu = true }.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.body2)
+                DropdownMenu(expanded = showFileMenu, onDismissRequest = { showFileMenu = false }) {
+                    DropdownMenuItem(onClick = { showFileMenu = false; ProjectStorage.saveProject(state) }) { Text("Сохранить как..") }
+                    DropdownMenuItem(onClick = { showFileMenu = false; ProjectStorage.loadProject(state) }) { Text("Открыть") }
                 }
             }
         }
 
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(top = PALETTE_HEIGHT_DP)
-                        .onGloballyPositioned { coords ->
-                            canvasTopLeft = coords.positionInRoot()
-                        }
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onDoubleTap = { offset ->
-                                    val node = state.findNodeAtScreenPosition(offset.toPoint())
-                                    if (node is ShieldNode) {
-                                        onOpenShield(node.id)
-                                    }
-                                }
-                            )
-                        }
-                        .pointerInput(Unit) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val position = event.changes.first().position
-                                    if (event.type == PointerEventType.Scroll) {
-                                        val scrollDelta = event.changes.first().scrollDelta.y
-                                        state.onZoom(scrollDelta, position.toPoint())
-                                        event.changes.first().consume()
-                                    }
+        // РАБОЧАЯ ОБЛАСТЬ
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            InteractiveCanvas(
+                state = state,
+                textMeasurer = textMeasurer,
+                onOpenShield = onOpenShield,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = PALETTE_HEIGHT_DP)
+                    .onGloballyPositioned { canvasTopLeft = it.positionInRoot() }
+            )
 
-                                    if (event.type == PointerEventType.Press) {
-                                        val pressedNode = state.findNodeAtScreenPosition(position.toPoint())
-                                        if (event.buttons.isSecondaryPressed) {
-                                            state.contextMenuPosition = position.toPoint()
-                                            state.selectedNode = pressedNode
-                                            if (pressedNode != null) {
-                                                state.showNodeContextMenu = true
-                                            } else {
-                                                state.showCanvasContextMenu = true
-                                            }
-                                        } else if (event.buttons.isPrimaryPressed) {
-                                            if (state.connectingFromNodeId != null) {
-                                                state.tryFinishConnecting(pressedNode)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .pointerInput(Unit) {
-                            detectDragGestures(
-                                onDragStart = { position ->
-                                    val node = state.findNodeAtScreenPosition(position.toPoint())
-                                    if (node != null) {
-                                        state.saveHistory()
-                                        dragTarget = node.id
-                                        nodeDragStartOffset = node.position - state.screenToWorld(position.toPoint())
-                                    } else {
-                                        dragTarget = "Canvas"
-                                    }
-                                },
-                                onDragEnd = {
-                                    val nodeId = dragTarget as? Int
-                                    nodeId?.let { state.snapNodeToEndPosition(it) }
-                                    dragTarget = null
-                                },
-                                onDragCancel = { dragTarget = null },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    when (val target = dragTarget) {
-                                        is Int -> {
-                                            val newWorldPos = state.screenToWorld(change.position.toPoint()) + nodeDragStartOffset
-                                            state.updateNodePosition(target, newWorldPos)
-                                        }
-                                        is String -> state.onPan(dragAmount.toPoint())
-                                    }
-                                }
-                            )
-                        }
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawProjectCanvas(textMeasurer, state)
+            // ПРЕДПРОСМОТР ПРИ ПЕРЕТАСКИВАНИИ ИЗ ПАЛИТРЫ
+            if (paletteDragType != null && palettePreviewWorldPos != null) {
+                val previewScreen = state.worldToScreen(palettePreviewWorldPos!!).toOffset()
+                Canvas(modifier = Modifier.fillMaxSize().padding(top = PALETTE_HEIGHT_DP)) {
+                    val w = NODE_WIDTH * state.scale
+                    val h = NODE_HEIGHT * state.scale
+                    val centerOffset = Offset(previewScreen.x - w / 2, previewScreen.y - h / 2)
+                    when (paletteDragType) {
+                        PaletteNodeType.SHIELD -> drawShieldShape(centerOffset, Size(w, h))
+                        PaletteNodeType.TRANSFORMER -> drawTransformerShape(previewScreen, 40f * state.scale)
+                        PaletteNodeType.GENERATOR -> drawGeneratorShape(textMeasurer, previewScreen, 50f * state.scale)
+                        PaletteNodeType.UPS -> drawUpsShape(textMeasurer, centerOffset, Size(w, h))
+                        PaletteNodeType.BATTERY -> drawBatteryShape(centerOffset, Size(w, h))
+                        PaletteNodeType.SOLAR_PANEL -> drawSolarPanelShape(centerOffset, Size(w, h))
+                        PaletteNodeType.INVERTER -> drawInverterShape(textMeasurer, centerOffset, Size(w, h))
+                        null -> {}
                     }
-
-                    state.nodes.forEach { node ->
-                        if (node.name.isNotBlank() || node is ShieldNode) {
-                            val screenPos = state.worldToScreen(node.position).toOffset()
-                            val scale = state.scale
-                            when (node) {
-                                is ShieldNode -> {
-                                    val displayName = ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
-                                    RightSideNameText(displayName, screenPos, NODE_WIDTH * scale, scale)
-                                }
-
-                                is TransformerNode -> {
-                                    val screenCenter = state.worldToScreen(node.position)
-                                    val r = node.radiusOuter * state.scale
-                                    TransformerNameText(node.name, screenCenter.toOffset(), r)
-                                }
-
-                                is GeneratorNode -> {
-                                    val screenCenter = state.worldToScreen(node.position)
-                                    val r = node.radius * state.scale
-                                    GeneratorNameText(node.name, screenCenter.toOffset(), r)
-                                }
-
-                                is UpsNode, is BatteryNode, is SolarPanelNode, is InverterNode -> {
-                                    RightSideNameText(node.name, screenPos, NODE_WIDTH * scale, scale)
-                                }
-                            }
-                        }
-                    }
-
-
-                    if (paletteDragType != null && palettePreviewWorldPos != null) {
-                        val previewScreen = state.worldToScreen(palettePreviewWorldPos!!).toOffset()
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            when (paletteDragType) {
-                                PaletteNodeType.SHIELD -> {
-                                    val width = NODE_WIDTH * state.scale
-                                    val height = NODE_HEIGHT * state.scale
-                                    drawShieldShape(
-                                        Offset(previewScreen.x - width / 2, previewScreen.y - height / 2),
-                                        Size(width, height)
-                                    )
-                                }
-
-                                PaletteNodeType.TRANSFORMER -> {
-                                    val radius = TRANSFORMER_RADIUS * state.scale
-                                    drawTransformerShape(previewScreen, radius)
-                                }
-
-                                PaletteNodeType.GENERATOR -> {
-                                    val radius = GENERATOR_RADIUS * state.scale
-                                    drawGeneratorShape(textMeasurer, previewScreen, radius)
-                                }
-                                PaletteNodeType.UPS -> {
-                                    val width = NODE_WIDTH * state.scale
-                                    val height = NODE_HEIGHT * state.scale
-                                    drawUpsShape(
-                                        textMeasurer = textMeasurer, // <--- Добавили это
-                                        topLeft = Offset(previewScreen.x - width / 2, previewScreen.y - height / 2),
-                                        size = Size(width, height)
-                                    )
-                                }
-                                PaletteNodeType.BATTERY -> {
-                                    val width = NODE_WIDTH * state.scale
-                                    val height = NODE_HEIGHT * state.scale
-                                    drawBatteryShape(Offset(previewScreen.x - width / 2, previewScreen.y - height / 2), Size(width, height))
-                                }
-                                PaletteNodeType.SOLAR_PANEL -> {
-                                    val width = NODE_WIDTH * state.scale
-                                    val height = NODE_HEIGHT * state.scale
-                                    drawSolarPanelShape(Offset(previewScreen.x - width / 2, previewScreen.y - height / 2), Size(width, height))
-                                }
-                                PaletteNodeType.INVERTER -> {
-                                    val width = NODE_WIDTH * state.scale
-                                    val height = NODE_HEIGHT * state.scale
-                                    drawInverterShape(
-                                        textMeasurer = textMeasurer, // <--- Добавили
-                                        topLeft = Offset(previewScreen.x - width / 2, previewScreen.y - height / 2),
-                                        size = Size(width, height)
-                                    )
-                                }
-                                null -> {}
-                            }
-                        }
-                    }
-
-                    NodeContextMenu(state, onOpenShield)
-                    CanvasContextMenu(state)
-                    RenameNodeDialog(state)
-                }
-
-                Surface(
-                    elevation = 8.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(PALETTE_HEIGHT_DP)
-                        .align(Alignment.TopStart),
-                    color = MaterialTheme.colors.surface
-                ) {
-                    PaletteRow(
-                        textMeasurer = textMeasurer,
-                        cellHeight = PALETTE_CELL_HEIGHT_DP,
-                        onStartDrag = { type, globalPos ->
-                            paletteDragType = type
-                            val local = globalPos - canvasTopLeft
-                            palettePreviewWorldPos = state.screenToWorld(local.toPoint())
-                        },
-                        onDrag = { globalPos ->
-                            val local = globalPos - canvasTopLeft
-                            palettePreviewWorldPos = state.screenToWorld(local.toPoint())
-                        },
-                        onEndDrag = { globalPos ->
-                            val local = globalPos - canvasTopLeft
-                            val worldPos = state.screenToWorld(local.toPoint())
-                            when (paletteDragType) {
-                                PaletteNodeType.SHIELD -> state.addShieldNode(worldPos)
-                                PaletteNodeType.TRANSFORMER -> state.addTransformerNode(worldPos)
-                                PaletteNodeType.GENERATOR -> state.addGeneratorNode(worldPos)
-                                PaletteNodeType.UPS -> state.addUpsNode(worldPos)
-                                PaletteNodeType.BATTERY -> state.addBatteryNode(worldPos)
-                                PaletteNodeType.SOLAR_PANEL -> state.addSolarPanelNode(worldPos)
-                                PaletteNodeType.INVERTER -> state.addInverterNode(worldPos)
-                                null -> {}
-                            }
-                            paletteDragType = null
-                            palettePreviewWorldPos = null
-                        },
-                        onCancel = {
-                            paletteDragType = null
-                            palettePreviewWorldPos = null
-                        }
-                    )
                 }
             }
-        }
-    }
 
+            NodeContextMenu(state, onOpenShield)
+            CanvasContextMenu(state)
+            RenameNodeDialog(state)
 
-@OptIn(ExperimentalTextApi::class)
-@Composable
-private fun PaletteRow(
-    textMeasurer: TextMeasurer,
-    cellHeight: Dp,
-    onStartDrag: (PaletteNodeType, Offset) -> Unit,
-    onDrag: (Offset) -> Unit,
-    onEndDrag: (Offset) -> Unit,
-    onCancel: () -> Unit
-) {
-    Row(modifier = Modifier.fillMaxWidth().padding(10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.Start) {
-        PaletteItem(textMeasurer = textMeasurer, label = "Щит", widthDp = 130.dp, heightDp = cellHeight, drawType = PaletteNodeType.SHIELD, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
-        Spacer(modifier = Modifier.width(16.dp))
-        PaletteItem(textMeasurer = textMeasurer, label = "Трансформатор", widthDp = 160.dp, heightDp = 110.dp, drawType = PaletteNodeType.TRANSFORMER, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
-        Spacer(modifier = Modifier.width(16.dp))
-        PaletteItem(textMeasurer = textMeasurer, label = "Генератор", widthDp = 130.dp, heightDp = cellHeight, drawType = PaletteNodeType.GENERATOR, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
-        PaletteItem(textMeasurer, "ИБП", 130.dp, cellHeight, PaletteNodeType.UPS, onStartDrag, onDrag, onEndDrag, onCancel)
-        Spacer(Modifier.width(16.dp))
-        PaletteItem(textMeasurer, "АКБ", 130.dp, cellHeight, PaletteNodeType.BATTERY, onStartDrag, onDrag, onEndDrag, onCancel)
-        Spacer(Modifier.width(16.dp))
-        PaletteItem(textMeasurer, "Солн. Панель", 140.dp, cellHeight, PaletteNodeType.SOLAR_PANEL, onStartDrag, onDrag, onEndDrag, onCancel)
-        Spacer(Modifier.width(16.dp))
-        PaletteItem(textMeasurer, "Инвертор", 130.dp, cellHeight, PaletteNodeType.INVERTER, onStartDrag, onDrag, onEndDrag, onCancel)
-    }
-}
-
-@OptIn(ExperimentalTextApi::class)
-@Composable
-private fun PaletteItem(
-    textMeasurer: TextMeasurer,
-    label: String,
-    widthDp: Dp,
-    heightDp: Dp,
-    drawType: PaletteNodeType,
-    onStartDrag: (PaletteNodeType, Offset) -> Unit,
-    onDrag: (Offset) -> Unit,
-    onEndDrag: (Offset) -> Unit,
-    onCancel: () -> Unit
-) {
-    var itemTopLeft by remember { mutableStateOf(Offset.Zero) }
-    var lastGlobalPointer by remember { mutableStateOf<Offset?>(null) }
-    Box(
-        modifier = Modifier
-            .size(widthDp, heightDp)
-            .onGloballyPositioned { coords -> itemTopLeft = coords.positionInRoot() }
-            .pointerInput(drawType) {
-                detectDragGestures(
-                    onDragStart = {
-                        val center = Offset(size.width / 2f, size.height / 2f)
-                        val globalCenter = itemTopLeft + center
-                        lastGlobalPointer = globalCenter
-                        onStartDrag(drawType, globalCenter)
+            Surface(elevation = 8.dp, modifier = Modifier.fillMaxWidth().height(PALETTE_HEIGHT_DP).align(Alignment.TopStart), color = MaterialTheme.colors.surface) {
+                NodesPalette(
+                    textMeasurer = textMeasurer,
+                    cellHeight = 110.dp,
+                    onStartDrag = { type, pos -> paletteDragType = type; palettePreviewWorldPos = state.screenToWorld((pos - canvasTopLeft).toPoint()) },
+                    onDrag = { pos -> palettePreviewWorldPos = state.screenToWorld((pos - canvasTopLeft).toPoint()) },
+                    onEndDrag = { pos ->
+                        val worldPos = state.screenToWorld((pos - canvasTopLeft).toPoint())
+                        when (paletteDragType) {
+                            PaletteNodeType.SHIELD -> state.addShieldNode(worldPos)
+                            PaletteNodeType.TRANSFORMER -> state.addTransformerNode(worldPos)
+                            PaletteNodeType.GENERATOR -> state.addGeneratorNode(worldPos)
+                            PaletteNodeType.UPS -> state.addUpsNode(worldPos)
+                            PaletteNodeType.BATTERY -> state.addBatteryNode(worldPos)
+                            PaletteNodeType.SOLAR_PANEL -> state.addSolarPanelNode(worldPos)
+                            PaletteNodeType.INVERTER -> state.addInverterNode(worldPos)
+                            null -> {}
+                        }
+                        paletteDragType = null; palettePreviewWorldPos = null
                     },
-                    onDrag = { change, _ ->
-                        change.consume()
-                        val global = itemTopLeft + change.position
-                        lastGlobalPointer = global
-                        onDrag(global)
-                    },
-                    onDragEnd = {
-                        val pos = lastGlobalPointer ?: (itemTopLeft + Offset(size.width / 2f, size.height / 2f))
-                        onEndDrag(pos)
-                        lastGlobalPointer = null
-                    },
-                    onDragCancel = {
-                        onCancel()
-                        lastGlobalPointer = null
-                    }
+                    onCancel = { paletteDragType = null; palettePreviewWorldPos = null }
                 )
             }
-            .padding(8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width * 0.8f
-            val h = size.height * 0.7f
-            when (drawType) {
-                PaletteNodeType.SHIELD -> drawShieldShape(Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
-                PaletteNodeType.TRANSFORMER -> {
-                    val radius = size.width * 0.25f
-                    drawTransformerShape(Offset(size.width / 2f, size.height / 2f), radius)
-                }
-                PaletteNodeType.GENERATOR -> {
-                    val radius = size.width * 0.35f
-                    drawGeneratorShape(textMeasurer, Offset(size.width / 2f, size.height / 2f), radius)
-                }
-                PaletteNodeType.UPS -> drawUpsShape(textMeasurer, Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
-                PaletteNodeType.BATTERY -> drawBatteryShape(Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
-                PaletteNodeType.SOLAR_PANEL -> drawSolarPanelShape(Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
-                PaletteNodeType.INVERTER -> drawInverterShape(textMeasurer, Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
-            }
-        }
-        Text(text = label, fontSize = 13.sp, modifier = Modifier.align(Alignment.BottomCenter))
-    }
-}
-
-@Composable
-private fun NodeNameText(name: String, screenPos: Offset, nodeWidth: Float, nodeHeight: Float) {
-    val density = LocalDensity.current
-
-    // Конвертируем пиксели в Dp
-    val offsetX = with(density) { (screenPos.x - nodeWidth / 2f).toDp() }
-    val offsetY = with(density) { (screenPos.y - nodeHeight / 2f).toDp() }
-    val widthDp = with(density) { nodeWidth.toDp() }
-    val heightDp = with(density) { nodeHeight.toDp() }
-
-    Box(
-        modifier = Modifier
-            .offset(offsetX, offsetY)
-            .size(width = widthDp, height = heightDp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = name,
-            color = MaterialTheme.colors.onSurface,
-            // fontScale уже учитывается в sp, но для точности можно оставить как есть
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-            softWrap = true
-        )
-    }
-}
-
-
-@Composable
-private fun TransformerNameText(name: String, screenCenter: Offset, radiusScreen: Float) {
-    val density = LocalDensity.current
-
-    val x = screenCenter.x + radiusScreen + 10f
-    val y = screenCenter.y - 8f
-
-    // Используем toDp()
-    val offsetX = with(density) { x.toDp() }
-    val offsetY = with(density) { y.toDp() }
-
-    Text(
-        text = name,
-        modifier = Modifier.offset(offsetX, offsetY),
-        color = MaterialTheme.colors.onSurface,
-        fontSize = 14.sp
-    )
-}
-
-@Composable
-private fun GeneratorNameText(name: String, screenCenter: Offset, radiusScreen: Float) {
-    val density = LocalDensity.current
-
-    val x = screenCenter.x + radiusScreen + 10f
-    val y = screenCenter.y - 8f
-
-    val offsetX = with(density) { x.toDp() }
-    val offsetY = with(density) { y.toDp() }
-
-    Text(
-        text = name,
-        modifier = Modifier.offset(offsetX, offsetY),
-        color = MaterialTheme.colors.onSurface,
-        fontSize = 14.sp
-    )
-}
-
-@Composable
-private fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (shieldId: Int) -> Unit) {
-    // Получаем текущую плотность экрана для конвертации
-    val density = LocalDensity.current
-
-    // Вычисляем смещение в dp. Конвертируем пиксели (state.contextMenuPosition) в dp.
-    val menuOffset = with(density) {
-        DpOffset(
-            x = state.contextMenuPosition.x.toDp(),
-            y = state.contextMenuPosition.y.toDp()
-        )
-    }
-
-    DropdownMenu(
-        expanded = state.showNodeContextMenu,
-        onDismissRequest = { state.showNodeContextMenu = false },
-        offset = menuOffset // Передаем корректное смещение
-    ) {
-        DropdownMenuItem(onClick = {
-            state.showRenameDialog = true
-            state.showNodeContextMenu = false
-        }) {
-            Text("Изменить название")
-        }
-
-        if (state.selectedNode is ShieldNode) {
-            DropdownMenuItem(onClick = {
-                state.selectedNode?.let { onOpenShield(it.id) }
-                state.showNodeContextMenu = false
-            }) {
-                Text("Открыть")
-            }
-        }
-
-        DropdownMenuItem(onClick = {
-            state.startConnecting()
-            state.showNodeContextMenu = false
-        }) {
-            Text("Соединить")
-        }
-
-        DropdownMenuItem(onClick = {
-            state.deleteSelectedNode()
-            state.showNodeContextMenu = false
-        }) {
-            Text("Удалить")
         }
     }
-}
-
-@Composable
-private fun CanvasContextMenu(state: ProjectCanvasState) {
-    val density = LocalDensity.current
-
-    // То же самое для меню холста
-    val menuOffset = with(density) {
-        DpOffset(
-            x = state.contextMenuPosition.x.toDp(),
-            y = state.contextMenuPosition.y.toDp()
-        )
-    }
-
-    DropdownMenu(
-        expanded = state.showCanvasContextMenu,
-        onDismissRequest = { state.showCanvasContextMenu = false },
-        offset = menuOffset
-    ) {
-        val worldPos = state.screenToWorld(state.contextMenuPosition)
-        DropdownMenuItem(onClick = {
-            state.addLevelLine(worldPos)
-            state.showCanvasContextMenu = false
-        }) {
-            Text("Добавить уровень")
-        }
-    }
-}
-
-
-@Composable
-private fun RenameNodeDialog(state: ProjectCanvasState) {
-    if (state.showRenameDialog && state.selectedNode != null) {
-        var newName by remember(state.selectedNode) { mutableStateOf(state.selectedNode!!.name) }
-        AlertDialog(
-            onDismissRequest = { state.showRenameDialog = false },
-            title = { Text("Изменить название") },
-            text = { OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Новое название") }, singleLine = true) },
-            confirmButton = { Button(onClick = { val sel = state.selectedNode
-                if (sel is ShieldNode) {
-                    // синхронизируем имя с данными щита
-                    val data = ShieldStorage.loadOrCreate(sel.id)
-                    data.shieldName = newName
-                    ShieldStorage.save(sel.id, data)
-                }
-                state.updateSelectedNodeName(newName);
-                state.showRenameDialog = false })
-            { Text("Сохранить") } },
-            dismissButton = { Button(onClick = { state.showRenameDialog = false }) { Text("Отмена") } }
-        )
-    }
-}
-
-@Composable
-private fun RightSideNameText(name: String, screenPos: Offset, nodeWidth: Float, scale: Float) {
-    val density = LocalDensity.current
-
-    // Смещаем текст вправо от центра ноды (плюс небольшой отступ 15 пикселей)
-    val offsetX = with(density) { (screenPos.x + nodeWidth / 2f + 15f * scale).toDp() }
-    val offsetY = with(density) { (screenPos.y - 10f * scale).toDp() }
-
-    Text(
-        text = name,
-        modifier = Modifier.offset(offsetX, offsetY),
-        color = MaterialTheme.colors.onSurface,
-        fontSize = 14.sp
-    )
 }

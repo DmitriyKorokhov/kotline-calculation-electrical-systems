@@ -12,6 +12,7 @@ import androidx.compose.ui.text.TextMeasurer
 import feature.projecteditor.domain.*
 import feature.projecteditor.state.ProjectCanvasState
 import feature.projecteditor.state.getNodeHeight
+import feature.projecteditor.ui.drawing.*
 
 private const val NODE_WIDTH = 120f
 private const val GRID_WIDTH = 200f
