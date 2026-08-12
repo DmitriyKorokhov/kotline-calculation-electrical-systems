@@ -13,6 +13,12 @@ import feature.projecteditor.domain.*
 import feature.projecteditor.state.ProjectCanvasState
 import feature.projecteditor.state.getNodeHeight
 import feature.projecteditor.ui.drawing.*
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.drawscope.clipRect
 
 private const val NODE_WIDTH = 120f
 private const val GRID_WIDTH = 200f
@@ -148,4 +154,92 @@ private fun calculateConnectionX(node: ProjectNode, connectionIndex: Int, totalC
         else -> NODE_WIDTH * 0.8f
     }
     return (node.position.x - span / 2) + connectionIndex * (span / (totalConnections - 1))
+}
+
+@OptIn(ExperimentalTextApi::class)
+fun DrawScope.drawGridHeaders(textMeasurer: TextMeasurer, state: ProjectCanvasState) {
+    val headerHeight = 24.dp.toPx()
+    val headerWidth = 40.dp.toPx()
+
+    val bgColor = Color(0xFFF5F5F5)
+    val lineColor = Color.Gray
+    val textColor = Color.DarkGray
+
+    // 1. Рисуем фоны панелей
+    drawRect(color = bgColor, topLeft = Offset(0f, 0f), size = Size(size.width, headerHeight))
+    drawRect(color = bgColor, topLeft = Offset(0f, 0f), size = Size(headerWidth, size.height))
+
+    // Угловой квадрат (он всегда будет чистым)
+    drawRect(color = Color(0xFFE0E0E0), topLeft = Offset(0f, 0f), size = Size(headerWidth, headerHeight))
+
+    // Линии-границы самих панелей
+    drawLine(lineColor, Offset(0f, headerHeight), Offset(size.width, headerHeight))
+    drawLine(lineColor, Offset(headerWidth, 0f), Offset(headerWidth, size.height))
+
+    // 2. Вычисляем видимую зону
+    val topLeftWorld = state.screenToWorld(Offset(0f, 0f).toPoint())
+    val bottomRightWorld = state.screenToWorld(Offset(size.width, size.height).toPoint())
+
+    val startCol = kotlin.math.floor(topLeftWorld.x / GRID_WIDTH).toInt() - 1
+    val endCol = kotlin.math.floor(bottomRightWorld.x / GRID_WIDTH).toInt() + 1
+
+    val startRow = kotlin.math.floor(topLeftWorld.y / GRID_HEIGHT).toInt() - 1
+    val endRow = kotlin.math.floor(bottomRightWorld.y / GRID_HEIGHT).toInt() + 1
+
+    val textStyle = TextStyle(color = textColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+
+    // 3. Рисуем столбцы (Буквы) — используем clipRect для жесткой обрезки!
+    clipRect(left = headerWidth, top = 0f, right = size.width, bottom = headerHeight) {
+        for (col in startCol..endCol) {
+            val worldX = col * GRID_WIDTH
+            val screenX = (worldX * state.scale) + state.offset.x
+
+            // Линия деления колонки
+            drawLine(lineColor, Offset(screenX, 0f), Offset(screenX, headerHeight))
+
+            // Отрисовка текста
+            val text = getExcelColumnName(col)
+            val layoutResult = textMeasurer.measure(text, textStyle)
+
+            val cellWidthOnScreen = GRID_WIDTH * state.scale
+            val textX = screenX + (cellWidthOnScreen - layoutResult.size.width) / 2
+            val textY = (headerHeight - layoutResult.size.height) / 2
+
+            drawText(layoutResult, topLeft = Offset(textX, textY))
+        }
+    }
+
+    // 4. Рисуем строки (Цифры) — используем clipRect для жесткой обрезки!
+    clipRect(left = 0f, top = headerHeight, right = headerWidth, bottom = size.height) {
+        for (row in startRow..endRow) {
+            val worldY = row * GRID_HEIGHT
+            val screenY = (worldY * state.scale) + state.offset.y
+
+            // Линия деления строки
+            drawLine(lineColor, Offset(0f, screenY), Offset(headerWidth, screenY))
+
+            // Отрисовка текста
+            val text = row.toString()
+            val layoutResult = textMeasurer.measure(text, textStyle)
+
+            val cellHeightOnScreen = GRID_HEIGHT * state.scale
+            val textX = (headerWidth - layoutResult.size.width) / 2
+            val textY = screenY + (cellHeightOnScreen - layoutResult.size.height) / 2
+
+            drawText(layoutResult, topLeft = Offset(textX, textY))
+        }
+    }
+}
+
+// Вспомогательная функция для генерации букв (A, B... Z, AA...).
+// Поддерживает и отрицательные индексы (на случай если пользователь ушел влево: -A, -B)
+private fun getExcelColumnName(index: Int): String {
+    var num = kotlin.math.abs(index)
+    var name = ""
+    while (num >= 0) {
+        name = ('A' + (num % 26)) + name
+        num = (num / 26) - 1
+        if (num < 0) break
+    }
+    return if (index < 0) "-$name" else name
 }

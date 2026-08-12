@@ -1,4 +1,3 @@
-// feature/projecteditor/ui/canvas/InteractiveCanvas.kt
 package feature.projecteditor.ui.canvas
 
 import androidx.compose.foundation.Canvas
@@ -16,6 +15,7 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextMeasurer
 import feature.projecteditor.domain.*
 import feature.projecteditor.state.ProjectCanvasState
+import feature.projecteditor.ui.drawGridHeaders
 import feature.projecteditor.ui.toOffset
 import feature.projecteditor.ui.toPoint
 import feature.projecteditor.ui.drawProjectCanvas
@@ -94,6 +94,7 @@ fun InteractiveCanvas(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawProjectCanvas(textMeasurer, state)
+            drawGridHeaders(textMeasurer, state)
         }
 
         // УНИФИЦИРОВАННАЯ ОТРИСОВКА ПОДПИСЕЙ (Всегда справа)
@@ -107,6 +108,9 @@ fun InteractiveCanvas(
                 val nodeWidthForLabel = when (node) {
                     is TransformerNode -> node.radiusOuter * 2f
                     is GeneratorNode -> node.radius * 2f
+                    is BatteryNode -> NODE_WIDTH * 0.5f
+                    is UpsNode -> NODE_HEIGHT
+                    is SolarPanelNode -> NODE_WIDTH * 0.8f
                     else -> NODE_WIDTH
                 }
 

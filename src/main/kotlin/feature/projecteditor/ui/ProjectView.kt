@@ -23,12 +23,16 @@ import feature.projecteditor.domain.Point
 import feature.projecteditor.state.ProjectCanvasState
 import core.storage.ProjectStorage
 import feature.projecteditor.ui.canvas.InteractiveCanvas
+import feature.projecteditor.ui.components.CanvasContextMenu
+import feature.projecteditor.ui.components.NodeContextMenu
 import feature.projecteditor.ui.components.NodesPalette
 import feature.projecteditor.ui.components.PaletteNodeType
+import feature.projecteditor.ui.components.RenameNodeDialog
 import feature.projecteditor.ui.drawing.*
-import feature.projecteditor.ui.menus.CanvasContextMenu
-import feature.projecteditor.ui.menus.NodeContextMenu
-import feature.projecteditor.ui.menus.RenameNodeDialog
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
@@ -44,7 +48,6 @@ fun ProjectView(
     var paletteDragType by remember { mutableStateOf<PaletteNodeType?>(null) }
     var palettePreviewWorldPos by remember { mutableStateOf<Point?>(null) }
     var canvasTopLeft by remember { mutableStateOf(Offset.Zero) }
-    var showFileMenu by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -54,6 +57,16 @@ fun ProjectView(
             .fillMaxSize()
             .focusRequester(focusRequester)
             .focusable()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        if (event.type == PointerEventType.Press) {
+                            focusRequester.requestFocus()
+                        }
+                    }
+                }
+            }
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.Z) {
                     if (event.isShiftPressed) state.redo() else state.undo()
@@ -62,33 +75,50 @@ fun ProjectView(
                 false
             }
     ) {
-        // МЕНЮ ФАЙЛ
-        Row(modifier = Modifier.fillMaxWidth().height(40.dp).background(MaterialTheme.colors.surface), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.padding(start = 8.dp)) {
-                Text(text = "Файл", modifier = Modifier.clickable { showFileMenu = true }.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.body2)
-                DropdownMenu(expanded = showFileMenu, onDismissRequest = { showFileMenu = false }) {
-                    DropdownMenuItem(onClick = { showFileMenu = false; ProjectStorage.saveProject(state) }) { Text("Сохранить как..") }
-                    DropdownMenuItem(onClick = { showFileMenu = false; ProjectStorage.loadProject(state) }) { Text("Открыть") }
-                }
-            }
+        // 2. ПАЛИТРА МОДЕЛЕЙ (Теперь это отдельный блок в Column, она больше не накладывается на Canvas)
+        Surface(elevation = 8.dp, modifier = Modifier.fillMaxWidth().height(PALETTE_HEIGHT_DP), color = MaterialTheme.colors.surface) {
+            NodesPalette(
+                textMeasurer = textMeasurer,
+                cellHeight = 110.dp,
+                onStartDrag = { type, pos -> paletteDragType = type; palettePreviewWorldPos = state.screenToWorld((pos - canvasTopLeft).toPoint()) },
+                onDrag = { pos -> palettePreviewWorldPos = state.screenToWorld((pos - canvasTopLeft).toPoint()) },
+                onEndDrag = { pos ->
+                    val worldPos = state.screenToWorld((pos - canvasTopLeft).toPoint())
+                    when (paletteDragType) {
+                        PaletteNodeType.SHIELD -> state.addShieldNode(worldPos)
+                        PaletteNodeType.TRANSFORMER -> state.addTransformerNode(worldPos)
+                        PaletteNodeType.GENERATOR -> state.addGeneratorNode(worldPos)
+                        PaletteNodeType.UPS -> state.addUpsNode(worldPos)
+                        PaletteNodeType.BATTERY -> state.addBatteryNode(worldPos)
+                        PaletteNodeType.SOLAR_PANEL -> state.addSolarPanelNode(worldPos)
+                        PaletteNodeType.INVERTER -> state.addInverterNode(worldPos)
+                        null -> {}
+                    }
+                    paletteDragType = null; palettePreviewWorldPos = null
+                },
+                onCancel = { paletteDragType = null; palettePreviewWorldPos = null }
+            )
         }
 
-        // РАБОЧАЯ ОБЛАСТЬ
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        // 3. РАБОЧАЯ ОБЛАСТЬ (Занимает весь оставшийся экран)
+        Box(modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .clipToBounds()
+        ) {
             InteractiveCanvas(
                 state = state,
                 textMeasurer = textMeasurer,
                 onOpenShield = onOpenShield,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = PALETTE_HEIGHT_DP)
                     .onGloballyPositioned { canvasTopLeft = it.positionInRoot() }
             )
 
             // ПРЕДПРОСМОТР ПРИ ПЕРЕТАСКИВАНИИ ИЗ ПАЛИТРЫ
             if (paletteDragType != null && palettePreviewWorldPos != null) {
                 val previewScreen = state.worldToScreen(palettePreviewWorldPos!!).toOffset()
-                Canvas(modifier = Modifier.fillMaxSize().padding(top = PALETTE_HEIGHT_DP)) {
+                Canvas(modifier = Modifier.fillMaxSize()) { // Убран отступ padding
                     val w = NODE_WIDTH * state.scale
                     val h = NODE_HEIGHT * state.scale
                     val centerOffset = Offset(previewScreen.x - w / 2, previewScreen.y - h / 2)
@@ -108,30 +138,6 @@ fun ProjectView(
             NodeContextMenu(state, onOpenShield)
             CanvasContextMenu(state)
             RenameNodeDialog(state)
-
-            Surface(elevation = 8.dp, modifier = Modifier.fillMaxWidth().height(PALETTE_HEIGHT_DP).align(Alignment.TopStart), color = MaterialTheme.colors.surface) {
-                NodesPalette(
-                    textMeasurer = textMeasurer,
-                    cellHeight = 110.dp,
-                    onStartDrag = { type, pos -> paletteDragType = type; palettePreviewWorldPos = state.screenToWorld((pos - canvasTopLeft).toPoint()) },
-                    onDrag = { pos -> palettePreviewWorldPos = state.screenToWorld((pos - canvasTopLeft).toPoint()) },
-                    onEndDrag = { pos ->
-                        val worldPos = state.screenToWorld((pos - canvasTopLeft).toPoint())
-                        when (paletteDragType) {
-                            PaletteNodeType.SHIELD -> state.addShieldNode(worldPos)
-                            PaletteNodeType.TRANSFORMER -> state.addTransformerNode(worldPos)
-                            PaletteNodeType.GENERATOR -> state.addGeneratorNode(worldPos)
-                            PaletteNodeType.UPS -> state.addUpsNode(worldPos)
-                            PaletteNodeType.BATTERY -> state.addBatteryNode(worldPos)
-                            PaletteNodeType.SOLAR_PANEL -> state.addSolarPanelNode(worldPos)
-                            PaletteNodeType.INVERTER -> state.addInverterNode(worldPos)
-                            null -> {}
-                        }
-                        paletteDragType = null; palettePreviewWorldPos = null
-                    },
-                    onCancel = { paletteDragType = null; palettePreviewWorldPos = null }
-                )
-            }
         }
     }
 }

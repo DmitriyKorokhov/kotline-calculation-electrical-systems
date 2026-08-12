@@ -17,20 +17,27 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun RightSideNameText(name: String, screenPos: Offset, nodeWidthOnScreen: Float, nodeHeight: Float, scale: Float) {
     val density = LocalDensity.current
-    val offsetX = with(density) { (screenPos.x + nodeWidthOnScreen / 2f + 15f).toDp() }
-    val boxHeight = 40.dp
+
+    // Масштабируем отступ (gap) от элемента, чтобы он был пропорциональным
+    val gap = 15f * scale
+    val offsetX = with(density) { (screenPos.x + nodeWidthOnScreen / 2f + gap).toDp() }
+
+    // Масштабируем размеры контейнера текста
+    val boxWidth = (200f * scale).dp
+    val boxHeight = (40f * scale).dp
     val offsetY = with(density) { screenPos.y.toDp() } - (boxHeight / 2)
 
     Box(
         modifier = Modifier
             .offset(offsetX, offsetY)
-            .size(width = 200.dp, height = boxHeight),
+            .size(width = boxWidth, height = boxHeight),
         contentAlignment = Alignment.CenterStart
     ) {
         Text(
             text = name,
             color = MaterialTheme.colors.onSurface,
-            fontSize = 14.sp,
+            fontSize = (14f * scale).sp,
+            lineHeight = (16f * scale).sp, // Масштабируем межстрочный интервал для переносов
             textAlign = TextAlign.Start,
             softWrap = true,
             maxLines = 2
