@@ -14,8 +14,6 @@ import feature.projecteditor.state.ProjectCanvasState
 import feature.projecteditor.state.getNodeHeight
 
 private const val NODE_WIDTH = 120f
-private const val POWER_SOURCE_WIDTH = NODE_WIDTH
-
 private const val GRID_WIDTH = 200f
 private const val GRID_HEIGHT = 140f
 
@@ -105,13 +103,35 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectN
     nodes.forEach { node ->
         val isSelected = node.id == connectingFromNodeId
         when (node) {
-            is PowerSourceNode -> {
-                val height = getNodeHeight(node)
-                drawPowerSourceShape(Offset(node.position.x - POWER_SOURCE_WIDTH / 2, node.position.y - height / 2), Size(POWER_SOURCE_WIDTH, height), isSelected)
-            }
             is ShieldNode -> {
                 val height = getNodeHeight(node)
                 drawShieldShape(Offset(node.position.x - NODE_WIDTH / 2, node.position.y - height / 2), Size(NODE_WIDTH, height), isSelected)
+            }
+            is UpsNode -> {
+                val height = getNodeHeight(node)
+                drawUpsShape(
+                    textMeasurer = textMeasurer,
+                    topLeft = Offset(node.position.x - NODE_WIDTH / 2, node.position.y - height / 2),
+                    size = Size(NODE_WIDTH, height),
+                    isSelected = isSelected
+                )
+            }
+            is BatteryNode -> {
+                val height = getNodeHeight(node)
+                drawBatteryShape(Offset(node.position.x - NODE_WIDTH / 2, node.position.y - height / 2), Size(NODE_WIDTH, height), isSelected)
+            }
+            is SolarPanelNode -> {
+                val height = getNodeHeight(node)
+                drawSolarPanelShape(Offset(node.position.x - NODE_WIDTH / 2, node.position.y - height / 2), Size(NODE_WIDTH, height), isSelected)
+            }
+            is InverterNode -> {
+                val height = getNodeHeight(node)
+                drawInverterShape(
+                    textMeasurer = textMeasurer,
+                    topLeft = Offset(node.position.x - NODE_WIDTH / 2, node.position.y - height / 2),
+                    size = Size(NODE_WIDTH, height),
+                    isSelected = isSelected
+                )
             }
             is TransformerNode -> drawTransformerShape(node.position.toOffset(), node.radiusOuter, isSelected)
             is GeneratorNode -> drawGeneratorShape(textMeasurer, node.position.toOffset(), node.radius, isSelected)

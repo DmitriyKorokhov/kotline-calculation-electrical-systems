@@ -32,17 +32,20 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
-private const val POWER_SOURCE_WIDTH = NODE_WIDTH
 private const val TRANSFORMER_RADIUS = 40f
 internal const val GENERATOR_RADIUS = 50f
 
 private val PALETTE_HEIGHT_DP = 128.dp
 private val PALETTE_CELL_HEIGHT_DP = 110.dp
 
-private enum class PaletteNodeType { SHIELD, POWER_SOURCE, TRANSFORMER, GENERATOR }
+private enum class PaletteNodeType {
+    SHIELD, TRANSFORMER, GENERATOR, UPS, BATTERY, SOLAR_PANEL, INVERTER
+}
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
@@ -208,22 +211,11 @@ fun ProjectView(
                         if (node.name.isNotBlank() || node is ShieldNode) {
                             val screenPos = state.worldToScreen(node.position).toOffset()
                             val scale = state.scale
-                            val nodeHeight =
-                                if (node is PowerSourceNode) getNodeHeight(node) * scale else NODE_HEIGHT * scale
                             when (node) {
                                 is ShieldNode -> {
-                                    val displayName =
-                                        ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
-                                    NodeNameText(displayName, screenPos, NODE_WIDTH * scale, nodeHeight)
+                                    val displayName = ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
+                                    RightSideNameText(displayName, screenPos, NODE_WIDTH * scale, scale)
                                 }
-
-                                is PowerSourceNode -> PowerSourceNameText(
-                                    node.name,
-                                    screenPos,
-                                    POWER_SOURCE_WIDTH * scale,
-                                    nodeHeight,
-                                    scale
-                                )
 
                                 is TransformerNode -> {
                                     val screenCenter = state.worldToScreen(node.position)
@@ -235,6 +227,10 @@ fun ProjectView(
                                     val screenCenter = state.worldToScreen(node.position)
                                     val r = node.radius * state.scale
                                     GeneratorNameText(node.name, screenCenter.toOffset(), r)
+                                }
+
+                                is UpsNode, is BatteryNode, is SolarPanelNode, is InverterNode -> {
+                                    RightSideNameText(node.name, screenPos, NODE_WIDTH * scale, scale)
                                 }
                             }
                         }
@@ -254,15 +250,6 @@ fun ProjectView(
                                     )
                                 }
 
-                                PaletteNodeType.POWER_SOURCE -> {
-                                    val width = POWER_SOURCE_WIDTH * state.scale
-                                    val height = getNodeHeight(PowerSourceNode(0, "", Point.Zero)) * state.scale
-                                    drawPowerSourceShape(
-                                        Offset(previewScreen.x - width / 2, previewScreen.y - height / 2),
-                                        Size(width, height)
-                                    )
-                                }
-
                                 PaletteNodeType.TRANSFORMER -> {
                                     val radius = TRANSFORMER_RADIUS * state.scale
                                     drawTransformerShape(previewScreen, radius)
@@ -271,6 +258,34 @@ fun ProjectView(
                                 PaletteNodeType.GENERATOR -> {
                                     val radius = GENERATOR_RADIUS * state.scale
                                     drawGeneratorShape(textMeasurer, previewScreen, radius)
+                                }
+                                PaletteNodeType.UPS -> {
+                                    val width = NODE_WIDTH * state.scale
+                                    val height = NODE_HEIGHT * state.scale
+                                    drawUpsShape(
+                                        textMeasurer = textMeasurer, // <--- Добавили это
+                                        topLeft = Offset(previewScreen.x - width / 2, previewScreen.y - height / 2),
+                                        size = Size(width, height)
+                                    )
+                                }
+                                PaletteNodeType.BATTERY -> {
+                                    val width = NODE_WIDTH * state.scale
+                                    val height = NODE_HEIGHT * state.scale
+                                    drawBatteryShape(Offset(previewScreen.x - width / 2, previewScreen.y - height / 2), Size(width, height))
+                                }
+                                PaletteNodeType.SOLAR_PANEL -> {
+                                    val width = NODE_WIDTH * state.scale
+                                    val height = NODE_HEIGHT * state.scale
+                                    drawSolarPanelShape(Offset(previewScreen.x - width / 2, previewScreen.y - height / 2), Size(width, height))
+                                }
+                                PaletteNodeType.INVERTER -> {
+                                    val width = NODE_WIDTH * state.scale
+                                    val height = NODE_HEIGHT * state.scale
+                                    drawInverterShape(
+                                        textMeasurer = textMeasurer, // <--- Добавили
+                                        topLeft = Offset(previewScreen.x - width / 2, previewScreen.y - height / 2),
+                                        size = Size(width, height)
+                                    )
                                 }
                                 null -> {}
                             }
@@ -307,9 +322,12 @@ fun ProjectView(
                             val worldPos = state.screenToWorld(local.toPoint())
                             when (paletteDragType) {
                                 PaletteNodeType.SHIELD -> state.addShieldNode(worldPos)
-                                PaletteNodeType.POWER_SOURCE -> state.addPowerSourceNode(worldPos)
                                 PaletteNodeType.TRANSFORMER -> state.addTransformerNode(worldPos)
                                 PaletteNodeType.GENERATOR -> state.addGeneratorNode(worldPos)
+                                PaletteNodeType.UPS -> state.addUpsNode(worldPos)
+                                PaletteNodeType.BATTERY -> state.addBatteryNode(worldPos)
+                                PaletteNodeType.SOLAR_PANEL -> state.addSolarPanelNode(worldPos)
+                                PaletteNodeType.INVERTER -> state.addInverterNode(worldPos)
                                 null -> {}
                             }
                             paletteDragType = null
@@ -336,14 +354,19 @@ private fun PaletteRow(
     onEndDrag: (Offset) -> Unit,
     onCancel: () -> Unit
 ) {
-    Row(modifier = Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.Start) {
+    Row(modifier = Modifier.fillMaxWidth().padding(10.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.Start) {
         PaletteItem(textMeasurer = textMeasurer, label = "Щит", widthDp = 130.dp, heightDp = cellHeight, drawType = PaletteNodeType.SHIELD, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
-        Spacer(modifier = Modifier.width(16.dp))
-        PaletteItem(textMeasurer = textMeasurer, label = "Шина", widthDp = 160.dp, heightDp = cellHeight, drawType = PaletteNodeType.POWER_SOURCE, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
         Spacer(modifier = Modifier.width(16.dp))
         PaletteItem(textMeasurer = textMeasurer, label = "Трансформатор", widthDp = 160.dp, heightDp = 110.dp, drawType = PaletteNodeType.TRANSFORMER, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
         Spacer(modifier = Modifier.width(16.dp))
         PaletteItem(textMeasurer = textMeasurer, label = "Генератор", widthDp = 130.dp, heightDp = cellHeight, drawType = PaletteNodeType.GENERATOR, onStartDrag = onStartDrag, onDrag = onDrag, onEndDrag = onEndDrag, onCancel = onCancel)
+        PaletteItem(textMeasurer, "ИБП", 130.dp, cellHeight, PaletteNodeType.UPS, onStartDrag, onDrag, onEndDrag, onCancel)
+        Spacer(Modifier.width(16.dp))
+        PaletteItem(textMeasurer, "АКБ", 130.dp, cellHeight, PaletteNodeType.BATTERY, onStartDrag, onDrag, onEndDrag, onCancel)
+        Spacer(Modifier.width(16.dp))
+        PaletteItem(textMeasurer, "Солн. Панель", 140.dp, cellHeight, PaletteNodeType.SOLAR_PANEL, onStartDrag, onDrag, onEndDrag, onCancel)
+        Spacer(Modifier.width(16.dp))
+        PaletteItem(textMeasurer, "Инвертор", 130.dp, cellHeight, PaletteNodeType.INVERTER, onStartDrag, onDrag, onEndDrag, onCancel)
     }
 }
 
@@ -399,10 +422,6 @@ private fun PaletteItem(
             val h = size.height * 0.7f
             when (drawType) {
                 PaletteNodeType.SHIELD -> drawShieldShape(Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
-                PaletteNodeType.POWER_SOURCE -> {
-                    val correctHeight = h / 4f
-                    drawPowerSourceShape(Offset((size.width - w) / 2f, (size.height - correctHeight) / 2f), Size(w, correctHeight))
-                }
                 PaletteNodeType.TRANSFORMER -> {
                     val radius = size.width * 0.25f
                     drawTransformerShape(Offset(size.width / 2f, size.height / 2f), radius)
@@ -411,6 +430,10 @@ private fun PaletteItem(
                     val radius = size.width * 0.35f
                     drawGeneratorShape(textMeasurer, Offset(size.width / 2f, size.height / 2f), radius)
                 }
+                PaletteNodeType.UPS -> drawUpsShape(textMeasurer, Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
+                PaletteNodeType.BATTERY -> drawBatteryShape(Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
+                PaletteNodeType.SOLAR_PANEL -> drawSolarPanelShape(Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
+                PaletteNodeType.INVERTER -> drawInverterShape(textMeasurer, Offset((size.width - w) / 2f, (size.height - h) / 2f), Size(w, h))
             }
         }
         Text(text = label, fontSize = 13.sp, modifier = Modifier.align(Alignment.BottomCenter))
@@ -444,20 +467,6 @@ private fun NodeNameText(name: String, screenPos: Offset, nodeWidth: Float, node
     }
 }
 
-@Composable
-private fun PowerSourceNameText(name: String, screenPos: Offset, nodeWidth: Float, nodeHeight: Float, scale: Float) {
-    val density = LocalDensity.current
-
-    val offsetX = with(density) { (screenPos.x - nodeWidth / 2f).toDp() }
-    val offsetY = with(density) { (screenPos.y - nodeHeight / 2f - (25 * scale)).toDp() }
-
-    Text(
-        text = name,
-        modifier = Modifier.offset(offsetX, offsetY),
-        color = MaterialTheme.colors.onSurface,
-        fontSize = 14.sp
-    )
-}
 
 @Composable
 private fun TransformerNameText(name: String, screenCenter: Offset, radiusScreen: Float) {
@@ -595,4 +604,20 @@ private fun RenameNodeDialog(state: ProjectCanvasState) {
             dismissButton = { Button(onClick = { state.showRenameDialog = false }) { Text("Отмена") } }
         )
     }
+}
+
+@Composable
+private fun RightSideNameText(name: String, screenPos: Offset, nodeWidth: Float, scale: Float) {
+    val density = LocalDensity.current
+
+    // Смещаем текст вправо от центра ноды (плюс небольшой отступ 15 пикселей)
+    val offsetX = with(density) { (screenPos.x + nodeWidth / 2f + 15f * scale).toDp() }
+    val offsetY = with(density) { (screenPos.y - 10f * scale).toDp() }
+
+    Text(
+        text = name,
+        modifier = Modifier.offset(offsetX, offsetY),
+        color = MaterialTheme.colors.onSurface,
+        fontSize = 14.sp
+    )
 }

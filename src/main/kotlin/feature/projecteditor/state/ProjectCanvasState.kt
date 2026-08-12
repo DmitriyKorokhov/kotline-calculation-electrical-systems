@@ -7,8 +7,6 @@ import kotlin.math.floor
 // Константы размеров объектов и сетки
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
-private const val POWER_SOURCE_WIDTH = NODE_WIDTH
-private const val POWER_SOURCE_HEIGHT = NODE_HEIGHT / 4f
 
 /**
  * Класс-хранитель состояния (State Holder).
@@ -82,7 +80,7 @@ class ProjectCanvasState {
                 }
                 else -> {
                     // ВОССТАНОВЛЕНО: переменные width и height для правильного расчета клика
-                    val width = if (node is PowerSourceNode) POWER_SOURCE_WIDTH else NODE_WIDTH
+                    val width = NODE_WIDTH
                     val height = getNodeHeight(node)
                     val nodeTopLeft = Point(node.position.x - width / 2, node.position.y - height / 2)
                     worldPos.x >= nodeTopLeft.x && worldPos.x <= nodeTopLeft.x + width &&
@@ -101,9 +99,12 @@ class ProjectCanvasState {
             val node = nodes[index]
             val updatedNode = when (node) {
                 is ShieldNode -> node.copy(position = newPosition)
-                is PowerSourceNode -> node.copy(position = newPosition)
                 is TransformerNode -> node.copy(position = newPosition)
                 is GeneratorNode -> node.copy(position = newPosition)
+                is UpsNode -> node.copy(position = newPosition)
+                is BatteryNode -> node.copy(position = newPosition)
+                is SolarPanelNode -> node.copy(position = newPosition)
+                is InverterNode -> node.copy(position = newPosition)
                 else -> node
             }
             nodes[index] = updatedNode
@@ -125,13 +126,6 @@ class ProjectCanvasState {
         saveHistory()
         val snappedPosition = snapToGrid(worldPos)
         nodes.add(ShieldNode(id = nextId++, name = "Щит", position = snappedPosition))
-        showCanvasContextMenu = false
-    }
-
-    fun addPowerSourceNode(worldPos: Point) {
-        saveHistory()
-        val snappedPosition = snapToGrid(worldPos)
-        nodes.add(PowerSourceNode(id = nextId++, name = "Шина", position = snappedPosition))
         showCanvasContextMenu = false
     }
 
@@ -175,14 +169,46 @@ class ProjectCanvasState {
             saveHistory()
             val updatedNode = when (it) {
                 is ShieldNode -> it.copy(name = newName)
-                is PowerSourceNode -> it.copy(name = newName)
                 is TransformerNode -> it.copy(name = newName)
+                is GeneratorNode -> it.copy(name = newName)
+                is UpsNode -> it.copy(name = newName)
+                is BatteryNode -> it.copy(name = newName)
+                is SolarPanelNode -> it.copy(name = newName)
+                is InverterNode -> it.copy(name = newName)
                 else -> it
             }
             val index = nodes.indexOf(it)
             if (index != -1) nodes[index] = updatedNode
         }
         showRenameDialog = false
+    }
+
+    fun addUpsNode(worldPos: Point) {
+        saveHistory()
+        val snappedPosition = snapToGrid(worldPos)
+        nodes.add(UpsNode(id = nextId++, name = "ИБП", position = snappedPosition))
+        showCanvasContextMenu = false
+    }
+
+    fun addBatteryNode(worldPos: Point) {
+        saveHistory()
+        val snappedPosition = snapToGrid(worldPos)
+        nodes.add(BatteryNode(id = nextId++, name = "АКБ", position = snappedPosition))
+        showCanvasContextMenu = false
+    }
+
+    fun addSolarPanelNode(worldPos: Point) {
+        saveHistory()
+        val snappedPosition = snapToGrid(worldPos)
+        nodes.add(SolarPanelNode(id = nextId++, name = "СБ", position = snappedPosition))
+        showCanvasContextMenu = false
+    }
+
+    fun addInverterNode(worldPos: Point) {
+        saveHistory()
+        val snappedPosition = snapToGrid(worldPos)
+        nodes.add(InverterNode(id = nextId++, name = "Инвертор", position = snappedPosition))
+        showCanvasContextMenu = false
     }
 
     private fun snapToGrid(position: Point): Point {
@@ -204,12 +230,12 @@ class ProjectCanvasState {
     }
 }
 
+
 /**
  * Вспомогательная функция для получения высоты узла.
  */
 fun getNodeHeight(node: ProjectNode): Float {
     return when (node) {
-        is PowerSourceNode -> POWER_SOURCE_HEIGHT
         is TransformerNode -> {
             2f * node.radiusOuter + node.radiusInner
         }

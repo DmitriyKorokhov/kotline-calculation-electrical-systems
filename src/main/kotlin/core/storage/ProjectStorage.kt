@@ -77,7 +77,6 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
     val serializableNodes = nodes.map { node ->
         when (node) {
             is ShieldNode -> SerializableShieldNode(node.id, node.name, node.position.x, node.position.y)
-            is PowerSourceNode -> SerializablePowerSourceNode(node.id, node.name, node.position.x, node.position.y)
             is TransformerNode -> SerializableTransformerNode(
                 node.id,
                 node.name,
@@ -93,6 +92,10 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
                 node.position.y,
                 node.radius
             )
+            is UpsNode -> SerializableUpsNode(node.id, node.name, node.position.x, node.position.y, node.activePowerW, node.batteryVoltageV)
+            is BatteryNode -> SerializableBatteryNode(node.id, node.name, node.position.x, node.position.y, node.capacityAh, node.voltageV)
+            is SolarPanelNode -> SerializableSolarPanelNode(node.id, node.name, node.position.x, node.position.y, node.maxPowerW, node.vocV)
+            is InverterNode -> SerializableInverterNode(node.id, node.name, node.position.x, node.position.y, node.nominalPowerW, node.isGridTie)
         }
     }
 
@@ -196,9 +199,12 @@ private fun SerializableNode.toDomainNode(): ProjectNode {
     val pos = Point(x, y)
     return when (this) {
         is SerializableShieldNode -> ShieldNode(id, name, pos)
-        is SerializablePowerSourceNode -> PowerSourceNode(id, name, pos)
         is SerializableTransformerNode -> TransformerNode(id, name, pos, radiusOuter, radiusInner)
         is SerializableGeneratorNode -> GeneratorNode(id, name, pos, radius)
+        is SerializableUpsNode -> UpsNode(id, name, pos, activePowerW, batteryVoltageV)
+        is SerializableBatteryNode -> BatteryNode(id, name, pos, capacityAh, voltageV)
+        is SerializableSolarPanelNode -> SolarPanelNode(id, name, pos, maxPowerW, vocV)
+        is SerializableInverterNode -> InverterNode(id, name, pos, nominalPowerW, isGridTie)
     }
 }
 

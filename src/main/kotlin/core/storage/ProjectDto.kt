@@ -37,15 +37,6 @@ data class SerializableShieldNode(
 ) : SerializableNode()
 
 @Serializable
-@SerialName("power_source")
-data class SerializablePowerSourceNode(
-    override val id: Int,
-    override val name: String,
-    override val x: Float,
-    override val y: Float
-) : SerializableNode()
-
-@Serializable
 @SerialName("transformer")
 data class SerializableTransformerNode(
     override val id: Int,
@@ -64,6 +55,50 @@ data class SerializableGeneratorNode(
     override val x: Float,
     override val y: Float,
     val radius: Float
+) : SerializableNode()
+
+@Serializable
+@SerialName("ups")
+data class SerializableUpsNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val activePowerW: Float,
+    val batteryVoltageV: Float
+) : SerializableNode()
+
+@Serializable
+@SerialName("battery")
+data class SerializableBatteryNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val capacityAh: Float,
+    val voltageV: Float
+) : SerializableNode()
+
+@Serializable
+@SerialName("solar_panel")
+data class SerializableSolarPanelNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val maxPowerW: Float,
+    val vocV: Float
+) : SerializableNode()
+
+@Serializable
+@SerialName("inverter")
+data class SerializableInverterNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val nominalPowerW: Float,
+    val isGridTie: Boolean
 ) : SerializableNode()
 
 @Serializable

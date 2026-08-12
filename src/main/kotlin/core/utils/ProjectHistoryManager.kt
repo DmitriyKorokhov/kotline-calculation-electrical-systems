@@ -46,9 +46,12 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
         val copiedNodes = this.nodes.map { node ->
             when (node) {
                 is ShieldNode -> node.copy()
-                is PowerSourceNode -> node.copy()
                 is TransformerNode -> node.copy()
                 is GeneratorNode -> node.copy()
+                is UpsNode -> node.copy()
+                is BatteryNode -> node.copy()
+                is SolarPanelNode -> node.copy()
+                is InverterNode -> node.copy()
             }
         }
         return CanvasSnapshot(
@@ -65,9 +68,12 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
         this.nodes.addAll(snapshot.nodes.map { node ->
             when (node) {
                 is ShieldNode -> node.copy()
-                is PowerSourceNode -> node.copy()
                 is TransformerNode -> node.copy()
                 is GeneratorNode -> node.copy()
+                is UpsNode -> node.copy()
+                is BatteryNode -> node.copy()
+                is SolarPanelNode -> node.copy()
+                is InverterNode -> node.copy()
             }
         })
 
