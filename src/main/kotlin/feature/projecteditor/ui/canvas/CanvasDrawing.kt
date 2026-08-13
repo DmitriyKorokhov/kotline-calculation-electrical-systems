@@ -150,7 +150,7 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectN
                 )
             }
             is TransformerNode -> drawTransformerShape(node.position.toOffset(), node.radiusOuter, isSelected)
-            is GeneratorNode -> drawGeneratorShape(textMeasurer, node.position.toOffset(), node.radius, isSelected)
+            is GeneratorNode -> drawGeneratorShape(node.position.toOffset(), node.radius, isSelected)
         }
     }
 }

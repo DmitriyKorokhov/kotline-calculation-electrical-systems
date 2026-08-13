@@ -161,7 +161,7 @@ fun ProjectView(
                     when (paletteDragType) {
                         PaletteNodeType.SHIELD -> drawShieldShape(centerOffset, Size(w, h))
                         PaletteNodeType.TRANSFORMER -> drawTransformerShape(previewScreen, 40f * state.scale)
-                        PaletteNodeType.GENERATOR -> drawGeneratorShape(textMeasurer, previewScreen, 50f * state.scale)
+                        PaletteNodeType.GENERATOR -> drawGeneratorShape(previewScreen, 50f * state.scale)
                         PaletteNodeType.UPS -> drawUpsShape(textMeasurer, centerOffset, Size(w, h))
                         PaletteNodeType.BATTERY -> drawBatteryShape(centerOffset, Size(w, h))
                         PaletteNodeType.SOLAR_PANEL -> drawSolarPanelShape(centerOffset, Size(w, h))

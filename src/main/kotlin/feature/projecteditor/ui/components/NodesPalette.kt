@@ -100,7 +100,7 @@ private fun PaletteItem(
             when (drawType) {
                 PaletteNodeType.SHIELD -> drawShieldShape(centerOffset, Size(w, h))
                 PaletteNodeType.TRANSFORMER -> drawTransformerShape(Offset(size.width / 2f, size.height / 2f), size.width * 0.25f)
-                PaletteNodeType.GENERATOR -> drawGeneratorShape(textMeasurer, Offset(size.width / 2f, size.height / 2f), size.width * 0.35f)
+                PaletteNodeType.GENERATOR -> drawGeneratorShape(Offset(size.width / 2f, size.height / 2f), size.width * 0.35f)
                 PaletteNodeType.UPS -> drawUpsShape(textMeasurer, centerOffset, Size(w, h))
                 PaletteNodeType.BATTERY -> drawBatteryShape(centerOffset, Size(w, h))
                 PaletteNodeType.SOLAR_PANEL -> drawSolarPanelShape(centerOffset, Size(w, h))
