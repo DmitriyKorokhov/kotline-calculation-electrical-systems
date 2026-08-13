@@ -96,6 +96,7 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
             is BatteryNode -> SerializableBatteryNode(node.id, node.name, node.position.x, node.position.y, node.capacityAh, node.voltageV)
             is SolarPanelNode -> SerializableSolarPanelNode(node.id, node.name, node.position.x, node.position.y, node.maxPowerW, node.vocV)
             is InverterNode -> SerializableInverterNode(node.id, node.name, node.position.x, node.position.y, node.nominalPowerW, node.isGridTie)
+            is SystemNode -> SerializableSystemNode(node.id, node.name, node.position.x, node.position.y, node.radius, node.nominalVoltageV, node.shortCircuitPowerMVA)
         }
     }
 
@@ -205,6 +206,7 @@ private fun SerializableNode.toDomainNode(): ProjectNode {
         is SerializableBatteryNode -> BatteryNode(id, name, pos, capacityAh, voltageV)
         is SerializableSolarPanelNode -> SolarPanelNode(id, name, pos, maxPowerW, vocV)
         is SerializableInverterNode -> InverterNode(id, name, pos, nominalPowerW, isGridTie)
+        is SerializableSystemNode -> SystemNode(id, name, pos, radius, nominalVoltageV, shortCircuitPowerMVA)
     }
 }
 

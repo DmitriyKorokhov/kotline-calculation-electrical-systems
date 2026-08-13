@@ -190,6 +190,7 @@ fun InteractiveCanvas(
                     is BatteryNode -> NODE_WIDTH * 0.5f
                     is UpsNode -> NODE_HEIGHT
                     is SolarPanelNode -> NODE_WIDTH * 0.8f
+                    is SystemNode -> node.radius * 2f
                     else -> NODE_WIDTH
                 }
 

@@ -87,6 +87,7 @@ class ProjectCanvasState {
                     // Проверка попадания в круг генератора
                     (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
                 }
+                is SystemNode -> (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
                 else -> {
                     // ВОССТАНОВЛЕНО: переменные width и height для правильного расчета клика
                     val width = NODE_WIDTH
@@ -114,6 +115,7 @@ class ProjectCanvasState {
                 is BatteryNode -> node.copy(position = newPosition)
                 is SolarPanelNode -> node.copy(position = newPosition)
                 is InverterNode -> node.copy(position = newPosition)
+                is SystemNode -> node.copy(position = newPosition)
                 else -> node
             }
             nodes[index] = updatedNode
@@ -142,12 +144,6 @@ class ProjectCanvasState {
         saveHistory()
         val snappedPosition = snapToGrid(worldPos)
         nodes.add(TransformerNode(id = nextId++, name = "T", position = snappedPosition, radiusOuter = 40f, radiusInner = 30f))
-        showCanvasContextMenu = false
-    }
-
-    fun addLevelLine(worldPos: Point) {
-        saveHistory()
-        levels.add(LevelLine(id = nextId++, yPosition = worldPos.y))
         showCanvasContextMenu = false
     }
 
@@ -184,6 +180,7 @@ class ProjectCanvasState {
                 is BatteryNode -> it.copy(name = newName)
                 is SolarPanelNode -> it.copy(name = newName)
                 is InverterNode -> it.copy(name = newName)
+                is SystemNode -> it.copy(name = newName)
                 else -> it
             }
             val index = nodes.indexOf(it)
@@ -217,6 +214,13 @@ class ProjectCanvasState {
         saveHistory()
         val snappedPosition = snapToGrid(worldPos)
         nodes.add(InverterNode(id = nextId++, name = "Инвертор", position = snappedPosition))
+        showCanvasContextMenu = false
+    }
+
+    fun addSystemNode(worldPos: Point) {
+        saveHistory()
+        val snappedPosition = snapToGrid(worldPos)
+        nodes.add(SystemNode(id = nextId++, name = "Система", position = snappedPosition))
         showCanvasContextMenu = false
     }
 
@@ -301,6 +305,7 @@ class ProjectCanvasState {
                 is BatteryNode -> node.copy(id = nextId, position = newPos)
                 is SolarPanelNode -> node.copy(id = nextId, position = newPos)
                 is InverterNode -> node.copy(id = nextId, position = newPos)
+                is SystemNode -> node.copy(id = nextId, position = newPos)
                 else -> node // Запасной вариант
             }
 

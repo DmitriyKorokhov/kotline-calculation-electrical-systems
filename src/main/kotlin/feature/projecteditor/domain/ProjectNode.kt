@@ -63,5 +63,14 @@ data class InverterNode(
     var isGridTie: Boolean = true
 ) : ProjectNode
 
+data class SystemNode(
+    override val id: Int,
+    override val name: String,
+    override var position: Point,
+    val radius: Float = 50f, // Такой же, как у генератора
+    val nominalVoltageV: Float = 400f,
+    val shortCircuitPowerMVA: Float = 500f
+) : ProjectNode
+
 data class Connection(val fromId: Int, val toId: Int)
 data class LevelLine(val id: Int, val yPosition: Float)

@@ -28,6 +28,18 @@ sealed class SerializableNode {
 }
 
 @Serializable
+@SerialName("system")
+data class SerializableSystemNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val radius: Float,
+    val nominalVoltageV: Float,
+    val shortCircuitPowerMVA: Float
+) : SerializableNode()
+
+@Serializable
 @SerialName("shield")
 data class SerializableShieldNode(
     override val id: Int,

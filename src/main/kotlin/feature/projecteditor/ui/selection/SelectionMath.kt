@@ -13,12 +13,14 @@ fun getBoundingBox(node: ProjectNode): Rect {
     val width = when (node) {
         is TransformerNode -> node.radiusOuter * 2f
         is GeneratorNode -> node.radius * 2f
+        is SystemNode -> node.radius * 2f
         else -> NODE_WIDTH
     }
     val height = when (node) {
         is TransformerNode -> node.radiusOuter * 2f
         is GeneratorNode -> node.radius * 2f
         is ShieldNode -> getNodeHeight(node)
+        is SystemNode -> node.radius * 2f
         else -> 80f // Базовая высота NODE_HEIGHT
     }
 

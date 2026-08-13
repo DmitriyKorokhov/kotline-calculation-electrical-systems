@@ -96,12 +96,14 @@ private fun DrawScope.drawConnections(connections: List<Connection>, nodes: List
             val startOffset = when (fromNode) {
                 is TransformerNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + 1.5f * fromNode.radiusOuter else fromNode.position.y - 1.5f * fromNode.radiusOuter)
                 is GeneratorNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + fromNode.radius else fromNode.position.y - fromNode.radius)
+                is SystemNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + fromNode.radius else fromNode.position.y - fromNode.radius)
                 else -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + getNodeHeight(fromNode) / 2 else fromNode.position.y - getNodeHeight(fromNode) / 2)
             }
 
             val endOffset = when (toNode) {
                 is TransformerNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - 1.5f * toNode.radiusOuter else toNode.position.y + 1.5f * toNode.radiusOuter)
                 is GeneratorNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - toNode.radius else toNode.position.y + toNode.radius)
+                is SystemNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - toNode.radius else toNode.position.y + toNode.radius)
                 else -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - getNodeHeight(toNode) / 2 else toNode.position.y + getNodeHeight(toNode) / 2)
             }
 
@@ -151,6 +153,7 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectN
             }
             is TransformerNode -> drawTransformerShape(node.position.toOffset(), node.radiusOuter, isSelected)
             is GeneratorNode -> drawGeneratorShape(node.position.toOffset(), node.radius, isSelected)
+            is SystemNode -> drawSystemShape( node.position.toOffset(), node.radius, isSelected)
         }
     }
 }
@@ -160,6 +163,7 @@ private fun calculateConnectionX(node: ProjectNode, connectionIndex: Int, totalC
     val span = when (node) {
         is TransformerNode -> node.radiusOuter * 1.5f
         is GeneratorNode -> node.radius * 1.5f
+        is SystemNode -> node.radius * 1.5f
         else -> NODE_WIDTH * 0.8f
     }
     return (node.position.x - span / 2) + connectionIndex * (span / (totalConnections - 1))

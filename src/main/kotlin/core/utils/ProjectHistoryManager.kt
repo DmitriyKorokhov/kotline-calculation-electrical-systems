@@ -52,6 +52,7 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
                 is BatteryNode -> node.copy()
                 is SolarPanelNode -> node.copy()
                 is InverterNode -> node.copy()
+                is SystemNode -> node.copy()
             }
         }
         return CanvasSnapshot(
@@ -74,6 +75,7 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
                 is BatteryNode -> node.copy()
                 is SolarPanelNode -> node.copy()
                 is InverterNode -> node.copy()
+                is SystemNode -> node.copy()
             }
         })
 

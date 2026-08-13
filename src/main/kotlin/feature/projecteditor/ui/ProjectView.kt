@@ -23,8 +23,8 @@ import feature.projecteditor.ui.components.EditorTabsPanel
 import feature.projecteditor.ui.components.palettes.*
 import feature.projecteditor.ui.canvas.InteractiveCanvas
 import feature.projecteditor.ui.menus.NodeContextMenu
-import feature.projecteditor.ui.components.NodesPalette
-import feature.projecteditor.ui.components.PaletteNodeType
+import feature.projecteditor.ui.components.palettes.NodesPalette
+import feature.projecteditor.ui.components.palettes.PaletteNodeType
 import feature.projecteditor.ui.menus.RenameNodeDialog
 import feature.projecteditor.ui.drawing.*
 import androidx.compose.ui.draw.clipToBounds
@@ -120,6 +120,7 @@ fun ProjectView(
                                 PaletteNodeType.BATTERY -> state.addBatteryNode(worldPos)
                                 PaletteNodeType.SOLAR_PANEL -> state.addSolarPanelNode(worldPos)
                                 PaletteNodeType.INVERTER -> state.addInverterNode(worldPos)
+                                PaletteNodeType.SYSTEM -> state.addSystemNode(worldPos)
                                 null -> {}
                             }
                             paletteDragType = null; palettePreviewWorldPos = null
@@ -166,6 +167,7 @@ fun ProjectView(
                         PaletteNodeType.BATTERY -> drawBatteryShape(centerOffset, Size(w, h))
                         PaletteNodeType.SOLAR_PANEL -> drawSolarPanelShape(centerOffset, Size(w, h))
                         PaletteNodeType.INVERTER -> drawInverterShape(textMeasurer, centerOffset, Size(w, h))
+                        PaletteNodeType.SYSTEM -> drawSystemShape( previewScreen, 50f * state.scale)
                         null -> {}
                     }
                 }
