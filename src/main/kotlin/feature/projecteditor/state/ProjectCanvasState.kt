@@ -1,8 +1,10 @@
 package feature.projecteditor.state
 
 import androidx.compose.runtime.*
-import feature.projecteditor.domain.* // Оставили только доменные импорты (без java.sql.Connection)
+import feature.projecteditor.domain.*
 import kotlin.math.floor
+import androidx.compose.runtime.mutableStateListOf
+import feature.projecteditor.ui.selection.getNodesInSelectionBox
 
 // Константы размеров объектов и сетки
 private const val NODE_WIDTH = 120f
@@ -24,6 +26,13 @@ class ProjectCanvasState {
     var selectedNode by mutableStateOf<ProjectNode?>(null)
     var showRenameDialog by mutableStateOf(false)
     var connectingFromNodeId by mutableStateOf<Int?>(null)
+    // === СОСТОЯНИЕ ВЫДЕЛЕНИЯ ===
+    val selectedNodeIds = mutableStateListOf<Int>()
+    var selectionStartScreen by mutableStateOf<Point?>(null)
+    var selectionEndScreen by mutableStateOf<Point?>(null)
+    // === МЕНЮ И БУФЕР ОБМЕНА ===
+    var showMultiSelectMenu by mutableStateOf(false)
+    var clipboardNodes by mutableStateOf<List<ProjectNode>>(emptyList())
 
     private val historyManager = core.utils.ProjectHistoryManager()
 
@@ -228,8 +237,79 @@ class ProjectCanvasState {
         )
         showCanvasContextMenu = false
     }
-}
 
+    fun clearSelection() {
+        selectedNodeIds.clear()
+    }
+
+    fun toggleOrAddSelection(nodeId: Int) {
+        // По ТЗ: если кликнули на невыделенную модель, она добавляется к выделенным
+        if (!selectedNodeIds.contains(nodeId)) {
+            selectedNodeIds.add(nodeId)
+        }
+    }
+
+    fun applySelectionBox() {
+        val start = selectionStartScreen ?: return
+        val end = selectionEndScreen ?: return
+
+        val startWorld = screenToWorld(start)
+        val endWorld = screenToWorld(end)
+
+        val newSelection = getNodesInSelectionBox(nodes, startWorld, endWorld)
+        selectedNodeIds.clear() // Сбрасываем старое выделение
+        selectedNodeIds.addAll(newSelection) // Применяем то, что попало в рамку
+    }
+
+    // 1. Удалить выделенное
+    fun deleteSelectedNodes() {
+        saveHistory()
+        nodes.removeAll { it.id in selectedNodeIds }
+        connections.removeAll { it.fromId in selectedNodeIds || it.toId in selectedNodeIds }
+        clearSelection()
+    }
+
+    // 2. Копировать выделенное
+    fun copySelectedNodes() {
+        clipboardNodes = nodes.filter { it.id in selectedNodeIds }
+    }
+
+    // 3. Вставить скопированное
+    fun pasteNodes(screenPos: Point) {
+        if (clipboardNodes.isEmpty()) return
+        saveHistory()
+
+        val worldPos = screenToWorld(screenPos)
+
+        // Находим левый верхний угол скопированной группы, чтобы вставить ровно под курсор
+        val minX = clipboardNodes.minOf { it.position.x }
+        val minY = clipboardNodes.minOf { it.position.y }
+        val deltaX = worldPos.x - minX
+        val deltaY = worldPos.y - minY
+
+        clearSelection()
+
+        clipboardNodes.forEach { node ->
+            val newPos = Point(node.position.x + deltaX, node.position.y + deltaY)
+
+            // Копируем узел, присваиваем новый ID и новые координаты
+            val newNode = when (node) {
+                is ShieldNode -> node.copy(id = nextId, position = newPos)
+                is TransformerNode -> node.copy(id = nextId, position = newPos)
+                is GeneratorNode -> node.copy(id = nextId, position = newPos)
+                is UpsNode -> node.copy(id = nextId, position = newPos)
+                is BatteryNode -> node.copy(id = nextId, position = newPos)
+                is SolarPanelNode -> node.copy(id = nextId, position = newPos)
+                is InverterNode -> node.copy(id = nextId, position = newPos)
+                else -> node // Запасной вариант
+            }
+
+            nodes.add(newNode)
+            selectedNodeIds.add(nextId) // Сразу выделяем вставленные элементы
+            nextId++
+        }
+    }
+}
 
 /**
  * Вспомогательная функция для получения высоты узла.

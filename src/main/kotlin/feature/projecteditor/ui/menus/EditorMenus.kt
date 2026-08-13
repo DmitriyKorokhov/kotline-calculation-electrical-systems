@@ -1,4 +1,4 @@
-package feature.projecteditor.ui.components
+package feature.projecteditor.ui.menus
 
 import androidx.compose.material.*
 import androidx.compose.runtime.*
@@ -16,36 +16,24 @@ fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (Int) -> Unit) {
     val xDp = with(density) { state.contextMenuPosition.x.toDp() }
     val yDp = with(density) { state.contextMenuPosition.y.toDp() }
 
-    // Обертка, которая находится ровно под курсором
     Box(modifier = Modifier.offset(x = xDp, y = yDp)) {
         DropdownMenu(
             expanded = state.showNodeContextMenu,
             onDismissRequest = { state.showNodeContextMenu = false }
-            // Убрали параметр offset отсюда!
         ) {
             DropdownMenuItem(onClick = { state.showRenameDialog = true; state.showNodeContextMenu = false }) { Text("Изменить название") }
+
             if (state.selectedNode is ShieldNode) {
                 DropdownMenuItem(onClick = { state.selectedNode?.let { onOpenShield(it.id) }; state.showNodeContextMenu = false }) { Text("Открыть") }
             }
+
             DropdownMenuItem(onClick = { state.startConnecting(); state.showNodeContextMenu = false }) { Text("Соединить") }
+            DropdownMenuItem(onClick = {
+                state.copySelectedNodes()
+                state.showNodeContextMenu = false
+            }) { Text("Копировать") }
+
             DropdownMenuItem(onClick = { state.deleteSelectedNode(); state.showNodeContextMenu = false }) { Text("Удалить") }
-        }
-    }
-}
-
-@Composable
-fun CanvasContextMenu(state: ProjectCanvasState) {
-    val density = LocalDensity.current
-    val xDp = with(density) { state.contextMenuPosition.x.toDp() }
-    val yDp = with(density) { state.contextMenuPosition.y.toDp() }
-
-    Box(modifier = Modifier.offset(x = xDp, y = yDp)) {
-        DropdownMenu(
-            expanded = state.showCanvasContextMenu,
-            onDismissRequest = { state.showCanvasContextMenu = false }
-        ) {
-            val worldPos = state.screenToWorld(state.contextMenuPosition)
-            DropdownMenuItem(onClick = { state.addLevelLine(worldPos); state.showCanvasContextMenu = false }) { Text("Добавить уровень") }
         }
     }
 }
@@ -72,5 +60,37 @@ fun RenameNodeDialog(state: ProjectCanvasState) {
             },
             dismissButton = { Button(onClick = { state.showRenameDialog = false }) { Text("Отмена") } }
         )
+    }
+}
+
+@Composable
+fun MultiSelectContextMenu(state: ProjectCanvasState) {
+    val density = LocalDensity.current
+    val xDp = with(density) { state.contextMenuPosition.x.toDp() }
+    val yDp = with(density) { state.contextMenuPosition.y.toDp() }
+
+    Box(modifier = Modifier.offset(x = xDp, y = yDp)) {
+        DropdownMenu(
+            expanded = state.showMultiSelectMenu,
+            onDismissRequest = { state.showMultiSelectMenu = false }
+        ) {
+            // Кнопки "Удалить" и "Копировать" показываются, только если есть выделенные элементы
+            if (state.selectedNodeIds.isNotEmpty()) {
+                DropdownMenuItem(onClick = {
+                    state.deleteSelectedNodes()
+                    state.showMultiSelectMenu = false
+                }) { Text("Удалить") }
+
+                DropdownMenuItem(onClick = {
+                    state.copySelectedNodes()
+                    state.showMultiSelectMenu = false
+                }) { Text("Копировать") }
+            }
+
+            DropdownMenuItem(onClick = {
+                state.pasteNodes(state.contextMenuPosition)
+                state.showMultiSelectMenu = false
+            }) { Text("Вставить") }
+        }
     }
 }

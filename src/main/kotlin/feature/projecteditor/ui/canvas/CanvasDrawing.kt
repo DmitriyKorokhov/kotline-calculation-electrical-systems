@@ -1,4 +1,4 @@
-package feature.projecteditor.ui
+package feature.projecteditor.ui.canvas
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -19,6 +19,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import feature.projecteditor.ui.utils.toOffset
+import feature.projecteditor.ui.utils.toPoint
+import kotlin.math.abs
+import kotlin.math.floor
 
 private const val NODE_WIDTH = 120f
 private const val GRID_WIDTH = 200f
@@ -38,7 +44,9 @@ fun DrawScope.drawProjectCanvas(textMeasurer: TextMeasurer, state: ProjectCanvas
         drawGrid(topLeftWorld.toOffset(), bottomRightWorld.toOffset())
         drawLevels(state.levels, topLeftWorld.toOffset(), bottomRightWorld.toOffset(), state.scale)
         drawConnections(state.connections, state.nodes, state.scale)
-        drawNodes(textMeasurer, state.nodes, state.connectingFromNodeId, state.scale)
+        drawNodes(textMeasurer, state.nodes, state.connectingFromNodeId, state.selectedNodeIds, state.scale)
+        // Добавляем отрисовку рамки выделения
+        drawSelectionBox(state)
     }
 }
 
@@ -106,9 +114,10 @@ private fun DrawScope.drawConnections(connections: List<Connection>, nodes: List
 }
 
 @OptIn(ExperimentalTextApi::class)
-private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectNode>, connectingFromNodeId: Int?, scale: Float) {
+private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectNode>, connectingFromNodeId: Int?, selectedIds: List<Int>, scale: Float) {
     nodes.forEach { node ->
-        val isSelected = node.id == connectingFromNodeId
+        // Модель подсвечивается, если она в массиве выделенных ИЛИ мы тянем от нее линию соединения
+        val isSelected = selectedIds.contains(node.id) || node.id == connectingFromNodeId
         when (node) {
             is ShieldNode -> {
                 val height = getNodeHeight(node)
@@ -158,8 +167,9 @@ private fun calculateConnectionX(node: ProjectNode, connectionIndex: Int, totalC
 
 @OptIn(ExperimentalTextApi::class)
 fun DrawScope.drawGridHeaders(textMeasurer: TextMeasurer, state: ProjectCanvasState) {
-    val headerHeight = 24.dp.toPx()
-    val headerWidth = 40.dp.toPx()
+    val headerSize =24.dp.toPx()
+    val headerHeight = headerSize
+    val headerWidth = headerSize
 
     val bgColor = Color(0xFFF5F5F5)
     val lineColor = Color.Gray
@@ -180,11 +190,11 @@ fun DrawScope.drawGridHeaders(textMeasurer: TextMeasurer, state: ProjectCanvasSt
     val topLeftWorld = state.screenToWorld(Offset(0f, 0f).toPoint())
     val bottomRightWorld = state.screenToWorld(Offset(size.width, size.height).toPoint())
 
-    val startCol = kotlin.math.floor(topLeftWorld.x / GRID_WIDTH).toInt() - 1
-    val endCol = kotlin.math.floor(bottomRightWorld.x / GRID_WIDTH).toInt() + 1
+    val startCol = floor(topLeftWorld.x / GRID_WIDTH).toInt() - 1
+    val endCol = floor(bottomRightWorld.x / GRID_WIDTH).toInt() + 1
 
-    val startRow = kotlin.math.floor(topLeftWorld.y / GRID_HEIGHT).toInt() - 1
-    val endRow = kotlin.math.floor(bottomRightWorld.y / GRID_HEIGHT).toInt() + 1
+    val startRow = floor(topLeftWorld.y / GRID_HEIGHT).toInt() - 1
+    val endRow = floor(bottomRightWorld.y / GRID_HEIGHT).toInt() + 1
 
     val textStyle = TextStyle(color = textColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
 
@@ -234,7 +244,7 @@ fun DrawScope.drawGridHeaders(textMeasurer: TextMeasurer, state: ProjectCanvasSt
 // Вспомогательная функция для генерации букв (A, B... Z, AA...).
 // Поддерживает и отрицательные индексы (на случай если пользователь ушел влево: -A, -B)
 private fun getExcelColumnName(index: Int): String {
-    var num = kotlin.math.abs(index)
+    var num = abs(index)
     var name = ""
     while (num >= 0) {
         name = ('A' + (num % 26)) + name
@@ -242,4 +252,37 @@ private fun getExcelColumnName(index: Int): String {
         if (num < 0) break
     }
     return if (index < 0) "-$name" else name
+}
+
+private fun DrawScope.drawSelectionBox(state: ProjectCanvasState) {
+    val start = state.selectionStartScreen ?: return
+    val end = state.selectionEndScreen ?: return
+
+    val isLeftToRight = start.x < end.x
+
+    // Цвета в стиле AutoCAD
+    val fillColor = if (isLeftToRight) Color(0, 85, 255, 30) else Color(0, 255, 0, 30)
+    val strokeColor = if (isLeftToRight) Color(0, 85, 255, 255) else Color(0, 255, 0, 255)
+
+    val startWorld = state.screenToWorld(start).toOffset()
+    val endWorld = state.screenToWorld(end).toOffset()
+
+    val rect = Rect(startWorld, endWorld)
+    drawRect(color = fillColor, topLeft = rect.topLeft, size = rect.size)
+
+    if (isLeftToRight) {
+        // Сплошная линия для Окна
+        drawRect(color = strokeColor, topLeft = rect.topLeft, size = rect.size, style = Stroke(1.5f / state.scale))
+    } else {
+        // Пунктирная линия для Секущей
+        drawRect(
+            color = strokeColor,
+            topLeft = rect.topLeft,
+            size = rect.size,
+            style = Stroke(
+                1.5f / state.scale,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f / state.scale, 10f / state.scale))
+            )
+        )
+    }
 }

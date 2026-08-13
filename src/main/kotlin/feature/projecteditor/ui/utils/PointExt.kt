@@ -1,4 +1,4 @@
-package feature.projecteditor.ui
+package feature.projecteditor.ui.utils
 
 import androidx.compose.ui.geometry.Offset
 import feature.projecteditor.domain.Point
