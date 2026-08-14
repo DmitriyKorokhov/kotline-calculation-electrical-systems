@@ -22,6 +22,9 @@ import feature.projecteditor.ui.labels.RightSideNameText
 import feature.shieldeditor.state.ShieldStorage
 import androidx.compose.ui.input.pointer.isTertiaryPressed
 import feature.projecteditor.state.ConnectionHit
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import java.awt.Cursor
 
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
@@ -35,9 +38,24 @@ fun InteractiveCanvas(
     modifier: Modifier = Modifier
 ) {
     var dragTarget by remember { mutableStateOf<Any?>(null) }
+    var nodeDragStartOffset by remember { mutableStateOf(Point.Zero) }
+
+    // === НОВЫЕ ПЕРЕМЕННЫЕ ===
+    var isPanning by remember { mutableStateOf(false) }
+    var isZooming by remember { mutableStateOf(false) }
+
+    // Вычисляем текущий курсор в зависимости от модификаторов и действий
+    val currentCursor = remember(isPanning, isZooming) {
+        when {
+            isPanning -> PointerIcon(Cursor(Cursor.MOVE_CURSOR))
+            isZooming -> PointerIcon(Cursor(Cursor.N_RESIZE_CURSOR))
+            else -> PointerIcon(Cursor(Cursor.CROSSHAIR_CURSOR)) // Всегда перекрестие на холсте
+        }
+    }
 
     Box(
         modifier = modifier
+            .pointerHoverIcon(currentCursor)
             // 1. КЛИКИ (ЛКМ - выделение/соединение, Двойной клик - открытие щита)
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -83,14 +101,19 @@ fun InteractiveCanvas(
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
+                        // Считываем клавиатуру
                         state.isCtrlPressed = event.keyboardModifiers.isCtrlPressed
                         state.isShiftPressed = event.keyboardModifiers.isShiftPressed
+                        // Проверяем, зажато ли колесико
+                        isPanning = event.buttons.isTertiaryPressed
                         val position = event.changes.first().position
-
                         // ЗУМ
                         if (event.type == PointerEventType.Scroll) {
+                            isZooming = true // Включаем курсор масштаба на момент скролла
                             state.onZoom(event.changes.first().scrollDelta.y, position.toPoint())
                             event.changes.first().consume()
+                        } else if (event.type == PointerEventType.Move && !isPanning) {
+                            isZooming = false // Сбрасываем курсор масштаба, если просто двигаем мышью
                         }
 
                         // ПЕРЕМЕЩЕНИЕ ХОЛСТА (Средняя кнопка мыши / Tertiary)
