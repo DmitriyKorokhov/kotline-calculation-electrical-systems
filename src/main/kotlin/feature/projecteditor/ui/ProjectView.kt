@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import feature.projecteditor.ui.menus.ConnectionContextMenu
 import feature.projecteditor.ui.menus.MultiSelectContextMenu
 import feature.projecteditor.ui.utils.toOffset
 import feature.projecteditor.ui.utils.toPoint
@@ -175,6 +176,7 @@ fun ProjectView(
 
             NodeContextMenu(state, onOpenShield)
             MultiSelectContextMenu(state)
+            ConnectionContextMenu(state)
             RenameNodeDialog(state)
         }
     }

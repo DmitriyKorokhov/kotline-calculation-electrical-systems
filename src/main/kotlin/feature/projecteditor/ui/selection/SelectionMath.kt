@@ -52,3 +52,51 @@ fun getNodesInSelectionBox(nodes: List<ProjectNode>, startWorld: Point, endWorld
         }
     }.map { it.id }
 }
+
+fun getConnectionsInSelectionBox(
+    connections: List<Connection>,
+    state: feature.projecteditor.state.ProjectCanvasState,
+    startWorld: Point,
+    endWorld: Point
+): List<Connection> {
+    val isLeftToRight = startWorld.x < endWorld.x
+    val selectBox = Rect(
+        left = minOf(startWorld.x, endWorld.x),
+        top = minOf(startWorld.y, endWorld.y),
+        right = maxOf(startWorld.x, endWorld.x),
+        bottom = maxOf(startWorld.y, endWorld.y)
+    )
+
+    return connections.filter { conn ->
+        val pts = state.calculateConnectionPoints(conn)
+        if (pts.isEmpty()) return@filter false
+
+        if (isLeftToRight) {
+            // Окно (слева направо): все точки линии должны быть внутри рамки
+            pts.all { pt -> selectBox.contains(Offset(pt.x, pt.y)) }
+        } else {
+            // Секущая (справа налево): достаточно пересечения любого отрезка
+            // 1. Если любая точка внутри - пересекает
+            if (pts.any { pt -> selectBox.contains(Offset(pt.x, pt.y)) }) return@filter true
+
+            // 2. Проверка пересечения самих отрезков с рамкой
+            for (i in 0 until pts.size - 1) {
+                val p1 = pts[i]
+                val p2 = pts[i + 1]
+                val minX = minOf(p1.x, p2.x)
+                val maxX = maxOf(p1.x, p2.x)
+                val minY = minOf(p1.y, p2.y)
+                val maxY = maxOf(p1.y, p2.y)
+
+                // Так как линии у нас ортогональные (только под прямым углом),
+                // достаточно проверки пересечения BoundingBox отрезка с BoundingBox рамки
+                if (maxX >= selectBox.left && minX <= selectBox.right &&
+                    maxY >= selectBox.top && minY <= selectBox.bottom
+                ) {
+                    return@filter true
+                }
+            }
+            false
+        }
+    }
+}

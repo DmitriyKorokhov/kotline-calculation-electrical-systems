@@ -1,3 +1,4 @@
+
 package core.storage
 
 import kotlinx.serialization.SerialName
@@ -114,12 +115,6 @@ data class SerializableInverterNode(
 ) : SerializableNode()
 
 @Serializable
-data class SerializableConnection(
-    val fromId: Int,
-    val toId: Int
-)
-
-@Serializable
 data class SerializableLevelLine(
     val id: Int,
     val yPosition: Float
@@ -174,4 +169,14 @@ data class SerializableAdditionalProtection(
     val breakerNumber: String,
     val protectionDevice: String,
     val protectionPoles: String
+)
+
+@Serializable
+data class SerializablePoint(val x: Float, val y: Float)
+
+@Serializable
+data class SerializableConnection(
+    val fromId: Int,
+    val toId: Int,
+    val waypoints: List<SerializablePoint> = emptyList()
 )

@@ -100,7 +100,6 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
         }
     }
 
-    val serializableConnections = connections.map { SerializableConnection(it.fromId, it.toId) }
     val serializableLevels = levels.map { SerializableLevelLine(it.id, it.yPosition) }
 
     // Сохраняем данные щитов
@@ -108,6 +107,14 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
     nodes.filterIsInstance<ShieldNode>().forEach { node ->
         val data = ShieldStorage.loadOrCreate(node.id)
         shieldsMap[node.id] = data.toSerializable()
+    }
+
+    val serializableConnections = connections.map { conn ->
+        SerializableConnection(
+            conn.fromId,
+            conn.toId,
+            conn.waypoints.map { wp -> SerializablePoint(wp.x, wp.y) }
+        )
     }
 
     return ProjectFile(
@@ -131,7 +138,13 @@ private fun ProjectCanvasState.loadFromProjectFile(file: ProjectFile) {
     levels.clear()
 
     nodes.addAll(file.nodes.map { it.toDomainNode() })
-    connections.addAll(file.connections.map { Connection(it.fromId, it.toId) })
+    connections.addAll(file.connections.map { conn ->
+        Connection(
+            conn.fromId,
+            conn.toId,
+            conn.waypoints.map { wp -> Point(wp.x, wp.y) }
+        )
+    })
     levels.addAll(file.levels.map { LevelLine(it.id, it.yPosition) })
 
     // Восстанавливаем данные щитов

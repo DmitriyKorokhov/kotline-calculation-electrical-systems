@@ -9,6 +9,8 @@ import feature.shieldeditor.state.ShieldStorage
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.Modifier
+import feature.projecteditor.domain.Point
+import feature.projecteditor.state.ConnectionHit
 
 @Composable
 fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (Int) -> Unit) {
@@ -91,6 +93,69 @@ fun MultiSelectContextMenu(state: ProjectCanvasState) {
                 state.pasteNodes(state.contextMenuPosition)
                 state.showMultiSelectMenu = false
             }) { Text("Вставить") }
+        }
+    }
+}
+
+@Composable
+fun ConnectionContextMenu(state: ProjectCanvasState) {
+    val density = LocalDensity.current
+    val xDp = with(density) { state.contextMenuPosition.x.toDp() }
+    val yDp = with(density) { state.contextMenuPosition.y.toDp() }
+
+    Box(modifier = Modifier.offset(x = xDp, y = yDp)) {
+        DropdownMenu(
+            expanded = state.showConnectionContextMenu,
+            onDismissRequest = { state.showConnectionContextMenu = false }
+        ) {
+            DropdownMenuItem(onClick = {
+                state.saveHistory()
+                state.connections.removeAll(state.selectedConnections)
+                state.selectedConnections.clear()
+                state.showConnectionContextMenu = false
+            }) { Text("Удалить") }
+
+            DropdownMenuItem(onClick = {
+                val hit = state.clickedConnectionHit
+                if (hit is ConnectionHit.Segment || hit is ConnectionHit.Midpoint) {
+                    val index = if (hit is ConnectionHit.Segment) hit.index else (hit as ConnectionHit.Midpoint).index
+                    var conn = hit.connection
+
+                    if (conn.waypoints.isEmpty()) {
+                        val initialPts = state.calculateConnectionPoints(conn)
+                        conn = conn.copy(waypoints = initialPts.subList(1, initialPts.size - 1))
+                        state.updateConnection(hit.connection, conn)
+                    }
+
+                    val pts = state.calculateConnectionPoints(conn)
+                    val p1 = pts[index]
+                    val p2 = pts[index+1]
+                    val isHorizontal = kotlin.math.abs(p1.y - p2.y) < kotlin.math.abs(p1.x - p2.x)
+
+                    val newWaypoints = conn.waypoints.toMutableList()
+                    val clickPos = state.screenToWorld(state.contextMenuPosition)
+
+                    val stepSize = 40f
+                    val insertIndex = index
+
+                    if (isHorizontal) {
+                        val midX = clickPos.x
+                        newWaypoints.add(insertIndex, Point(midX, p1.y))
+                        newWaypoints.add(insertIndex + 1, Point(midX, p1.y + stepSize))
+                        newWaypoints.add(insertIndex + 2, Point(p2.x, p1.y + stepSize))
+                    } else {
+                        val midY = clickPos.y
+                        newWaypoints.add(insertIndex, Point(p1.x, midY))
+                        newWaypoints.add(insertIndex + 1, Point(p1.x + stepSize, midY))
+                        newWaypoints.add(insertIndex + 2, Point(p1.x + stepSize, p2.y))
+                    }
+
+                    val updated = conn.copy(waypoints = newWaypoints)
+                    state.saveHistory()
+                    state.updateConnection(conn, updated)
+                }
+                state.showConnectionContextMenu = false
+            }) { Text("Добавить угол") }
         }
     }
 }

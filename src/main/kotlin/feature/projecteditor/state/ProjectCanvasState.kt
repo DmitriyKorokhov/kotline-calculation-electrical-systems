@@ -34,6 +34,13 @@ class ProjectCanvasState {
     var showMultiSelectMenu by mutableStateOf(false)
     var clipboardNodes by mutableStateOf<List<ProjectNode>>(emptyList())
 
+    var showConnectionContextMenu by mutableStateOf(false)
+    var clickedConnectionHit by mutableStateOf<ConnectionHit?>(null)
+
+    val selectedConnections = mutableStateListOf<Connection>()
+    var isCtrlPressed by mutableStateOf(false)
+    var isShiftPressed by mutableStateOf(false)
+
     private val historyManager = core.utils.ProjectHistoryManager()
 
     fun saveHistory() {
@@ -152,14 +159,6 @@ class ProjectCanvasState {
         showNodeContextMenu = false
     }
 
-    fun tryFinishConnecting(clickedNode: ProjectNode?) {
-        if (connectingFromNodeId != null && clickedNode != null && clickedNode.id != connectingFromNodeId) {
-            saveHistory()
-            connections.add(Connection(connectingFromNodeId!!, clickedNode.id))
-        }
-        connectingFromNodeId = null
-    }
-
     fun deleteSelectedNode() {
         selectedNode?.let { nodeToDelete ->
             saveHistory()
@@ -244,6 +243,7 @@ class ProjectCanvasState {
 
     fun clearSelection() {
         selectedNodeIds.clear()
+        selectedConnections.clear()
     }
 
     fun toggleOrAddSelection(nodeId: Int) {
@@ -260,16 +260,34 @@ class ProjectCanvasState {
         val startWorld = screenToWorld(start)
         val endWorld = screenToWorld(end)
 
-        val newSelection = getNodesInSelectionBox(nodes, startWorld, endWorld)
-        selectedNodeIds.clear() // Сбрасываем старое выделение
-        selectedNodeIds.addAll(newSelection) // Применяем то, что попало в рамку
+        val newNodes = feature.projecteditor.ui.selection.getNodesInSelectionBox(nodes, startWorld, endWorld)
+        val newConns = feature.projecteditor.ui.selection.getConnectionsInSelectionBox(connections, this, startWorld, endWorld)
+
+        if (isCtrlPressed) {
+            // Исключаем из выделения
+            selectedNodeIds.removeAll(newNodes)
+            selectedConnections.removeAll(newConns)
+        } else if (isShiftPressed) {
+            // Добавляем к выделению
+            newNodes.forEach { if (it !in selectedNodeIds) selectedNodeIds.add(it) }
+            newConns.forEach { if (it !in selectedConnections) selectedConnections.add(it) }
+        } else {
+            // Заменяем выделение
+            selectedNodeIds.clear()
+            selectedNodeIds.addAll(newNodes)
+            selectedConnections.clear()
+            selectedConnections.addAll(newConns)
+        }
     }
 
     // 1. Удалить выделенное
     fun deleteSelectedNodes() {
         saveHistory()
         nodes.removeAll { it.id in selectedNodeIds }
+        // Удаляем линии, привязанные к удаляемым узлам
         connections.removeAll { it.fromId in selectedNodeIds || it.toId in selectedNodeIds }
+        // Удаляем явно выделенные линии
+        connections.removeAll(selectedConnections)
         clearSelection()
     }
 
@@ -314,6 +332,171 @@ class ProjectCanvasState {
             nextId++
         }
     }
+
+    fun tryFinishConnecting(clickedNode: ProjectNode?) {
+        if (connectingFromNodeId != null && clickedNode != null && clickedNode.id != connectingFromNodeId) {
+            saveHistory()
+            connections.add(Connection(connectingFromNodeId!!, clickedNode.id))
+        }
+        connectingFromNodeId = null
+    }
+
+    fun updateConnection(oldConn: Connection, newConn: Connection) {
+        val index = connections.indexOf(oldConn)
+        if (index != -1) {
+            connections[index] = newConn
+            if (selectedConnections.contains(oldConn)) {
+                selectedConnections.remove(oldConn)
+                selectedConnections.add(newConn)
+            }
+        }
+    }
+
+    // === МЕТОДЫ РАСЧЕТА СОЕДИНЕНИЙ (ВНУТРИ ProjectCanvasState) ===
+    fun calculateConnectionX(node: ProjectNode, connectionIndex: Int, totalConnections: Int): Float {
+        if (totalConnections <= 1) return node.position.x
+        val span = when (node) {
+            is TransformerNode -> node.radiusOuter * 1.5f
+            is GeneratorNode -> node.radius * 1.5f
+            is SystemNode -> node.radius * 1.5f
+            else -> NODE_WIDTH * 0.8f
+        }
+        return (node.position.x - span / 2) + connectionIndex * (span / (totalConnections - 1))
+    }
+
+    // Метод с исправленными отступами для круглых моделей
+    fun getAttachmentPoint(node: ProjectNode, targetX: Float, isTop: Boolean): Point {
+        val yOffset = when (node) {
+            is TransformerNode -> node.radiusOuter * 0.8f
+            is GeneratorNode -> node.radius * 0.85f
+            is SystemNode -> node.radius * 0.85f
+            else -> getNodeHeight(node) / 2
+        }
+        return Point(targetX, if (isTop) node.position.y + yOffset else node.position.y - yOffset)
+    }
+
+    fun calculateConnectionPoints(conn: Connection): List<Point> {
+        val fromNode = nodes.find { it.id == conn.fromId } ?: return emptyList()
+        val toNode = nodes.find { it.id == conn.toId } ?: return emptyList()
+
+        val outgoingConnections = connections.filter { it.fromId == fromNode.id }
+        val outgoingIndex = outgoingConnections.indexOf(conn)
+        val startX = calculateConnectionX(fromNode, outgoingIndex, outgoingConnections.size)
+
+        val incomingConnections = connections.filter { it.toId == toNode.id }
+        val incomingIndex = incomingConnections.indexOf(conn)
+        val endX = calculateConnectionX(toNode, incomingIndex, incomingConnections.size)
+
+        val isFromNodeOnTop = fromNode.position.y < toNode.position.y
+        val startOffset = getAttachmentPoint(fromNode, startX, isFromNodeOnTop)
+        val endOffset = getAttachmentPoint(toNode, endX, !isFromNodeOnTop)
+
+        // Изначальное поведение: динамический центр
+        if (conn.waypoints.isEmpty()) {
+            val midY = (startOffset.y + endOffset.y) / 2f
+            return listOf(startOffset, Point(startOffset.x, midY), Point(endOffset.x, midY), endOffset)
+        }
+
+        // Если линию уже редактировали - якорим первый и последний углы к моделям
+        val wps = conn.waypoints.toMutableList()
+        wps[0] = Point(startOffset.x, wps[0].y)
+        wps[wps.lastIndex] = Point(endOffset.x, wps.last().y)
+
+        return listOf(startOffset) + wps + listOf(endOffset)
+    }
+
+    fun hitTestConnections(screenPos: Point): ConnectionHit? {
+        val worldPos = screenToWorld(screenPos)
+        val thresholdSq = (15f / scale) * (15f / scale)
+
+        for (conn in connections) {
+            if (selectedConnections.contains(conn)) {
+                val pts = calculateConnectionPoints(conn)
+                conn.waypoints.forEachIndexed { index, _ ->
+                    val actualWp = pts[index + 1]
+                    if ((worldPos - actualWp).getDistanceSquared() < thresholdSq) {
+                        return ConnectionHit.Waypoint(conn, index)
+                    }
+                }
+            }
+        }
+        for (conn in connections) {
+            if (selectedConnections.contains(conn)) {
+                val pts = calculateConnectionPoints(conn)
+                for (i in 0 until pts.size - 1) {
+                    val mid = (pts[i] + pts[i+1]) / 2f
+                    if ((worldPos - mid).getDistanceSquared() < thresholdSq) return ConnectionHit.Midpoint(conn, i)
+                }
+            }
+        }
+        for (conn in connections) {
+            val pts = calculateConnectionPoints(conn)
+            for (i in 0 until pts.size - 1) {
+                if (pointToSegmentDistanceSquared(worldPos, pts[i], pts[i+1]) < thresholdSq) return ConnectionHit.Segment(conn, i)
+            }
+        }
+        return null
+    }
+
+    fun cleanupConnection(conn: Connection): Connection {
+        if (conn.waypoints.isEmpty()) return conn
+
+        var currentWps = conn.waypoints.toMutableList()
+        val thresholdSq = (20f / scale) * (20f / scale) // Радиус "прилипания" для объединения
+        var changed = true
+
+        // Шаг 1. Объединение точек (удаляем схлопнувшиеся П-образные колена)
+        while (changed && currentWps.size >= 2) {
+            changed = false
+            for (i in 0 until currentWps.size - 1) {
+                if ((currentWps[i] - currentWps[i+1]).getDistanceSquared() < thresholdSq) {
+                    currentWps.removeAt(i + 1)
+                    currentWps.removeAt(i) // Удаляем сразу две точки, распрямляя линию
+                    changed = true
+                    break
+                }
+            }
+        }
+
+        // Шаг 2. Удаление лишних точек, если они выстроились в одну прямую линию
+        changed = true
+        while (changed && currentWps.size >= 3) {
+            changed = false
+            for (i in 0 until currentWps.size - 2) {
+                val p1 = currentWps[i]
+                val p2 = currentWps[i+1]
+                val p3 = currentWps[i+2]
+
+                val sameX = kotlin.math.abs(p1.x - p2.x) < 2f && kotlin.math.abs(p2.x - p3.x) < 2f
+                val sameY = kotlin.math.abs(p1.y - p2.y) < 2f && kotlin.math.abs(p2.y - p3.y) < 2f
+
+                if (sameX || sameY) {
+                    currentWps.removeAt(i + 1) // Удаляем точку посередине прямого участка
+                    changed = true
+                    break
+                }
+            }
+        }
+
+        return conn.copy(waypoints = currentWps)
+    }
+}
+
+sealed class ConnectionHit {
+    abstract val connection: Connection
+    data class Waypoint(override val connection: Connection, val index: Int) : ConnectionHit()
+    data class Midpoint(override val connection: Connection, val index: Int) : ConnectionHit()
+    data class Segment(override val connection: Connection, val index: Int) : ConnectionHit()
+    data class SegmentDrag(override val connection: Connection, val w1Index: Int, val w2Index: Int) : ConnectionHit()
+}
+
+fun pointToSegmentDistanceSquared(p: Point, v: Point, w: Point): Float {
+    val l2 = (w - v).getDistanceSquared()
+    if (l2 == 0f) return (p - v).getDistanceSquared()
+    var t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2
+    t = t.coerceIn(0f, 1f)
+    val proj = Point(v.x + t * (w.x - v.x), v.y + t * (w.y - v.y))
+    return (p - proj).getDistanceSquared()
 }
 
 /**

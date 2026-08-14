@@ -43,7 +43,7 @@ fun DrawScope.drawProjectCanvas(textMeasurer: TextMeasurer, state: ProjectCanvas
         // Для отрисовки переводим обратно в Offset
         drawGrid(topLeftWorld.toOffset(), bottomRightWorld.toOffset())
         drawLevels(state.levels, topLeftWorld.toOffset(), bottomRightWorld.toOffset(), state.scale)
-        drawConnections(state.connections, state.nodes, state.scale)
+        drawConnections(state)
         drawNodes(textMeasurer, state.nodes, state.connectingFromNodeId, state.selectedNodeIds, state.scale)
         // Добавляем отрисовку рамки выделения
         drawSelectionBox(state)
@@ -77,40 +77,43 @@ private fun DrawScope.drawLevels(levels: List<LevelLine>, topLeft: Offset, botto
     }
 }
 
-private fun DrawScope.drawConnections(connections: List<Connection>, nodes: List<ProjectNode>, scale: Float) {
-    connections.forEach { conn ->
-        val fromNode = nodes.find { it.id == conn.fromId }
-        val toNode = nodes.find { it.id == conn.toId }
+private fun DrawScope.drawConnections(state: ProjectCanvasState) {
+    state.connections.forEach { conn ->
+        val pts = state.calculateConnectionPoints(conn)
+        if (pts.size >= 2) {
+            val isSelected = state.selectedConnections.contains(conn)
+            // Линия всегда серая
+            val color = Color.Gray
+            val strokeWidth = 2f / state.scale
 
-        if (fromNode != null && toNode != null) {
-            val outgoingConnections = connections.filter { it.fromId == fromNode.id }
-            val outgoingIndex = outgoingConnections.indexOf(conn)
-            val startX = calculateConnectionX(fromNode, outgoingIndex, outgoingConnections.size)
-
-            val incomingConnections = connections.filter { it.toId == toNode.id }
-            val incomingIndex = incomingConnections.indexOf(conn)
-            val endX = calculateConnectionX(toNode, incomingIndex, incomingConnections.size)
-
-            val isFromNodeOnTop = fromNode.position.y < toNode.position.y
-
-            val startOffset = when (fromNode) {
-                is TransformerNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + 1.5f * fromNode.radiusOuter else fromNode.position.y - 1.5f * fromNode.radiusOuter)
-                is GeneratorNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + fromNode.radius else fromNode.position.y - fromNode.radius)
-                is SystemNode -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + fromNode.radius else fromNode.position.y - fromNode.radius)
-                else -> Offset(startX, if (isFromNodeOnTop) fromNode.position.y + getNodeHeight(fromNode) / 2 else fromNode.position.y - getNodeHeight(fromNode) / 2)
+            for (i in 0 until pts.size - 1) {
+                drawLine(color = color, start = pts[i].toOffset(), end = pts[i+1].toOffset(), strokeWidth = strokeWidth)
             }
 
-            val endOffset = when (toNode) {
-                is TransformerNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - 1.5f * toNode.radiusOuter else toNode.position.y + 1.5f * toNode.radiusOuter)
-                is GeneratorNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - toNode.radius else toNode.position.y + toNode.radius)
-                is SystemNode -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - toNode.radius else toNode.position.y + toNode.radius)
-                else -> Offset(endX, if (isFromNodeOnTop) toNode.position.y - getNodeHeight(toNode) / 2 else toNode.position.y + getNodeHeight(toNode) / 2)
-            }
+            // Отрисовка маркеров поверх выделенной линии
+            if (isSelected) {
+                // Кружочки на всех внутренних углах
+                for (i in 1 until pts.size - 1) {
+                    drawCircle(Color.Blue, radius = 6f / state.scale, center = pts[i].toOffset())
+                }
 
-            val midY = (startOffset.y + endOffset.y) / 2
-            drawLine(color = Color.Gray, start = startOffset, end = Offset(startOffset.x, midY), strokeWidth = 2f / scale)
-            drawLine(color = Color.Gray, start = Offset(startOffset.x, midY), end = Offset(endOffset.x, midY), strokeWidth = 2f / scale)
-            drawLine(color = Color.Gray, start = Offset(endOffset.x, midY), end = endOffset, strokeWidth = 2f / scale)
+                // Утолщения на ВСЕХ участках
+                for (i in 0 until pts.size - 1) {
+                    val p1 = pts[i]
+                    val p2 = pts[i+1]
+                    val mid = (p1 + p2) / 2f
+
+                    val isHorizontal = kotlin.math.abs(p1.y - p2.y) < kotlin.math.abs(p1.x - p2.x)
+                    val lineLen = 24f / state.scale
+                    val midThick = 8f / state.scale // Сделано толще (было 6)
+
+                    if (isHorizontal) {
+                        drawLine(Color.Blue, start = Offset(mid.x - lineLen/2, mid.y), end = Offset(mid.x + lineLen/2, mid.y), strokeWidth = midThick)
+                    } else {
+                        drawLine(Color.Blue, start = Offset(mid.x, mid.y - lineLen/2), end = Offset(mid.x, mid.y + lineLen/2), strokeWidth = midThick)
+                    }
+                }
+            }
         }
     }
 }

@@ -72,5 +72,10 @@ data class SystemNode(
     val shortCircuitPowerMVA: Float = 500f
 ) : ProjectNode
 
-data class Connection(val fromId: Int, val toId: Int)
+data class Connection(
+    val fromId: Int,
+    val toId: Int,
+    val waypoints: List<Point> = emptyList()
+)
+
 data class LevelLine(val id: Int, val yPosition: Float)
