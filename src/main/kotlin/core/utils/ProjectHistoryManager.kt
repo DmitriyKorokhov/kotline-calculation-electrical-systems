@@ -53,6 +53,10 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
                 is SolarPanelNode -> node.copy()
                 is InverterNode -> node.copy()
                 is SystemNode -> node.copy()
+                is ItRackRowNode -> node.copy(
+                    racks = node.racks.map { it.copy() },
+                    feeds = node.feeds.map { it.copy(connectedRacks = it.connectedRacks.toSet()) }
+                )
             }
         }
         return CanvasSnapshot(
@@ -76,6 +80,10 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
                 is SolarPanelNode -> node.copy()
                 is InverterNode -> node.copy()
                 is SystemNode -> node.copy()
+                is ItRackRowNode -> node.copy(
+                    racks = node.racks.map { it.copy() },
+                    feeds = node.feeds.map { it.copy(connectedRacks = it.connectedRacks.toSet()) }
+                )
             }
         })
 

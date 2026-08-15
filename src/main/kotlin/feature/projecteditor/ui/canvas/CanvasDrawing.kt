@@ -44,7 +44,7 @@ fun DrawScope.drawProjectCanvas(textMeasurer: TextMeasurer, state: ProjectCanvas
         drawGrid(topLeftWorld.toOffset(), bottomRightWorld.toOffset())
         drawLevels(state.levels, topLeftWorld.toOffset(), bottomRightWorld.toOffset(), state.scale)
         drawConnections(state)
-        drawNodes(textMeasurer, state.nodes, state.connectingFromNodeId, state.selectedNodeIds, state.scale)
+        drawNodes(textMeasurer, state.nodes, state.connectingFromNodeId, state.selectedNodeIds)
         // Добавляем отрисовку рамки выделения
         drawSelectionBox(state)
     }
@@ -103,7 +103,7 @@ private fun DrawScope.drawConnections(state: ProjectCanvasState) {
                     val p2 = pts[i+1]
                     val mid = (p1 + p2) / 2f
 
-                    val isHorizontal = kotlin.math.abs(p1.y - p2.y) < kotlin.math.abs(p1.x - p2.x)
+                    val isHorizontal = abs(p1.y - p2.y) < abs(p1.x - p2.x)
                     val lineLen = 24f / state.scale
                     val midThick = 8f / state.scale // Сделано толще (было 6)
 
@@ -119,7 +119,7 @@ private fun DrawScope.drawConnections(state: ProjectCanvasState) {
 }
 
 @OptIn(ExperimentalTextApi::class)
-private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectNode>, connectingFromNodeId: Int?, selectedIds: List<Int>, scale: Float) {
+private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectNode>, connectingFromNodeId: Int?, selectedIds: List<Int>) {
     nodes.forEach { node ->
         // Модель подсвечивается, если она в массиве выделенных ИЛИ мы тянем от нее линию соединения
         val isSelected = selectedIds.contains(node.id) || node.id == connectingFromNodeId
@@ -157,19 +157,15 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectN
             is TransformerNode -> drawTransformerShape(node.position.toOffset(), node.radiusOuter, isSelected)
             is GeneratorNode -> drawGeneratorShape(node.position.toOffset(), node.radius, isSelected)
             is SystemNode -> drawSystemShape( node.position.toOffset(), node.radius, isSelected)
+            is ItRackRowNode -> {
+                drawItRackRowShape(
+                    centerOffset = node.position.toOffset(),
+                    node = node,
+                    isSelected = isSelected
+                )
+            }
         }
     }
-}
-
-private fun calculateConnectionX(node: ProjectNode, connectionIndex: Int, totalConnections: Int): Float {
-    if (totalConnections <= 1) return node.position.x
-    val span = when (node) {
-        is TransformerNode -> node.radiusOuter * 1.5f
-        is GeneratorNode -> node.radius * 1.5f
-        is SystemNode -> node.radius * 1.5f
-        else -> NODE_WIDTH * 0.8f
-    }
-    return (node.position.x - span / 2) + connectionIndex * (span / (totalConnections - 1))
 }
 
 @OptIn(ExperimentalTextApi::class)

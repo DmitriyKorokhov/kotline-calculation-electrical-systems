@@ -180,3 +180,25 @@ data class SerializableConnection(
     val toId: Int,
     val waypoints: List<SerializablePoint> = emptyList()
 )
+
+@Serializable
+data class SerializableRack(val index: Int, val powerW: Float)
+
+@Serializable
+data class SerializableRackFeed(
+    val name: String,
+    val connectedRacks: Set<Int>,
+    val isTop: Boolean,
+    val colorArgb: Long
+)
+
+@Serializable
+@SerialName("it_rack_row")
+data class SerializableItRackRowNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val racks: List<SerializableRack>,
+    val feeds: List<SerializableRackFeed>
+) : SerializableNode()

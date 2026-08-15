@@ -4,6 +4,8 @@ import androidx.compose.runtime.*
 import feature.projecteditor.domain.*
 import kotlin.math.floor
 import androidx.compose.runtime.mutableStateListOf
+import feature.projecteditor.ui.selection.FEED_LINE_SPACING
+import feature.projecteditor.ui.selection.getItRackRowSize
 import feature.projecteditor.ui.selection.getNodesInSelectionBox
 
 // Константы размеров объектов и сетки
@@ -40,6 +42,7 @@ class ProjectCanvasState {
     val selectedConnections = mutableStateListOf<Connection>()
     var isCtrlPressed by mutableStateOf(false)
     var isShiftPressed by mutableStateOf(false)
+    var showRackSettingsDialog by mutableStateOf(false)
 
     private val historyManager = core.utils.ProjectHistoryManager()
 
@@ -90,13 +93,21 @@ class ProjectCanvasState {
                     (worldPos - c1).getDistanceSquared() < node.radiusOuter * node.radiusOuter ||
                             (worldPos - c2).getDistanceSquared() < node.radiusOuter * node.radiusOuter
                 }
-                is GeneratorNode -> {
-                    // Проверка попадания в круг генератора
-                    (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
-                }
+                is GeneratorNode -> (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
                 is SystemNode -> (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
+                is ItRackRowNode -> {
+                    val (width, height) = feature.projecteditor.ui.selection.getItRackRowSize(node)
+                    val nodeTopLeft = Point(node.position.x - width / 2, node.position.y - height / 2)
+                    worldPos.x >= nodeTopLeft.x && worldPos.x <= nodeTopLeft.x + width &&
+                            worldPos.y >= nodeTopLeft.y && worldPos.y <= nodeTopLeft.y + height
+                }
+                is ItRackRowNode -> {
+                    val (width, height) = feature.projecteditor.ui.selection.getItRackRowSize(node)
+                    val nodeTopLeft = Point(node.position.x - width / 2, node.position.y - height / 2)
+                    worldPos.x >= nodeTopLeft.x && worldPos.x <= nodeTopLeft.x + width &&
+                            worldPos.y >= nodeTopLeft.y && worldPos.y <= nodeTopLeft.y + height
+                }
                 else -> {
-                    // ВОССТАНОВЛЕНО: переменные width и height для правильного расчета клика
                     val width = NODE_WIDTH
                     val height = getNodeHeight(node)
                     val nodeTopLeft = Point(node.position.x - width / 2, node.position.y - height / 2)
@@ -123,6 +134,7 @@ class ProjectCanvasState {
                 is SolarPanelNode -> node.copy(position = newPosition)
                 is InverterNode -> node.copy(position = newPosition)
                 is SystemNode -> node.copy(position = newPosition)
+                is ItRackRowNode -> node.copy(position = newPosition)
                 else -> node
             }
             nodes[index] = updatedNode
@@ -144,6 +156,13 @@ class ProjectCanvasState {
         saveHistory()
         val snappedPosition = snapToGrid(worldPos)
         nodes.add(ShieldNode(id = nextId++, name = "Щит", position = snappedPosition))
+        showCanvasContextMenu = false
+    }
+
+    fun addItRackRowNode(worldPos: Point) {
+        saveHistory()
+        val snappedPosition = snapToGrid(worldPos)
+        nodes.add(ItRackRowNode(id = nextId++, position = snappedPosition))
         showCanvasContextMenu = false
     }
 
@@ -180,6 +199,7 @@ class ProjectCanvasState {
                 is SolarPanelNode -> it.copy(name = newName)
                 is InverterNode -> it.copy(name = newName)
                 is SystemNode -> it.copy(name = newName)
+                is ItRackRowNode -> it.copy(name = newName)
                 else -> it
             }
             val index = nodes.indexOf(it)
@@ -244,13 +264,6 @@ class ProjectCanvasState {
     fun clearSelection() {
         selectedNodeIds.clear()
         selectedConnections.clear()
-    }
-
-    fun toggleOrAddSelection(nodeId: Int) {
-        // По ТЗ: если кликнули на невыделенную модель, она добавляется к выделенным
-        if (!selectedNodeIds.contains(nodeId)) {
-            selectedNodeIds.add(nodeId)
-        }
     }
 
     fun applySelectionBox() {
@@ -364,8 +377,28 @@ class ProjectCanvasState {
         return (node.position.x - span / 2) + connectionIndex * (span / (totalConnections - 1))
     }
 
-    // Метод с исправленными отступами для круглых моделей
-    fun getAttachmentPoint(node: ProjectNode, targetX: Float, isTop: Boolean): Point {
+    // Метод с исправленными отступами для круглых моделей и расчет привязок так, чтобы линии "прилипали" к координатам горизонтальных шин питания.
+    fun getAttachmentPoint(node: ProjectNode, targetX: Float, isTop: Boolean, connectionIndex: Int = 0): Point {
+        if (node is ItRackRowNode) {
+            val (_, totalHeight) = feature.projecteditor.ui.selection.getItRackRowSize(node)
+
+            // Получаем точное количество сгенерированных уровней
+            val assignments = feature.projecteditor.ui.selection.calculateFeedAssignments(node.feeds, node.racks)
+            val topTracksCount = assignments.values.filter { it.isTop }.maxOfOrNull { it.trackIndex + 1 } ?: 0
+            val bottomTracksCount = assignments.values.filter { !it.isTop }.maxOfOrNull { it.trackIndex + 1 } ?: 0
+
+            val feedYOffset = if (isTop) {
+                val feedIdx = connectionIndex % maxOf(1, topTracksCount)
+                (totalHeight / 2) - (feedIdx * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
+            } else {
+                val feedIdx = connectionIndex % maxOf(1, bottomTracksCount)
+                (totalHeight / 2) - (feedIdx * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
+            }
+
+            return Point(targetX, if (isTop) node.position.y - feedYOffset else node.position.y + feedYOffset)
+        }
+
+        // Существующая логика для остальных узлов
         val yOffset = when (node) {
             is TransformerNode -> node.radiusOuter * 0.8f
             is GeneratorNode -> node.radius * 0.85f
@@ -388,8 +421,8 @@ class ProjectCanvasState {
         val endX = calculateConnectionX(toNode, incomingIndex, incomingConnections.size)
 
         val isFromNodeOnTop = fromNode.position.y < toNode.position.y
-        val startOffset = getAttachmentPoint(fromNode, startX, isFromNodeOnTop)
-        val endOffset = getAttachmentPoint(toNode, endX, !isFromNodeOnTop)
+        val startOffset = getAttachmentPoint(fromNode, startX, isFromNodeOnTop, outgoingIndex)
+        val endOffset = getAttachmentPoint(toNode, endX, !isFromNodeOnTop, incomingIndex)
 
         // Изначальное поведение: динамический центр
         if (conn.waypoints.isEmpty()) {

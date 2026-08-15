@@ -78,4 +78,24 @@ data class Connection(
     val waypoints: List<Point> = emptyList()
 )
 
+data class Rack(
+    val index: Int,
+    var powerW: Float = 5f
+)
+
+data class RackFeed(
+    val name: String,
+    val connectedRacks: Set<Int> = emptySet(),
+    val isTop: Boolean = true,
+    val colorArgb: Long = if (isTop) 0xFFD32F2F else 0xFF1976D2 // Сохраняем цвет луча (ARGB)
+)
+
+data class ItRackRowNode(
+    override val id: Int,
+    override var name: String = "ИТ-стойки",
+    override var position: Point,
+    val racks: List<Rack> = listOf(Rack(1), Rack(2), Rack(3)),
+    val feeds: List<RackFeed> = listOf(RackFeed("Луч А", setOf(1, 2, 3), true), RackFeed("Луч B", setOf(1, 2, 3), false))
+) : ProjectNode
+
 data class LevelLine(val id: Int, val yPosition: Float)

@@ -11,6 +11,22 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.Modifier
 import feature.projecteditor.domain.Point
 import feature.projecteditor.state.ConnectionHit
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import feature.projecteditor.domain.ItRackRowNode
+import feature.projecteditor.domain.Rack
+import feature.projecteditor.domain.RackFeed
 
 @Composable
 fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (Int) -> Unit) {
@@ -24,6 +40,15 @@ fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (Int) -> Unit) {
             onDismissRequest = { state.showNodeContextMenu = false }
         ) {
             DropdownMenuItem(onClick = { state.showRenameDialog = true; state.showNodeContextMenu = false }) { Text("Изменить название") }
+
+            if (state.selectedNode is ItRackRowNode) {
+                DropdownMenuItem(onClick = {
+                    state.showRackSettingsDialog = true
+                    state.showNodeContextMenu = false
+                }) {
+                    Text("Настроить ряд")
+                }
+            }
 
             if (state.selectedNode is ShieldNode) {
                 DropdownMenuItem(onClick = { state.selectedNode?.let { onOpenShield(it.id) }; state.showNodeContextMenu = false }) { Text("Открыть") }

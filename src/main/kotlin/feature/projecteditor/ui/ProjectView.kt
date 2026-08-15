@@ -28,10 +28,13 @@ import feature.projecteditor.ui.components.palettes.PaletteNodeType
 import feature.projecteditor.ui.menus.RenameNodeDialog
 import feature.projecteditor.ui.drawing.*
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import feature.projecteditor.ui.menus.ConnectionContextMenu
+import feature.projecteditor.ui.menus.ItRackRowSettingsWindow
 import feature.projecteditor.ui.menus.MultiSelectContextMenu
 import feature.projecteditor.ui.utils.toOffset
 import feature.projecteditor.ui.utils.toPoint
@@ -122,6 +125,7 @@ fun ProjectView(
                                 PaletteNodeType.SOLAR_PANEL -> state.addSolarPanelNode(worldPos)
                                 PaletteNodeType.INVERTER -> state.addInverterNode(worldPos)
                                 PaletteNodeType.SYSTEM -> state.addSystemNode(worldPos)
+                                PaletteNodeType.IT_RACK_ROW -> state.addItRackRowNode(worldPos)
                                 null -> {}
                             }
                             paletteDragType = null; palettePreviewWorldPos = null
@@ -169,6 +173,14 @@ fun ProjectView(
                         PaletteNodeType.SOLAR_PANEL -> drawSolarPanelShape(centerOffset, Size(w, h))
                         PaletteNodeType.INVERTER -> drawInverterShape(textMeasurer, centerOffset, Size(w, h))
                         PaletteNodeType.SYSTEM -> drawSystemShape( previewScreen, 50f * state.scale)
+                        PaletteNodeType.IT_RACK_ROW -> {
+                            val dummyNode = feature.projecteditor.domain.ItRackRowNode(0, position = Point.Zero)
+                            withTransform({
+                                scale(state.scale, pivot = previewScreen)
+                            }) {
+                                drawItRackRowShape(previewScreen, dummyNode)
+                            }
+                        }
                         null -> {}
                     }
                 }
@@ -178,6 +190,12 @@ fun ProjectView(
             MultiSelectContextMenu(state)
             ConnectionContextMenu(state)
             RenameNodeDialog(state)
+            if (state.showRackSettingsDialog) {
+                ItRackRowSettingsWindow(
+                    state = state,
+                    onDismiss = { state.showRackSettingsDialog = false }
+                )
+            }
         }
     }
 }

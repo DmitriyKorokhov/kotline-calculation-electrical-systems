@@ -11,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -21,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import feature.projecteditor.ui.drawing.*
 
-enum class PaletteNodeType { SHIELD, TRANSFORMER, GENERATOR, UPS, BATTERY, SOLAR_PANEL, INVERTER, SYSTEM }
+enum class PaletteNodeType { SHIELD, TRANSFORMER, GENERATOR, UPS, BATTERY, SOLAR_PANEL, INVERTER, SYSTEM, IT_RACK_ROW }
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
@@ -51,6 +53,7 @@ fun NodesPalette(
         PaletteItem(textMeasurer, "Солнечная панель", 130.dp, cellHeight, PaletteNodeType.SOLAR_PANEL, onStartDrag, onDrag, onEndDrag, onCancel)
         PaletteItem(textMeasurer, "Инвертор", 120.dp, cellHeight, PaletteNodeType.INVERTER, onStartDrag, onDrag, onEndDrag, onCancel)
         PaletteItem(textMeasurer, "Система", 120.dp, cellHeight, PaletteNodeType.SYSTEM, onStartDrag, onDrag, onEndDrag, onCancel)
+        PaletteItem(textMeasurer, "ИТ-стойки", 120.dp, cellHeight, PaletteNodeType.IT_RACK_ROW, onStartDrag, onDrag, onEndDrag, onCancel)
     }
 }
 
@@ -144,6 +147,18 @@ private fun PaletteItem(
                     }
 
                     PaletteNodeType.SYSTEM -> drawSystemShape(center, minDimension * 0.45f)
+
+                    PaletteNodeType.IT_RACK_ROW -> {
+                        val dummyNode = feature.projecteditor.domain.ItRackRowNode(
+                            id = 0,
+                            position = feature.projecteditor.domain.Point.Zero
+                        )
+                        withTransform({
+                            scale(0.5f, center)
+                        }) {
+                            drawItRackRowShape(center, dummyNode)
+                        }
+                    }
                 }
             }
         }

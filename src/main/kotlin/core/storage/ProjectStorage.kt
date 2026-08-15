@@ -97,6 +97,14 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
             is SolarPanelNode -> SerializableSolarPanelNode(node.id, node.name, node.position.x, node.position.y, node.maxPowerW, node.vocV)
             is InverterNode -> SerializableInverterNode(node.id, node.name, node.position.x, node.position.y, node.nominalPowerW, node.isGridTie)
             is SystemNode -> SerializableSystemNode(node.id, node.name, node.position.x, node.position.y, node.radius, node.nominalVoltageV, node.shortCircuitPowerMVA)
+            is ItRackRowNode -> SerializableItRackRowNode(
+                node.id,
+                node.name,
+                node.position.x,
+                node.position.y,
+                node.racks.map { SerializableRack(it.index, it.powerW) },
+                node.feeds.map { SerializableRackFeed(it.name, it.connectedRacks, it.isTop, it.colorArgb) } // Добавили it.colorArgb
+            )
         }
     }
 
@@ -220,6 +228,13 @@ private fun SerializableNode.toDomainNode(): ProjectNode {
         is SerializableSolarPanelNode -> SolarPanelNode(id, name, pos, maxPowerW, vocV)
         is SerializableInverterNode -> InverterNode(id, name, pos, nominalPowerW, isGridTie)
         is SerializableSystemNode -> SystemNode(id, name, pos, radius, nominalVoltageV, shortCircuitPowerMVA)
+        is SerializableItRackRowNode -> ItRackRowNode(
+            id,
+            name,
+            pos,
+            racks.map { Rack(it.index, it.powerW) },
+            feeds.map { RackFeed(it.name, it.connectedRacks, it.isTop, it.colorArgb) } // Добавили it.colorArgb
+        )
     }
 }
 

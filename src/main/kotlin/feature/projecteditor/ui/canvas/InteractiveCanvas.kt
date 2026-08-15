@@ -38,12 +38,8 @@ fun InteractiveCanvas(
     modifier: Modifier = Modifier
 ) {
     var dragTarget by remember { mutableStateOf<Any?>(null) }
-    var nodeDragStartOffset by remember { mutableStateOf(Point.Zero) }
-
-    // === НОВЫЕ ПЕРЕМЕННЫЕ ===
     var isPanning by remember { mutableStateOf(false) }
     var isZooming by remember { mutableStateOf(false) }
-
     // Вычисляем текущий курсор в зависимости от модификаторов и действий
     val currentCursor = remember(isPanning, isZooming) {
         when {
@@ -61,7 +57,16 @@ fun InteractiveCanvas(
                 detectTapGestures(
                     onDoubleTap = { offset ->
                         val node = state.findNodeAtScreenPosition(offset.toPoint())
-                        if (node is ShieldNode) onOpenShield(node.id)
+                        if (node is ShieldNode) {
+                            onOpenShield(node.id)
+                        } else if (node is ItRackRowNode) {
+                            // Выделяем узел, чтобы диалог знал, чьи данные редактировать
+                            state.clearSelection()
+                            state.selectedNodeIds.add(node.id)
+                            state.selectedNode = node
+                            // Открываем диалог
+                            state.showRackSettingsDialog = true
+                        }
                     },
                     onTap = { offset ->
                         val node = state.findNodeAtScreenPosition(offset.toPoint())
@@ -295,12 +300,10 @@ fun InteractiveCanvas(
                             val target = dragTarget as ConnectionHit.Waypoint
                             val conn = target.connection
                             val wpIndex = target.index
-
                             val newWaypoints = conn.waypoints.toMutableList()
                             val currentPt = newWaypoints[wpIndex]
                             var newX = currentPt.x + deltaWorld.x
                             var newY = currentPt.y + deltaWorld.y
-
                             // Крайние углы жестко привязаны к моделям по оси X (могут двигаться только вверх-вниз)
                             if (wpIndex == 0) newX = currentPt.x
                             if (wpIndex == newWaypoints.lastIndex) newX = currentPt.x
@@ -359,6 +362,7 @@ fun InteractiveCanvas(
                     is UpsNode -> NODE_HEIGHT
                     is SolarPanelNode -> NODE_WIDTH * 0.8f
                     is SystemNode -> node.radius * 2f
+                    is ItRackRowNode -> feature.projecteditor.ui.selection.getItRackRowSize(node).first
                     else -> NODE_WIDTH
                 }
 
