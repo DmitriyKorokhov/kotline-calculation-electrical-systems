@@ -57,6 +57,7 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
                     racks = node.racks.map { it.copy() },
                     feeds = node.feeds.map { it.copy(connectedRacks = it.connectedRacks.toSet()) }
                 )
+                is RectifierNode -> node.copy()
             }
         }
         return CanvasSnapshot(
@@ -84,6 +85,7 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
                     racks = node.racks.map { it.copy() },
                     feeds = node.feeds.map { it.copy(connectedRacks = it.connectedRacks.toSet()) }
                 )
+                is RectifierNode -> node.copy()
             }
         })
 

@@ -202,3 +202,13 @@ data class SerializableItRackRowNode(
     val racks: List<SerializableRack>,
     val feeds: List<SerializableRackFeed>
 ) : SerializableNode()
+
+@Serializable
+@SerialName("rectifier")
+data class SerializableRectifierNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val nominalPowerW: Float
+) : SerializableNode()

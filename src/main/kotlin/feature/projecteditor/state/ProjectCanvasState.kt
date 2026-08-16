@@ -135,6 +135,7 @@ class ProjectCanvasState {
                 is InverterNode -> node.copy(position = newPosition)
                 is SystemNode -> node.copy(position = newPosition)
                 is ItRackRowNode -> node.copy(position = newPosition)
+                is RectifierNode -> node.copy(position = newPosition)
                 else -> node
             }
             nodes[index] = updatedNode
@@ -173,6 +174,13 @@ class ProjectCanvasState {
         showCanvasContextMenu = false
     }
 
+    fun addRectifierNode(worldPos: Point) {
+        saveHistory()
+        val snappedPosition = snapToGrid(worldPos)
+        nodes.add(RectifierNode(id = nextId++, name = "Выпрямитель", position = snappedPosition))
+        showCanvasContextMenu = false
+    }
+
     fun startConnecting() {
         connectingFromNodeId = selectedNode?.id
         showNodeContextMenu = false
@@ -200,6 +208,7 @@ class ProjectCanvasState {
                 is InverterNode -> it.copy(name = newName)
                 is SystemNode -> it.copy(name = newName)
                 is ItRackRowNode -> it.copy(name = newName)
+                is RectifierNode -> it.copy(name = newName)
                 else -> it
             }
             val index = nodes.indexOf(it)
@@ -460,16 +469,29 @@ class ProjectCanvasState {
             getAttachmentPoint(toNode, endX, !isFromNodeOnTop)
         }
 
+        val result = mutableListOf<Point>()
+        result.add(startOffset)
+
         if (conn.waypoints.isEmpty()) {
             val midY = (startOffset.y + endOffset.y) / 2f
-            return listOf(startOffset, Point(startOffset.x, midY), Point(endOffset.x, midY), endOffset)
+            result.add(Point(startOffset.x, midY))
+            result.add(Point(endOffset.x, midY))
+        } else {
+            val wps = conn.waypoints
+
+            if (wps.first().x != startOffset.x) {
+                result.add(Point(startOffset.x, wps.first().y))
+            }
+
+            result.addAll(wps)
+
+            if (wps.last().x != endOffset.x) {
+                result.add(Point(endOffset.x, wps.last().y))
+            }
         }
 
-        val wps = conn.waypoints.toMutableList()
-        wps[0] = Point(startOffset.x, wps[0].y)
-        wps[wps.lastIndex] = Point(endOffset.x, wps.last().y)
-
-        return listOf(startOffset) + wps + listOf(endOffset)
+        result.add(endOffset)
+        return result
     }
 
     fun hitTestConnections(screenPos: Point): ConnectionHit? {
@@ -479,10 +501,9 @@ class ProjectCanvasState {
         for (conn in connections) {
             if (selectedConnections.contains(conn)) {
                 val pts = calculateConnectionPoints(conn)
-                conn.waypoints.forEachIndexed { index, _ ->
-                    val actualWp = pts[index + 1]
-                    if ((worldPos - actualWp).getDistanceSquared() < thresholdSq) {
-                        return ConnectionHit.Waypoint(conn, index)
+                for (i in 1 until pts.size - 1) {
+                    if ((worldPos - pts[i]).getDistanceSquared() < thresholdSq) {
+                        return ConnectionHit.Waypoint(conn, i - 1)
                     }
                 }
             }

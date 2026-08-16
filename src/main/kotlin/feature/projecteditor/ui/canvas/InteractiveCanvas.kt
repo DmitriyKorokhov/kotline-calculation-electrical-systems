@@ -206,7 +206,8 @@ fun InteractiveCanvas(
                                     }
 
                                     val pts = state.calculateConnectionPoints(conn)
-                                    val newWaypoints = conn.waypoints.toMutableList()
+                                    val newWaypoints = pts.subList(1, pts.size - 1).toMutableList()
+
                                     var w1Index = index - 1
                                     var w2Index = index
 
@@ -300,7 +301,8 @@ fun InteractiveCanvas(
                             val target = dragTarget as ConnectionHit.Waypoint
                             val conn = target.connection
                             val wpIndex = target.index
-                            val newWaypoints = conn.waypoints.toMutableList()
+                            val pts = state.calculateConnectionPoints(conn)
+                            val newWaypoints = pts.subList(1, pts.size - 1).toMutableList()
                             val currentPt = newWaypoints[wpIndex]
                             var newX = currentPt.x + deltaWorld.x
                             var newY = currentPt.y + deltaWorld.y

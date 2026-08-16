@@ -23,7 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import feature.projecteditor.ui.drawing.*
 
-enum class PaletteNodeType { SHIELD, TRANSFORMER, GENERATOR, UPS, BATTERY, SOLAR_PANEL, INVERTER, SYSTEM, IT_RACK_ROW }
+enum class PaletteNodeType {
+    SHIELD, TRANSFORMER, GENERATOR, UPS, BATTERY, SOLAR_PANEL, INVERTER, RECTIFIER, SYSTEM, IT_RACK_ROW
+}
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
@@ -54,6 +56,7 @@ fun NodesPalette(
         PaletteItem(textMeasurer, "Инвертор", 120.dp, cellHeight, PaletteNodeType.INVERTER, onStartDrag, onDrag, onEndDrag, onCancel)
         PaletteItem(textMeasurer, "Система", 120.dp, cellHeight, PaletteNodeType.SYSTEM, onStartDrag, onDrag, onEndDrag, onCancel)
         PaletteItem(textMeasurer, "ИТ-стойки", 120.dp, cellHeight, PaletteNodeType.IT_RACK_ROW, onStartDrag, onDrag, onEndDrag, onCancel)
+        PaletteItem(textMeasurer, "Выпрямитель", 130.dp, cellHeight, PaletteNodeType.RECTIFIER, onStartDrag, onDrag, onEndDrag, onCancel)
     }
 }
 
@@ -158,6 +161,10 @@ private fun PaletteItem(
                         }) {
                             drawItRackRowShape(center, dummyNode)
                         }
+                    }
+
+                    PaletteNodeType.RECTIFIER -> drawRectShape(0.65f) { topLeft, s ->
+                        drawRectifierShape(textMeasurer, topLeft, s)
                     }
                 }
             }

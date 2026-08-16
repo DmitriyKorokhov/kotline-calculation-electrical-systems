@@ -77,41 +77,126 @@ private fun DrawScope.drawLevels(levels: List<LevelLine>, topLeft: Offset, botto
     }
 }
 
+private data class LineSegment(
+    val connection: Connection,
+    val start: Offset,
+    val end: Offset,
+    val isHorizontal: Boolean
+)
+
 private fun DrawScope.drawConnections(state: ProjectCanvasState) {
+    val strokeWidth = 2f / state.scale
+    // 1. Убрали зависимость от state.scale. Теперь радиус жестко привязан к миру (как ширина узлов).
+    val jumpRadius = 15f
+
+    val allSegments = mutableListOf<LineSegment>()
     state.connections.forEach { conn ->
         val pts = state.calculateConnectionPoints(conn)
-        if (pts.size >= 2) {
-            val isSelected = state.selectedConnections.contains(conn)
-            // Линия всегда серая
-            val color = Color.Gray
-            val strokeWidth = 2f / state.scale
+        for (i in 0 until pts.size - 1) {
+            val p1 = pts[i].toOffset()
+            val p2 = pts[i+1].toOffset()
+            val isHorizontal = kotlin.math.abs(p1.y - p2.y) < kotlin.math.abs(p1.x - p2.x)
+            allSegments.add(LineSegment(conn, p1, p2, isHorizontal))
+        }
+    }
 
-            for (i in 0 until pts.size - 1) {
-                drawLine(color = color, start = pts[i].toOffset(), end = pts[i+1].toOffset(), strokeWidth = strokeWidth)
+    val verticalSegments = allSegments.filter { !it.isHorizontal }
+    val horizontalSegments = allSegments.filter { it.isHorizontal }
+
+    val normalColor = Color.Gray
+    val selectedColor = Color.Blue
+
+    verticalSegments.forEach { seg ->
+        val color = if (state.selectedConnections.contains(seg.connection)) selectedColor else normalColor
+        drawLine(color = color, start = seg.start, end = seg.end, strokeWidth = strokeWidth)
+    }
+
+    horizontalSegments.forEach { seg ->
+        val color = if (state.selectedConnections.contains(seg.connection)) selectedColor else normalColor
+        val startX = seg.start.x
+        val endX = seg.end.x
+        val y = seg.start.y
+
+        val dir = if (endX > startX) 1f else -1f
+
+        val intersections = verticalSegments.filter { vSeg ->
+            if (vSeg.connection == seg.connection) return@filter false
+
+            val vX = vSeg.start.x
+            val vMinY = minOf(vSeg.start.y, vSeg.end.y)
+            val vMaxY = maxOf(vSeg.start.y, vSeg.end.y)
+
+            val isXIntersect = if (dir > 0) vX in startX..endX else vX in endX..startX
+            val isYIntersect = y in vMinY..vMaxY
+
+            isXIntersect && isYIntersect
+        }
+            .map { it.start.x }
+            .distinct() // 2. Защита от дубликатов на одной оси
+            .sortedBy { it * dir }
+
+        val path = androidx.compose.ui.graphics.Path()
+        path.moveTo(startX, y)
+
+        var currentX = startX
+
+        intersections.forEach { intersectX ->
+            val arcStartX = intersectX - jumpRadius * dir
+            val arcEndX = intersectX + jumpRadius * dir
+
+            // 3. Проверка наслоения: если пересечения слишком близко (или идентичны из-за погрешностей)
+            val isOverlapping = (arcStartX - currentX) * dir <= 0
+
+            if (!isOverlapping) {
+                // Если наслоения нет, рисуем честную прямую линию до начала прыжка
+                path.lineTo(arcStartX, y)
             }
 
-            // Отрисовка маркеров поверх выделенной линии
-            if (isSelected) {
-                // Кружочки на всех внутренних углах
-                for (i in 1 until pts.size - 1) {
-                    drawCircle(Color.Blue, radius = 6f / state.scale, center = pts[i].toOffset())
-                }
+            val rectLeft = minOf(intersectX - jumpRadius, intersectX + jumpRadius)
+            val rectRight = maxOf(intersectX - jumpRadius, intersectX + jumpRadius)
 
-                // Утолщения на ВСЕХ участках
-                for (i in 0 until pts.size - 1) {
-                    val p1 = pts[i]
-                    val p2 = pts[i+1]
-                    val mid = (p1 + p2) / 2f
+            path.arcTo(
+                rect = androidx.compose.ui.geometry.Rect(
+                    left = rectLeft,
+                    top = y - jumpRadius,
+                    right = rectRight,
+                    bottom = y + jumpRadius
+                ),
+                startAngleDegrees = if (dir > 0) 180f else 0f,
+                sweepAngleDegrees = if (dir > 0) 180f else -180f,
+                forceMoveTo = isOverlapping // Если наслоились, начинаем новую дугу БЕЗ прямой линии назад
+            )
 
-                    val isHorizontal = abs(p1.y - p2.y) < abs(p1.x - p2.x)
-                    val lineLen = 24f / state.scale
-                    val midThick = 8f / state.scale // Сделано толще (было 6)
+            // Двигаем currentX вперед с учетом направления
+            currentX = if (dir > 0) maxOf(currentX, arcEndX) else minOf(currentX, arcEndX)
+        }
 
-                    if (isHorizontal) {
-                        drawLine(Color.Blue, start = Offset(mid.x - lineLen/2, mid.y), end = Offset(mid.x + lineLen/2, mid.y), strokeWidth = midThick)
-                    } else {
-                        drawLine(Color.Blue, start = Offset(mid.x, mid.y - lineLen/2), end = Offset(mid.x, mid.y + lineLen/2), strokeWidth = midThick)
-                    }
+        // Рисуем остаток линии до конца сегмента
+        if ((endX - currentX) * dir > 0) {
+            path.lineTo(endX, y)
+        }
+
+        drawPath(path, color = color, style = Stroke(strokeWidth))
+    }
+
+    // Отрисовка маркеров выделения...
+    state.connections.forEach { conn ->
+        val pts = state.calculateConnectionPoints(conn)
+        if (pts.size >= 2 && state.selectedConnections.contains(conn)) {
+            for (i in 1 until pts.size - 1) {
+                drawCircle(Color.Blue, radius = 6f / state.scale, center = pts[i].toOffset())
+            }
+            for (i in 0 until pts.size - 1) {
+                val p1 = pts[i]
+                val p2 = pts[i+1]
+                val mid = (p1 + p2) / 2f
+                val isHorizontal = kotlin.math.abs(p1.y - p2.y) < kotlin.math.abs(p1.x - p2.x)
+                val lineLen = 24f / state.scale
+                val midThick = 8f / state.scale
+                if (isHorizontal) {
+                    drawLine(Color.Blue, start = Offset(mid.x - lineLen/2, mid.y), end = Offset(mid.x + lineLen/2, mid.y), strokeWidth = midThick)
+                } else {
+                    drawLine(Color.Blue, start = Offset(mid.x, mid.y - lineLen/2), end = Offset(mid.x, mid.y + lineLen/2), strokeWidth = midThick)
                 }
             }
         }
@@ -161,6 +246,15 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectN
                 drawItRackRowShape(
                     centerOffset = node.position.toOffset(),
                     node = node,
+                    isSelected = isSelected
+                )
+            }
+            is RectifierNode -> {
+                val height = feature.projecteditor.state.getNodeHeight(node)
+                drawRectifierShape(
+                    textMeasurer = textMeasurer,
+                    topLeft = Offset(node.position.x - NODE_WIDTH / 2, node.position.y - height / 2),
+                    size = Size(NODE_WIDTH, height),
                     isSelected = isSelected
                 )
             }

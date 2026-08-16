@@ -105,6 +105,7 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
                 node.racks.map { SerializableRack(it.index, it.powerW) },
                 node.feeds.map { SerializableRackFeed(it.name, it.connectedRacks, it.isTop, it.colorArgb) } // Добавили it.colorArgb
             )
+            is RectifierNode -> SerializableRectifierNode(node.id, node.name, node.position.x, node.position.y, node.nominalPowerW)
         }
     }
 
@@ -235,6 +236,7 @@ private fun SerializableNode.toDomainNode(): ProjectNode {
             racks.map { Rack(it.index, it.powerW) },
             feeds.map { RackFeed(it.name, it.connectedRacks, it.isTop, it.colorArgb) } // Добавили it.colorArgb
         )
+        is SerializableRectifierNode -> RectifierNode(id, name, pos, nominalPowerW)
     }
 }
 

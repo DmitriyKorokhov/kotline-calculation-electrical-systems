@@ -98,4 +98,13 @@ data class ItRackRowNode(
     val feeds: List<RackFeed> = listOf(RackFeed("Луч А", setOf(1, 2, 3), true), RackFeed("Луч B", setOf(1, 2, 3), false))
 ) : ProjectNode
 
-data class LevelLine(val id: Int, val yPosition: Float)
+data class RectifierNode(
+    override val id: Int,
+    override var name: String,
+    override var position: Point,
+    var nominalPowerW: Float = 5000f
+) : ProjectNode
+
+data class LevelLine(
+    val id: Int, val yPosition: Float
+)

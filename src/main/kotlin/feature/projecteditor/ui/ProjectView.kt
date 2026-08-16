@@ -76,12 +76,20 @@ fun ProjectView(
             }
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
-                    // Обработка ESCAPE
+                    // Обработка ESCAPE (снять выделение)
                     if (event.key == Key.Escape) {
                         state.clearSelection()
                         return@onPreviewKeyEvent true
                     }
-                    // Обработка Ctrl + Z
+                    // Обработка DELETE или BACKSPACE (Удалить выделенное)
+                    if (event.key == Key.Delete || event.key == Key.Backspace) {
+                        // Проверяем, есть ли что удалять, чтобы зря не засорять историю (Undo/Redo)
+                        if (state.selectedNodeIds.isNotEmpty() || state.selectedConnections.isNotEmpty()) {
+                            state.deleteSelectedNodes()
+                        }
+                        return@onPreviewKeyEvent true
+                    }
+                    // Обработка Ctrl + Z (Отмена/Повтор)
                     if (event.isCtrlPressed && event.key == Key.Z) {
                         if (event.isShiftPressed) state.redo() else state.undo()
                         return@onPreviewKeyEvent true
@@ -126,6 +134,7 @@ fun ProjectView(
                                 PaletteNodeType.INVERTER -> state.addInverterNode(worldPos)
                                 PaletteNodeType.SYSTEM -> state.addSystemNode(worldPos)
                                 PaletteNodeType.IT_RACK_ROW -> state.addItRackRowNode(worldPos)
+                                PaletteNodeType.RECTIFIER -> state.addRectifierNode(worldPos)
                                 null -> {}
                             }
                             paletteDragType = null; palettePreviewWorldPos = null
@@ -181,6 +190,7 @@ fun ProjectView(
                                 drawItRackRowShape(previewScreen, dummyNode)
                             }
                         }
+                        PaletteNodeType.RECTIFIER -> drawRectifierShape(textMeasurer, centerOffset, Size(w, h))
                         null -> {}
                     }
                 }
