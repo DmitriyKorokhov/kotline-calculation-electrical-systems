@@ -378,27 +378,8 @@ class ProjectCanvasState {
     }
 
     // Метод с исправленными отступами для круглых моделей и расчет привязок так, чтобы линии "прилипали" к координатам горизонтальных шин питания.
-    fun getAttachmentPoint(node: ProjectNode, targetX: Float, isTop: Boolean, connectionIndex: Int = 0): Point {
-        if (node is ItRackRowNode) {
-            val (_, totalHeight) = feature.projecteditor.ui.selection.getItRackRowSize(node)
-
-            // Получаем точное количество сгенерированных уровней
-            val assignments = feature.projecteditor.ui.selection.calculateFeedAssignments(node.feeds, node.racks)
-            val topTracksCount = assignments.values.filter { it.isTop }.maxOfOrNull { it.trackIndex + 1 } ?: 0
-            val bottomTracksCount = assignments.values.filter { !it.isTop }.maxOfOrNull { it.trackIndex + 1 } ?: 0
-
-            val feedYOffset = if (isTop) {
-                val feedIdx = connectionIndex % maxOf(1, topTracksCount)
-                (totalHeight / 2) - (feedIdx * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
-            } else {
-                val feedIdx = connectionIndex % maxOf(1, bottomTracksCount)
-                (totalHeight / 2) - (feedIdx * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
-            }
-
-            return Point(targetX, if (isTop) node.position.y - feedYOffset else node.position.y + feedYOffset)
-        }
-
-        // Существующая логика для остальных узлов
+    fun getAttachmentPoint(node: ProjectNode, targetX: Float, isTop: Boolean): Point {
+        // Стандартная логика привязок для всех моделей, КРОМЕ IT-ряда
         val yOffset = when (node) {
             is TransformerNode -> node.radiusOuter * 0.8f
             is GeneratorNode -> node.radius * 0.85f
@@ -408,6 +389,50 @@ class ProjectCanvasState {
         return Point(targetX, if (isTop) node.position.y + yOffset else node.position.y - yOffset)
     }
 
+    fun getItRackRowAttachmentPoint(node: ItRackRowNode, connectionIndex: Int, otherNodeX: Float): Point {
+        if (node.feeds.isEmpty()) return node.position
+
+        // 1. Поочередно связываем соединение с конкретным лучом (1:1)
+        val feedIndex = connectionIndex % node.feeds.size
+        val feed = node.feeds[feedIndex]
+
+        // 2. Рассчитываем габариты и положение ряда
+        val (totalWidth, totalHeight) = feature.projecteditor.ui.selection.getItRackRowSize(node)
+        val topLeftY = node.position.y - totalHeight / 2
+
+        val racksWidth = (node.racks.size * feature.projecteditor.ui.selection.RACK_WIDTH) + ((node.racks.size - 1) * feature.projecteditor.ui.selection.RACK_GAP)
+        val racksStartX = node.position.x - racksWidth / 2
+
+        val assignments = feature.projecteditor.ui.selection.calculateFeedAssignments(node.feeds, node.racks)
+        val assignment = assignments[feedIndex] ?: return node.position
+
+        val topTracksCount = assignments.values.filter { it.isTop }.maxOfOrNull { it.trackIndex + 1 } ?: 0
+        val racksTopY = topLeftY + (if (topTracksCount > 0) feature.projecteditor.ui.selection.FEED_MARGIN + (topTracksCount - 1) * feature.projecteditor.ui.selection.FEED_LINE_SPACING else 0f)
+
+        // 3. Вычисляем Y-координату именно этого луча
+        val feedY = if (assignment.isTop) {
+            topLeftY + (assignment.trackIndex * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
+        } else {
+            racksTopY + feature.projecteditor.ui.selection.RACK_HEIGHT + feature.projecteditor.ui.selection.FEED_MARGIN + (assignment.trackIndex * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
+        }
+
+        // 4. Находим края луча по оси X (крайние левые и правые подключенные стойки)
+        val connectedIndices = node.racks.mapIndexedNotNull { index, rack ->
+            if (feed.connectedRacks.contains(rack.index)) index else null
+        }
+        val minIdx = connectedIndices.minOrNull() ?: 0
+        val maxIdx = connectedIndices.maxOrNull() ?: 0
+
+        val leftX = racksStartX + minIdx * (feature.projecteditor.ui.selection.RACK_WIDTH + feature.projecteditor.ui.selection.RACK_GAP) + feature.projecteditor.ui.selection.RACK_WIDTH / 2
+        val rightX = racksStartX + maxIdx * (feature.projecteditor.ui.selection.RACK_WIDTH + feature.projecteditor.ui.selection.RACK_GAP) + feature.projecteditor.ui.selection.RACK_WIDTH / 2
+
+        // 5. Привязываемся к левому краю, если другой узел левее, и к правому, если правее
+        val attachX = if (otherNodeX < node.position.x) leftX else rightX
+
+        return Point(attachX, feedY)
+    }
+
+    // МЕТОД расчета линий с внедрением логики IT-ряда
     fun calculateConnectionPoints(conn: Connection): List<Point> {
         val fromNode = nodes.find { it.id == conn.fromId } ?: return emptyList()
         val toNode = nodes.find { it.id == conn.toId } ?: return emptyList()
@@ -421,16 +446,25 @@ class ProjectCanvasState {
         val endX = calculateConnectionX(toNode, incomingIndex, incomingConnections.size)
 
         val isFromNodeOnTop = fromNode.position.y < toNode.position.y
-        val startOffset = getAttachmentPoint(fromNode, startX, isFromNodeOnTop, outgoingIndex)
-        val endOffset = getAttachmentPoint(toNode, endX, !isFromNodeOnTop, incomingIndex)
 
-        // Изначальное поведение: динамический центр
+        // ИСПОЛЬЗУЕМ ТОЧНЫЕ ТОЧКИ ПРИВЯЗКИ, если узел - это ряд стоек
+        val startOffset = if (fromNode is ItRackRowNode) {
+            getItRackRowAttachmentPoint(fromNode, outgoingIndex, toNode.position.x)
+        } else {
+            getAttachmentPoint(fromNode, startX, isFromNodeOnTop)
+        }
+
+        val endOffset = if (toNode is ItRackRowNode) {
+            getItRackRowAttachmentPoint(toNode, incomingIndex, fromNode.position.x)
+        } else {
+            getAttachmentPoint(toNode, endX, !isFromNodeOnTop)
+        }
+
         if (conn.waypoints.isEmpty()) {
             val midY = (startOffset.y + endOffset.y) / 2f
             return listOf(startOffset, Point(startOffset.x, midY), Point(endOffset.x, midY), endOffset)
         }
 
-        // Если линию уже редактировали - якорим первый и последний углы к моделям
         val wps = conn.waypoints.toMutableList()
         wps[0] = Point(startOffset.x, wps[0].y)
         wps[wps.lastIndex] = Point(endOffset.x, wps.last().y)
