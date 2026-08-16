@@ -73,7 +73,24 @@ fun InteractiveCanvas(
                         val connHit = state.hitTestConnections(offset.toPoint())
 
                         if (state.connectingFromNodeId != null) {
-                            state.tryFinishConnecting(node)
+                            val hovered = state.hoveredPin
+                            val fromNode = state.nodes.find { it.id == state.connectingFromNodeId }
+
+                            if (hovered != null && hovered.first.id != state.connectingFromNodeId && fromNode != null) {
+                                state.saveHistory()
+                                // Умный расчет ближайшей стороны выхода для первой модели
+                                val (autoFromSide, _) = state.getClosestSides(fromNode, hovered.first)
+
+                                state.connections.add(Connection(
+                                    fromId = state.connectingFromNodeId!!,
+                                    toId = hovered.first.id,
+                                    fromSide = autoFromSide, // Используем умный расчет вместо жесткого BOTTOM
+                                    toSide = hovered.second // Цепляется строго к той грани, куда кликнул пользователь
+                                ))
+                                state.connectingFromNodeId = null
+                            } else {
+                                state.tryFinishConnecting(node) // fallback (полностью автоматический расчет)
+                            }
                         } else if (node != null) {
                             if (state.isCtrlPressed) {
                                 state.selectedNodeIds.remove(node.id)
@@ -119,6 +136,7 @@ fun InteractiveCanvas(
                             event.changes.first().consume()
                         } else if (event.type == PointerEventType.Move && !isPanning) {
                             isZooming = false // Сбрасываем курсор масштаба, если просто двигаем мышью
+                            state.updateHoveredPin(position.toPoint())
                         }
 
                         // ПЕРЕМЕЩЕНИЕ ХОЛСТА (Средняя кнопка мыши / Tertiary)
@@ -185,6 +203,12 @@ fun InteractiveCanvas(
                                 state.selectedConnections.add(connHit.connection)
                             }
                             when (connHit) {
+                                is ConnectionHit.Endpoint -> {
+                                    state.isDraggingLineEnd = true
+                                    // Запоминаем ID модели, к которой изначально привязан этот конец линии
+                                    state.draggingEndpointNodeId = if (connHit.isSource) connHit.connection.fromId else connHit.connection.toId
+                                    dragTarget = connHit
+                                }
                                 is ConnectionHit.Waypoint -> {
                                     var conn = connHit.connection
                                     if (conn.waypoints.isEmpty()) {
@@ -198,7 +222,6 @@ fun InteractiveCanvas(
                                     val index = if (connHit is ConnectionHit.Midpoint) connHit.index else (connHit as ConnectionHit.Segment).index
                                     var conn = connHit.connection
 
-                                    // При первом редактировании конвертируем динамическую линию в редактируемую
                                     if (conn.waypoints.isEmpty()) {
                                         val pts = state.calculateConnectionPoints(conn)
                                         conn = conn.copy(waypoints = pts.subList(1, pts.size - 1))
@@ -207,25 +230,23 @@ fun InteractiveCanvas(
 
                                     val pts = state.calculateConnectionPoints(conn)
                                     val newWaypoints = pts.subList(1, pts.size - 1).toMutableList()
-
                                     var w1Index = index - 1
                                     var w2Index = index
 
-                                    // Если тянем за крайний сегмент (у модели), внедряем 2 новые точки для излома
                                     if (index == 0) {
-                                        newWaypoints.add(0, pts[0])
-                                        newWaypoints.add(1, pts[0].copy())
-                                        newWaypoints.add(2, pts[1].copy())
-                                        w1Index = 1
-                                        w2Index = 2
+                                        if (pts.size >= 2) {
+                                            newWaypoints.add(0, pts[1].copy())
+                                            newWaypoints.add(0, pts[0].copy())
+                                        }
+                                        w1Index = 0
+                                        w2Index = 1
                                     } else if (index == pts.size - 2) {
-                                        val lastPt = pts.last()
-                                        val prevPt = pts[pts.lastIndex - 1]
-                                        newWaypoints.add(prevPt.copy())
-                                        newWaypoints.add(lastPt.copy())
-                                        newWaypoints.add(lastPt)
-                                        w1Index = newWaypoints.lastIndex - 2
-                                        w2Index = newWaypoints.lastIndex - 1
+                                        if (pts.size >= 2) {
+                                            newWaypoints.add(pts[pts.lastIndex - 1].copy())
+                                            newWaypoints.add(pts.last().copy())
+                                        }
+                                        w1Index = newWaypoints.lastIndex - 1
+                                        w2Index = newWaypoints.lastIndex
                                     }
 
                                     val updatedConn = conn.copy(waypoints = newWaypoints)
@@ -242,12 +263,30 @@ fun InteractiveCanvas(
                         }
                     },
                     onDragEnd = {
+                        if (dragTarget is ConnectionHit.Endpoint) {
+                            val target = dragTarget as ConnectionHit.Endpoint
+                            val pin = state.hoveredPin
+                            if (pin != null) {
+                                state.saveHistory()
+                                state.isDraggingLineEnd = false
+                                state.draggingEndpointNodeId = null
+                                // Убрали сброс waypoints, теперь изломы сохраняются
+                                val newConn = if (target.isSource) {
+                                    target.connection.copy(fromId = pin.first.id, fromSide = pin.second)
+                                } else {
+                                    target.connection.copy(toId = pin.first.id, toSide = pin.second)
+                                }
+                                state.updateConnection(target.connection, newConn)
+                            }
+                        }
+
+                        state.isDraggingLineEnd = false
+
                         if (dragTarget == "SelectionBox") {
                             state.applySelectionBox()
                         } else if (dragTarget == "Nodes") {
                             state.selectedNodeIds.forEach { state.snapNodeToEndPosition(it) }
                         }
-
                         // --- Очистка и объединение точек при отпускании мыши ---
                         if (dragTarget is ConnectionHit.Waypoint || dragTarget is ConnectionHit.SegmentDrag) {
                             val hit = dragTarget as ConnectionHit
@@ -260,6 +299,8 @@ fun InteractiveCanvas(
                         state.selectionEndScreen = null
                     },
                     onDragCancel = {
+                        state.isDraggingLineEnd = false
+                        state.draggingEndpointNodeId = null
                         dragTarget = null
                         state.selectionStartScreen = null
                         state.selectionEndScreen = null

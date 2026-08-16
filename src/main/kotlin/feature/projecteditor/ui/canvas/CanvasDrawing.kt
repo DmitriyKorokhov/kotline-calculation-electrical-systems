@@ -45,7 +45,7 @@ fun DrawScope.drawProjectCanvas(textMeasurer: TextMeasurer, state: ProjectCanvas
         drawLevels(state.levels, topLeftWorld.toOffset(), bottomRightWorld.toOffset(), state.scale)
         drawConnections(state)
         drawNodes(textMeasurer, state.nodes, state.connectingFromNodeId, state.selectedNodeIds)
-        // Добавляем отрисовку рамки выделения
+        drawPins(state)
         drawSelectionBox(state)
     }
 }
@@ -156,7 +156,7 @@ private fun DrawScope.drawConnections(state: ProjectCanvasState) {
             val rectRight = maxOf(intersectX - jumpRadius, intersectX + jumpRadius)
 
             path.arcTo(
-                rect = androidx.compose.ui.geometry.Rect(
+                rect = Rect(
                     left = rectLeft,
                     top = y - jumpRadius,
                     right = rectRight,
@@ -183,9 +183,17 @@ private fun DrawScope.drawConnections(state: ProjectCanvasState) {
     state.connections.forEach { conn ->
         val pts = state.calculateConnectionPoints(conn)
         if (pts.size >= 2 && state.selectedConnections.contains(conn)) {
+            // Кружочки на внутренних углах
             for (i in 1 until pts.size - 1) {
                 drawCircle(Color.Blue, radius = 6f / state.scale, center = pts[i].toOffset())
             }
+
+            val pFirst = pts.first().toOffset()
+            val pLast = pts.last().toOffset()
+            val handleRadius = 6f / state.scale
+
+            drawCircle(Color.Red, radius = handleRadius, center = pFirst)
+            drawCircle(Color.Red, radius = handleRadius, center = pLast)
             for (i in 0 until pts.size - 1) {
                 val p1 = pts[i]
                 val p2 = pts[i+1]
@@ -334,6 +342,34 @@ fun DrawScope.drawGridHeaders(textMeasurer: TextMeasurer, state: ProjectCanvasSt
             val textY = screenY + (cellHeightOnScreen - layoutResult.size.height) / 2
 
             drawText(layoutResult, topLeft = Offset(textX, textY))
+        }
+    }
+}
+
+private fun DrawScope.drawPins(state: ProjectCanvasState) {
+    if (state.selectedConnections.size != 1 || state.selectedNodeIds.isNotEmpty()) return
+
+    val normalRadius = 4f / state.scale
+    val hoveredRadius = 8f / state.scale
+    val conn = state.selectedConnections.first()
+
+    state.nodes.forEach { node ->
+        // 1. Показывать пины ТОЛЬКО на тех моделях, которые соединяет эта линия
+        if (node.id != conn.fromId && node.id != conn.toId) return@forEach
+
+        // 2. Если мы тащим конкретный конец линии, скрываем пины на противоположной модели,
+        // чтобы визуально было понятно, что магнит работает только для текущей модели
+        if (state.isDraggingLineEnd && state.draggingEndpointNodeId != null && node.id != state.draggingEndpointNodeId) return@forEach
+
+        AnchorSide.values().forEach { side ->
+            val pin = state.getPinPosition(node, side)
+            val isHovered = state.hoveredPin?.first?.id == node.id && state.hoveredPin?.second == side
+
+            drawCircle(
+                color = if (isHovered) Color.Red else Color.Blue.copy(alpha = 0.5f),
+                radius = if (isHovered) hoveredRadius else normalRadius,
+                center = pin.toOffset()
+            )
         }
     }
 }

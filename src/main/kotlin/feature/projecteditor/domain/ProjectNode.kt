@@ -67,14 +67,20 @@ data class SystemNode(
     override val id: Int,
     override val name: String,
     override var position: Point,
-    val radius: Float = 50f, // Такой же, как у генератора
+    val radius: Float = 50f,
     val nominalVoltageV: Float = 400f,
     val shortCircuitPowerMVA: Float = 500f
 ) : ProjectNode
 
+enum class AnchorSide {
+    TOP, BOTTOM, LEFT, RIGHT
+}
+
 data class Connection(
     val fromId: Int,
     val toId: Int,
+    val fromSide: AnchorSide = AnchorSide.BOTTOM,
+    val toSide: AnchorSide = AnchorSide.TOP,
     val waypoints: List<Point> = emptyList()
 )
 

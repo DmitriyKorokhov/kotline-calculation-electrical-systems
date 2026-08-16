@@ -178,6 +178,8 @@ data class SerializablePoint(val x: Float, val y: Float)
 data class SerializableConnection(
     val fromId: Int,
     val toId: Int,
+    val fromSide: SerializableAnchorSide = SerializableAnchorSide.BOTTOM,
+    val toSide: SerializableAnchorSide = SerializableAnchorSide.TOP,
     val waypoints: List<SerializablePoint> = emptyList()
 )
 
@@ -212,3 +214,8 @@ data class SerializableRectifierNode(
     override val y: Float,
     val nominalPowerW: Float
 ) : SerializableNode()
+
+@Serializable
+enum class SerializableAnchorSide {
+    TOP, BOTTOM, LEFT, RIGHT
+}
