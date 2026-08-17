@@ -76,16 +76,18 @@ fun InteractiveCanvas(
                             val hovered = state.hoveredPin
                             val fromNode = state.nodes.find { it.id == state.connectingFromNodeId }
 
-                            if (hovered != null && hovered.first.id != state.connectingFromNodeId && fromNode != null) {
+                            // ИСПРАВЛЕНИЕ: используем hovered.node вместо hovered.first
+                            if (hovered != null && hovered.node.id != state.connectingFromNodeId && fromNode != null) {
                                 state.saveHistory()
                                 // Умный расчет ближайшей стороны выхода для первой модели
-                                val (autoFromSide, _) = state.getClosestSides(fromNode, hovered.first)
+                                val (autoFromSide, _) = state.getClosestSides(fromNode, hovered.node)
 
                                 state.connections.add(Connection(
                                     fromId = state.connectingFromNodeId!!,
-                                    toId = hovered.first.id,
-                                    fromSide = autoFromSide, // Используем умный расчет вместо жесткого BOTTOM
-                                    toSide = hovered.second // Цепляется строго к той грани, куда кликнул пользователь
+                                    toId = hovered.node.id,
+                                    fromSide = autoFromSide,
+                                    toSide = hovered.side,
+                                    toSubId = hovered.subId // Сохраняем пин при первом клике!
                                 ))
                                 state.connectingFromNodeId = null
                             } else {
@@ -227,7 +229,6 @@ fun InteractiveCanvas(
                                         conn = conn.copy(waypoints = pts.subList(1, pts.size - 1))
                                         state.updateConnection(connHit.connection, conn)
                                     }
-
                                     val pts = state.calculateConnectionPoints(conn)
                                     val newWaypoints = pts.subList(1, pts.size - 1).toMutableList()
                                     var w1Index = index - 1
@@ -251,7 +252,6 @@ fun InteractiveCanvas(
 
                                     val updatedConn = conn.copy(waypoints = newWaypoints)
                                     state.updateConnection(conn, updatedConn)
-
                                     dragTarget = ConnectionHit.SegmentDrag(updatedConn, w1Index, w2Index)
                                 }
                                 is ConnectionHit.SegmentDrag -> {}
@@ -268,13 +268,18 @@ fun InteractiveCanvas(
                             val pin = state.hoveredPin
                             if (pin != null) {
                                 state.saveHistory()
-                                state.isDraggingLineEnd = false
-                                state.draggingEndpointNodeId = null
-                                // Убрали сброс waypoints, теперь изломы сохраняются
                                 val newConn = if (target.isSource) {
-                                    target.connection.copy(fromId = pin.first.id, fromSide = pin.second)
+                                    target.connection.copy(
+                                        fromId = pin.node.id,
+                                        fromSide = pin.side,
+                                        fromSubId = pin.subId,
+                                    )
                                 } else {
-                                    target.connection.copy(toId = pin.first.id, toSide = pin.second)
+                                    target.connection.copy(
+                                        toId = pin.node.id,
+                                        toSide = pin.side,
+                                        toSubId = pin.subId,
+                                    )
                                 }
                                 state.updateConnection(target.connection, newConn)
                             }
@@ -345,12 +350,20 @@ fun InteractiveCanvas(
                             val pts = state.calculateConnectionPoints(conn)
                             val newWaypoints = pts.subList(1, pts.size - 1).toMutableList()
                             val currentPt = newWaypoints[wpIndex]
+
                             var newX = currentPt.x + deltaWorld.x
                             var newY = currentPt.y + deltaWorld.y
-                            // Крайние углы жестко привязаны к моделям по оси X (могут двигаться только вверх-вниз)
-                            if (wpIndex == 0) newX = currentPt.x
-                            if (wpIndex == newWaypoints.lastIndex) newX = currentPt.x
 
+                            // Правильно блокируем ось в зависимости от грани выхода ===
+                            val isFirstHorizontal = conn.fromSide == AnchorSide.LEFT || conn.fromSide == AnchorSide.RIGHT
+                            val isLastHorizontal = conn.toSide == AnchorSide.LEFT || conn.toSide == AnchorSide.RIGHT
+
+                            if (wpIndex == 0) {
+                                if (isFirstHorizontal) newY = currentPt.y else newX = currentPt.x
+                            }
+                            if (wpIndex == newWaypoints.lastIndex) {
+                                if (isLastHorizontal) newY = currentPt.y else newX = currentPt.x
+                            }
                             // Сдвигаем соседние точки, чтобы сохранить прямые углы
                             if (wpIndex > 0) {
                                 val prev = newWaypoints[wpIndex - 1]

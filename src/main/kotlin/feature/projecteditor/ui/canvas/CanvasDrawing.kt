@@ -349,21 +349,20 @@ fun DrawScope.drawGridHeaders(textMeasurer: TextMeasurer, state: ProjectCanvasSt
 private fun DrawScope.drawPins(state: ProjectCanvasState) {
     if (state.selectedConnections.size != 1 || state.selectedNodeIds.isNotEmpty()) return
 
-    val normalRadius = 4f / state.scale
-    val hoveredRadius = 8f / state.scale
+    val normalRadius = maxOf(6f, 5f / state.scale)
+    val hoveredRadius = maxOf(10f, 8f / state.scale)
     val conn = state.selectedConnections.first()
 
     state.nodes.forEach { node ->
-        // 1. Показывать пины ТОЛЬКО на тех моделях, которые соединяет эта линия
+        // Показываем пины ТОЛЬКО на тех моделях, которые соединяет эта линия
         if (node.id != conn.fromId && node.id != conn.toId) return@forEach
 
-        // 2. Если мы тащим конкретный конец линии, скрываем пины на противоположной модели,
-        // чтобы визуально было понятно, что магнит работает только для текущей модели
+        // Скрываем пины на противоположной модели при перетаскивании конца линии
         if (state.isDraggingLineEnd && state.draggingEndpointNodeId != null && node.id != state.draggingEndpointNodeId) return@forEach
 
-        AnchorSide.values().forEach { side ->
-            val pin = state.getPinPosition(node, side)
-            val isHovered = state.hoveredPin?.first?.id == node.id && state.hoveredPin?.second == side
+        state.getAvailablePins(node).forEach { pinId ->
+            val pin = state.getPinPosition(pinId.node, pinId.side, pinId.subId)
+            val isHovered = state.hoveredPin == pinId // Сравниваем объекты PinId
 
             drawCircle(
                 color = if (isHovered) Color.Red else Color.Blue.copy(alpha = 0.5f),

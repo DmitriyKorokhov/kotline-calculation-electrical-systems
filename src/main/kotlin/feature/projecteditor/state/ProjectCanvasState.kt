@@ -39,7 +39,7 @@ class ProjectCanvasState {
     var isCtrlPressed by mutableStateOf(false)
     var isShiftPressed by mutableStateOf(false)
     var showRackSettingsDialog by mutableStateOf(false)
-    var hoveredPin by mutableStateOf<Pair<ProjectNode, AnchorSide>?>(null)
+    var hoveredPin by mutableStateOf<PinId?>(null)
     var isDraggingLineEnd by mutableStateOf(false)
     var draggingEndpointNodeId by mutableStateOf<Int?>(null)
 
@@ -403,15 +403,21 @@ class ProjectCanvasState {
         }
     }
 
-    // === НОВЫЙ МЕТОД: Умное авто-распределение по граням ===
     fun getSmartAttachmentPoint(node: ProjectNode, conn: Connection, isSource: Boolean): Point {
-        // Оставляем кастомную логику для IT-ряда (привязка к лучам), чтобы не сломать твои наработки
         if (node is ItRackRowNode) {
-            val conns = if (isSource) connections.filter { it.fromId == node.id } else connections.filter { it.toId == node.id }
-            val idx = conns.indexOf(conn)
+            val subId = if (isSource) conn.fromSubId else conn.toSubId
+
+            // Если мы явно привязали линию к лучу, берем его. Если нет - раскидываем автоматически по порядку
+            val feedIndex = subId ?: run {
+                val conns = if (isSource) connections.filter { it.fromId == node.id } else connections.filter { it.toId == node.id }
+                val idx = conns.indexOf(conn).coerceAtLeast(0)
+                if (node.feeds.isNotEmpty()) idx % node.feeds.size else 0
+            }
+
             val otherNodeId = if (isSource) conn.toId else conn.fromId
             val otherNodeX = nodes.find { it.id == otherNodeId }?.position?.x ?: node.position.x
-            return getItRackRowAttachmentPoint(node, maxOf(0, idx), otherNodeX)
+
+            return getItRackRowAttachmentPoint(node, feedIndex, otherNodeX)
         }
 
         val side = if (isSource) conn.fromSide else conn.toSide
@@ -439,50 +445,12 @@ class ProjectCanvasState {
         }
     }
 
-    fun getItRackRowAttachmentPoint(node: ItRackRowNode, connectionIndex: Int, otherNodeX: Float): Point {
-        if (node.feeds.isEmpty()) return node.position
-
-        // 1. Поочередно связываем соединение с конкретным лучом (1:1)
-        val feedIndex = connectionIndex % node.feeds.size
-        val feed = node.feeds[feedIndex]
-
-        // 2. Рассчитываем габариты и положение ряда
-        val (totalWidth, totalHeight) = feature.projecteditor.ui.selection.getItRackRowSize(node)
-        val topLeftY = node.position.y - totalHeight / 2
-
-        val racksWidth = (node.racks.size * feature.projecteditor.ui.selection.RACK_WIDTH) + ((node.racks.size - 1) * feature.projecteditor.ui.selection.RACK_GAP)
-        val racksStartX = node.position.x - racksWidth / 2
-
-        val assignments = feature.projecteditor.ui.selection.calculateFeedAssignments(node.feeds, node.racks)
-        val assignment = assignments[feedIndex] ?: return node.position
-
-        val topTracksCount = assignments.values.filter { it.isTop }.maxOfOrNull { it.trackIndex + 1 } ?: 0
-        val racksTopY = topLeftY + (if (topTracksCount > 0) feature.projecteditor.ui.selection.FEED_MARGIN + (topTracksCount - 1) * feature.projecteditor.ui.selection.FEED_LINE_SPACING else 0f)
-
-        // 3. Вычисляем Y-координату именно этого луча
-        val feedY = if (assignment.isTop) {
-            topLeftY + (assignment.trackIndex * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
-        } else {
-            racksTopY + feature.projecteditor.ui.selection.RACK_HEIGHT + feature.projecteditor.ui.selection.FEED_MARGIN + (assignment.trackIndex * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
+    fun getPinPosition(node: ProjectNode, side: AnchorSide, subId: Int? = null): Point {
+        if (node is ItRackRowNode && subId != null) {
+            val coords = getFeedCoordinates(node, subId) ?: return node.position
+            return if (side == AnchorSide.LEFT) Point(coords.leftX, coords.feedY) else Point(coords.rightX, coords.feedY)
         }
 
-        // 4. Находим края луча по оси X (крайние левые и правые подключенные стойки)
-        val connectedIndices = node.racks.mapIndexedNotNull { index, rack ->
-            if (feed.connectedRacks.contains(rack.index)) index else null
-        }
-        val minIdx = connectedIndices.minOrNull() ?: 0
-        val maxIdx = connectedIndices.maxOrNull() ?: 0
-
-        val leftX = racksStartX + minIdx * (feature.projecteditor.ui.selection.RACK_WIDTH + feature.projecteditor.ui.selection.RACK_GAP) + feature.projecteditor.ui.selection.RACK_WIDTH / 2
-        val rightX = racksStartX + maxIdx * (feature.projecteditor.ui.selection.RACK_WIDTH + feature.projecteditor.ui.selection.RACK_GAP) + feature.projecteditor.ui.selection.RACK_WIDTH / 2
-
-        // 5. Привязываемся к левому краю, если другой узел левее, и к правому, если правее
-        val attachX = if (otherNodeX < node.position.x) leftX else rightX
-
-        return Point(attachX, feedY)
-    }
-
-    fun getPinPosition(node: ProjectNode, side: AnchorSide): Point {
         val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
         return when (side) {
             AnchorSide.TOP -> Point(bounds.left + bounds.width / 2f, bounds.top)
@@ -498,16 +466,14 @@ class ProjectCanvasState {
             return
         }
         val worldPos = screenToWorld(screenPos)
-        val thresholdSq = (25f / scale) * (25f / scale) // Радиус "магнита"
-
+        val thresholdSq = (25f / scale) * (25f / scale)
         for (node in nodes) {
-            // Игнорируем узлы, к которым нельзя привязать этот конец линии
             if (draggingEndpointNodeId != null && node.id != draggingEndpointNodeId) continue
-
-            for (side in AnchorSide.values()) {
-                val pin = getPinPosition(node, side)
+            // Используем новую систему доступных пинов
+            for (pinId in getAvailablePins(node)) {
+                val pin = getPinPosition(pinId.node, pinId.side, pinId.subId)
                 if ((worldPos - pin).getDistanceSquared() < thresholdSq) {
-                    hoveredPin = node to side
+                    hoveredPin = pinId
                     return
                 }
             }
@@ -563,11 +529,10 @@ class ProjectCanvasState {
 
         result.add(endOffset)
 
-        // Встроенная очистка. На лету удаляем дубликаты и выпрямляем участки,
-        // чтобы при перетаскивании моделей не оставалось "висящих" и оторванных сегментов.
         val cleanResult = mutableListOf<Point>()
         for (p in result) {
-            if (cleanResult.isEmpty() || (kotlin.math.abs(cleanResult.last().x - p.x) > 1f || kotlin.math.abs(cleanResult.last().y - p.y) > 1f)) {
+            // порог дубликатов уменьшен до 0.5f
+            if (cleanResult.isEmpty() || (kotlin.math.abs(cleanResult.last().x - p.x) > 0.5f || kotlin.math.abs(cleanResult.last().y - p.y) > 0.5f)) {
                 cleanResult.add(p)
             }
         }
@@ -579,8 +544,9 @@ class ProjectCanvasState {
                 val p1 = cleanResult[i]
                 val p2 = cleanResult[i+1]
                 val p3 = cleanResult[i+2]
-                val sameX = kotlin.math.abs(p1.x - p2.x) < 1f && kotlin.math.abs(p2.x - p3.x) < 1f
-                val sameY = kotlin.math.abs(p1.y - p2.y) < 1f && kotlin.math.abs(p2.y - p3.y) < 1f
+                // порог схлопывания прямых участков уменьшен до 0.5f
+                val sameX = kotlin.math.abs(p1.x - p2.x) < 0.5f && kotlin.math.abs(p2.x - p3.x) < 0.5f
+                val sameY = kotlin.math.abs(p1.y - p2.y) < 0.5f && kotlin.math.abs(p2.y - p3.y) < 0.5f
                 if (sameX || sameY) {
                     cleanResult.removeAt(i + 1)
                     changed = true
@@ -590,6 +556,66 @@ class ProjectCanvasState {
         }
 
         return cleanResult
+    }
+
+    data class FeedCoords(val feedY: Float, val leftX: Float, val rightX: Float)
+
+    private fun getFeedCoordinates(node: ItRackRowNode, feedIndex: Int): FeedCoords? {
+        if (node.feeds.isEmpty() || feedIndex !in node.feeds.indices) return null
+        val feed = node.feeds[feedIndex]
+
+        val (totalWidth, totalHeight) = feature.projecteditor.ui.selection.getItRackRowSize(node)
+        val topLeftY = node.position.y - totalHeight / 2
+        val racksWidth = (node.racks.size * feature.projecteditor.ui.selection.RACK_WIDTH) + ((node.racks.size - 1) * feature.projecteditor.ui.selection.RACK_GAP)
+        val racksStartX = node.position.x - racksWidth / 2
+
+        val assignments = feature.projecteditor.ui.selection.calculateFeedAssignments(node.feeds, node.racks)
+        val assignment = assignments[feedIndex] ?: return null
+
+        val topTracksCount = assignments.values.filter { it.isTop }.maxOfOrNull { it.trackIndex + 1 } ?: 0
+        val racksTopY = topLeftY + (if (topTracksCount > 0) feature.projecteditor.ui.selection.FEED_MARGIN + (topTracksCount - 1) * feature.projecteditor.ui.selection.FEED_LINE_SPACING else 0f)
+
+        val feedY = if (assignment.isTop) {
+            topLeftY + (assignment.trackIndex * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
+        } else {
+            racksTopY + feature.projecteditor.ui.selection.RACK_HEIGHT + feature.projecteditor.ui.selection.FEED_MARGIN + (assignment.trackIndex * feature.projecteditor.ui.selection.FEED_LINE_SPACING)
+        }
+
+        val connectedIndices = node.racks.mapIndexedNotNull { index, rack ->
+            if (feed.connectedRacks.contains(rack.index)) index else null
+        }
+        val minIdx = connectedIndices.minOrNull() ?: 0
+        val maxIdx = connectedIndices.maxOrNull() ?: 0
+
+        val leftX = racksStartX + minIdx * (feature.projecteditor.ui.selection.RACK_WIDTH + feature.projecteditor.ui.selection.RACK_GAP) + feature.projecteditor.ui.selection.RACK_WIDTH / 2
+        val rightX = racksStartX + maxIdx * (feature.projecteditor.ui.selection.RACK_WIDTH + feature.projecteditor.ui.selection.RACK_GAP) + feature.projecteditor.ui.selection.RACK_WIDTH / 2
+
+        return FeedCoords(feedY, leftX, rightX)
+    }
+
+    // Полностью ЗАМЕНИТЕ старую getItRackRowAttachmentPoint на эту:
+    fun getItRackRowAttachmentPoint(node: ItRackRowNode, feedIndex: Int, otherNodeX: Float): Point {
+        val coords = getFeedCoordinates(node, feedIndex) ?: return node.position
+        // Автоматически меняем лево/право в зависимости от положения второй модели!
+        val attachX = if (otherNodeX < node.position.x) coords.leftX else coords.rightX
+        return Point(attachX, coords.feedY)
+    }
+
+    // ДОБАВЬТЕ функцию генерации пинов для моделей:
+    fun getAvailablePins(node: ProjectNode): List<PinId> {
+        if (node is ItRackRowNode) {
+            val pins = mutableListOf<PinId>()
+            node.feeds.indices.forEach { feedIndex ->
+                pins.add(PinId(node, AnchorSide.LEFT, feedIndex)) // Пин на левом крае луча
+                pins.add(PinId(node, AnchorSide.RIGHT, feedIndex)) // Пин на правом крае луча
+            }
+            return pins
+        }
+        // Для остальных моделей - классические 4 стороны
+        return listOf(
+            PinId(node, AnchorSide.TOP), PinId(node, AnchorSide.BOTTOM),
+            PinId(node, AnchorSide.LEFT), PinId(node, AnchorSide.RIGHT)
+        )
     }
 
     fun hitTestConnections(screenPos: Point): ConnectionHit? {
@@ -637,44 +663,74 @@ class ProjectCanvasState {
     fun cleanupConnection(conn: Connection): Connection {
         if (conn.waypoints.isEmpty()) return conn
 
-        var currentWps = conn.waypoints.toMutableList()
-        val thresholdSq = (3f / scale) * (3f / scale)
-        var changed = true
+        // 1. Берем РЕАЛЬНУЮ отрисованную линию со всеми авто-коленами от моделей
+        val pts = calculateConnectionPoints(conn).toMutableList()
 
-        // Шаг 1. Объединение точек (удаляем схлопнувшиеся П-образные колена)
-        while (changed && currentWps.size >= 2) {
+        // Комфортный магнит (12 пикселей масштабируются при зуме)
+        val snapThreshold = 12f / scale
+
+        // 2. Двойной проход магнита (цепная реакция)
+
+        // Проход вперед (примагничиваем к предыдущим сегментам)
+        for (i in 1 until pts.size - 1) {
+            val prev = pts[i - 1]
+            var pt = pts[i]
+
+            if (kotlin.math.abs(pt.x - prev.x) < snapThreshold) pt = Point(prev.x, pt.y)
+            if (kotlin.math.abs(pt.y - prev.y) < snapThreshold) pt = Point(pt.x, prev.y)
+
+            pts[i] = pt
+        }
+
+        // Проход назад (примагничиваем к последующим сегментам и финишу)
+        for (i in pts.size - 2 downTo 1) {
+            val next = pts[i + 1]
+            var pt = pts[i]
+
+            if (kotlin.math.abs(pt.x - next.x) < snapThreshold) pt = Point(next.x, pt.y)
+            if (kotlin.math.abs(pt.y - next.y) < snapThreshold) pt = Point(pt.x, next.y)
+
+            pts[i] = pt
+        }
+
+        // 3. Удаление слипшихся дубликатов (схлопнувшиеся колена)
+        var changed = true
+        while (changed && pts.size > 2) {
             changed = false
-            for (i in 0 until currentWps.size - 1) {
-                if ((currentWps[i] - currentWps[i+1]).getDistanceSquared() < thresholdSq) {
-                    currentWps.removeAt(i + 1)
-                    currentWps.removeAt(i) // Удаляем сразу две точки, распрямляя линию
+            for (i in 0 until pts.size - 1) {
+                if ((pts[i] - pts[i+1]).getDistanceSquared() < 1f) {
+                    pts.removeAt(i)
                     changed = true
                     break
                 }
             }
         }
 
-        // Шаг 2. Удаление лишних точек, если они выстроились в одну прямую линию
+        // 4. Выпрямление длинных прямых участков (удаление промежуточных точек)
         changed = true
-        while (changed && currentWps.size >= 3) {
+        while (changed && pts.size > 2) {
             changed = false
-            for (i in 0 until currentWps.size - 2) {
-                val p1 = currentWps[i]
-                val p2 = currentWps[i+1]
-                val p3 = currentWps[i+2]
+            for (i in 0 until pts.size - 2) {
+                val p1 = pts[i]
+                val p2 = pts[i+1]
+                val p3 = pts[i+2]
 
-                val sameX = kotlin.math.abs(p1.x - p2.x) < 2f && kotlin.math.abs(p2.x - p3.x) < 2f
-                val sameY = kotlin.math.abs(p1.y - p2.y) < 2f && kotlin.math.abs(p2.y - p3.y) < 2f
+                // Если три точки лежат на идеальной прямой
+                val sameX = kotlin.math.abs(p1.x - p2.x) < 1f && kotlin.math.abs(p2.x - p3.x) < 1f
+                val sameY = kotlin.math.abs(p1.y - p2.y) < 1f && kotlin.math.abs(p2.y - p3.y) < 1f
 
                 if (sameX || sameY) {
-                    currentWps.removeAt(i + 1) // Удаляем точку посередине прямого участка
+                    pts.removeAt(i + 1) // Удаляем центральную точку
                     changed = true
                     break
                 }
             }
         }
 
-        return conn.copy(waypoints = currentWps)
+        // 5. Возвращаем только внутренние изломы (без старта и финиша моделей)
+        val newWaypoints = if (pts.size <= 2) emptyList() else pts.subList(1, pts.size - 1)
+
+        return conn.copy(waypoints = newWaypoints)
     }
 }
 

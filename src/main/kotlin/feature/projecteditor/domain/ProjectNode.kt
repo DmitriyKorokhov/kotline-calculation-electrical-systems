@@ -81,7 +81,15 @@ data class Connection(
     val toId: Int,
     val fromSide: AnchorSide = AnchorSide.BOTTOM,
     val toSide: AnchorSide = AnchorSide.TOP,
-    val waypoints: List<Point> = emptyList()
+    val waypoints: List<Point> = emptyList(),
+    val fromSubId: Int? = null, // Запоминает номер луча ИТ-ряда
+    val toSubId: Int? = null
+)
+
+data class PinId(
+    val node: ProjectNode,
+    val side: AnchorSide,
+    val subId: Int? = null // Указывает на конкретный луч
 )
 
 data class Rack(
