@@ -409,11 +409,10 @@ class ProjectCanvasState {
 
         val side = if (isSource) conn.fromSide else conn.toSide
 
-        // Находим все соединения, подключенные к ЭТОМУ узлу и к ЭТОЙ ЖЕ стороне
         val sideConnections = connections.filter {
             (it.fromId == node.id && it.fromSide == side) ||
                     (it.toId == node.id && it.toSide == side)
-        }.sortedBy { it.hashCode() } // Сортируем для стабильного порядка
+        }.sortedBy { connections.indexOf(it) }
 
         val index = sideConnections.indexOf(conn)
         val total = sideConnections.size
