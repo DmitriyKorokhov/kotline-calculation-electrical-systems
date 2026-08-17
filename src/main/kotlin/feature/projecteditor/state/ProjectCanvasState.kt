@@ -94,24 +94,11 @@ class ProjectCanvasState {
                 }
                 is GeneratorNode -> (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
                 is SystemNode -> (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
-                is ItRackRowNode -> {
-                    val (width, height) = feature.projecteditor.ui.selection.getItRackRowSize(node)
-                    val nodeTopLeft = Point(node.position.x - width / 2, node.position.y - height / 2)
-                    worldPos.x >= nodeTopLeft.x && worldPos.x <= nodeTopLeft.x + width &&
-                            worldPos.y >= nodeTopLeft.y && worldPos.y <= nodeTopLeft.y + height
-                }
-                is ItRackRowNode -> {
-                    val (width, height) = feature.projecteditor.ui.selection.getItRackRowSize(node)
-                    val nodeTopLeft = Point(node.position.x - width / 2, node.position.y - height / 2)
-                    worldPos.x >= nodeTopLeft.x && worldPos.x <= nodeTopLeft.x + width &&
-                            worldPos.y >= nodeTopLeft.y && worldPos.y <= nodeTopLeft.y + height
-                }
                 else -> {
-                    val width = NODE_WIDTH
-                    val height = getNodeHeight(node)
-                    val nodeTopLeft = Point(node.position.x - width / 2, node.position.y - height / 2)
-                    worldPos.x >= nodeTopLeft.x && worldPos.x <= nodeTopLeft.x + width &&
-                            worldPos.y >= nodeTopLeft.y && worldPos.y <= nodeTopLeft.y + height
+                    // Теперь зона клика идеально совпадает с визуальной моделью!
+                    val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
+                    worldPos.x >= bounds.left && worldPos.x <= bounds.right &&
+                            worldPos.y >= bounds.top && worldPos.y <= bounds.bottom
                 }
             }
         }
@@ -434,6 +421,15 @@ class ProjectCanvasState {
         // Получаем точные границы модели из SelectionMath
         val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
 
+        if (node is TransformerNode || node is GeneratorNode || node is SystemNode) {
+            return when (side) {
+                AnchorSide.TOP -> Point(node.position.x, bounds.top)
+                AnchorSide.BOTTOM -> Point(node.position.x, bounds.bottom)
+                AnchorSide.LEFT -> Point(bounds.left, node.position.y)
+                AnchorSide.RIGHT -> Point(bounds.right, node.position.y)
+            }
+        }
+
         // Магия расталкивания: делим грань на (total + 1) частей
         val fraction = (maxOf(0, index) + 1).toFloat() / (total + 1).toFloat()
 
@@ -601,15 +597,18 @@ class ProjectCanvasState {
         return Point(attachX, coords.feedY)
     }
 
-    // ДОБАВЬТЕ функцию генерации пинов для моделей:
     fun getAvailablePins(node: ProjectNode): List<PinId> {
         if (node is ItRackRowNode) {
             val pins = mutableListOf<PinId>()
             node.feeds.indices.forEach { feedIndex ->
-                pins.add(PinId(node, AnchorSide.LEFT, feedIndex)) // Пин на левом крае луча
-                pins.add(PinId(node, AnchorSide.RIGHT, feedIndex)) // Пин на правом крае луча
+                pins.add(PinId(node, AnchorSide.LEFT, feedIndex))
+                pins.add(PinId(node, AnchorSide.RIGHT, feedIndex))
             }
             return pins
+        }
+        // ИСПРАВЛЕНИЕ: Трансформатору оставляем только верх и низ
+        if (node is TransformerNode) {
+            return listOf(PinId(node, AnchorSide.TOP), PinId(node, AnchorSide.BOTTOM))
         }
         // Для остальных моделей - классические 4 стороны
         return listOf(

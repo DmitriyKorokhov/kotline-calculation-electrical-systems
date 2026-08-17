@@ -15,18 +15,27 @@ const val FEED_MARGIN = 20f // Отступ от стоек до первой ш
 
 // 1. Получаем точные границы (Bounding Box) для любой модели
 fun getBoundingBox(node: ProjectNode): Rect {
+    // Точные визуальные ширины с учетом масштабирования при отрисовке (0.85f, 0.8f и т.д.)
     val width = when (node) {
-        is TransformerNode -> node.radiusOuter * 2f
-        is GeneratorNode -> node.radius * 2f
-        is SystemNode -> node.radius * 2f
+        is TransformerNode -> (node.radiusOuter * 0.8f) * 2f
+        is GeneratorNode -> (node.radius * 0.85f) * 2f
+        is SystemNode -> (node.radius * 0.85f) * 2f
         is ItRackRowNode -> getItRackRowSize(node).first
+        is BatteryNode -> NODE_WIDTH * 0.5f       // 60f
+        is UpsNode -> 80f                         // NODE_HEIGHT
+        is SolarPanelNode -> NODE_WIDTH * 0.8f    // 96f
         else -> NODE_WIDTH
     }
+
+    // Точные визуальные высоты
     val height = when (node) {
-        is TransformerNode -> node.radiusOuter * 2f
-        is GeneratorNode -> node.radius * 2f
+        is TransformerNode -> {
+            val drawRadius = node.radiusOuter * 0.8f
+            drawRadius * 3.2f
+        }
+        is GeneratorNode -> (node.radius * 0.85f) * 2f
+        is SystemNode -> (node.radius * 0.85f) * 2f
         is ShieldNode -> getNodeHeight(node)
-        is SystemNode -> node.radius * 2f
         is ItRackRowNode -> getItRackRowSize(node).second
         else -> 80f // Базовая высота NODE_HEIGHT
     }
