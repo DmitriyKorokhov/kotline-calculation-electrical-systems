@@ -69,6 +69,10 @@ fun InteractiveCanvas(
                         }
                     },
                     onTap = { offset ->
+                        // Если мы в режиме редактирования текста - завершаем его при клике куда угодно
+                        if (state.inlineEditingNodeId != null) {
+                            state.finishInlineEditing()
+                        }
                         val node = state.findNodeAtScreenPosition(offset.toPoint())
                         val connHit = state.hitTestConnections(offset.toPoint())
 
@@ -82,13 +86,15 @@ fun InteractiveCanvas(
                                 // Умный расчет ближайшей стороны выхода для первой модели
                                 val (autoFromSide, _) = state.getClosestSides(fromNode, hovered.node)
 
-                                state.connections.add(Connection(
-                                    fromId = state.connectingFromNodeId!!,
-                                    toId = hovered.node.id,
-                                    fromSide = autoFromSide,
-                                    toSide = hovered.side,
-                                    toSubId = hovered.subId // Сохраняем пин при первом клике!
-                                ))
+                                state.connections.add(
+                                    Connection(
+                                        fromId = state.connectingFromNodeId!!,
+                                        toId = hovered.node.id,
+                                        fromSide = autoFromSide,
+                                        toSide = hovered.side,
+                                        toSubId = hovered.subId // Сохраняем пин при первом клике!
+                                    )
+                                )
                                 state.connectingFromNodeId = null
                             } else {
                                 state.tryFinishConnecting(node) // fallback (полностью автоматический расчет)
@@ -106,7 +112,9 @@ fun InteractiveCanvas(
                             if (state.isCtrlPressed) {
                                 state.selectedConnections.remove(connHit.connection)
                             } else if (state.isShiftPressed) {
-                                if (!state.selectedConnections.contains(connHit.connection)) state.selectedConnections.add(connHit.connection)
+                                if (!state.selectedConnections.contains(connHit.connection)) state.selectedConnections.add(
+                                    connHit.connection
+                                )
                             } else {
                                 state.clearSelection()
                                 state.selectedConnections.add(connHit.connection)
@@ -208,9 +216,11 @@ fun InteractiveCanvas(
                                 is ConnectionHit.Endpoint -> {
                                     state.isDraggingLineEnd = true
                                     // Запоминаем ID модели, к которой изначально привязан этот конец линии
-                                    state.draggingEndpointNodeId = if (connHit.isSource) connHit.connection.fromId else connHit.connection.toId
+                                    state.draggingEndpointNodeId =
+                                        if (connHit.isSource) connHit.connection.fromId else connHit.connection.toId
                                     dragTarget = connHit
                                 }
+
                                 is ConnectionHit.Waypoint -> {
                                     var conn = connHit.connection
                                     if (conn.waypoints.isEmpty()) {
@@ -220,8 +230,10 @@ fun InteractiveCanvas(
                                     }
                                     dragTarget = connHit.copy(connection = conn)
                                 }
+
                                 is ConnectionHit.Midpoint, is ConnectionHit.Segment -> {
-                                    val index = if (connHit is ConnectionHit.Midpoint) connHit.index else (connHit as ConnectionHit.Segment).index
+                                    val index =
+                                        if (connHit is ConnectionHit.Midpoint) connHit.index else (connHit as ConnectionHit.Segment).index
                                     var conn = connHit.connection
 
                                     if (conn.waypoints.isEmpty()) {
@@ -254,6 +266,7 @@ fun InteractiveCanvas(
                                     state.updateConnection(conn, updatedConn)
                                     dragTarget = ConnectionHit.SegmentDrag(updatedConn, w1Index, w2Index)
                                 }
+
                                 is ConnectionHit.SegmentDrag -> {}
                             }
                         } else {
@@ -319,7 +332,10 @@ fun InteractiveCanvas(
                         if (dragTarget == "Nodes") {
                             state.selectedNodeIds.forEach { id ->
                                 val n = state.nodes.find { it.id == id }
-                                if (n != null) state.updateNodePosition(id, Point(n.position.x + deltaWorld.x, n.position.y + deltaWorld.y))
+                                if (n != null) state.updateNodePosition(
+                                    id,
+                                    Point(n.position.x + deltaWorld.x, n.position.y + deltaWorld.y)
+                                )
                             }
                         } else if (dragTarget is ConnectionHit.SegmentDrag) {
                             // === Перетаскивание целого сегмента (строго ортогонально) ===
@@ -355,7 +371,8 @@ fun InteractiveCanvas(
                             var newY = currentPt.y + deltaWorld.y
 
                             // Правильно блокируем ось в зависимости от грани выхода ===
-                            val isFirstHorizontal = conn.fromSide == AnchorSide.LEFT || conn.fromSide == AnchorSide.RIGHT
+                            val isFirstHorizontal =
+                                conn.fromSide == AnchorSide.LEFT || conn.fromSide == AnchorSide.RIGHT
                             val isLastHorizontal = conn.toSide == AnchorSide.LEFT || conn.toSide == AnchorSide.RIGHT
 
                             if (wpIndex == 0) {
@@ -410,7 +427,6 @@ fun InteractiveCanvas(
                 val scale = state.scale
                 val nodeHeight = NODE_HEIGHT * scale
 
-                // Вычисляем ширину узла для правильного отступа текста
                 val nodeWidthForLabel = when (node) {
                     is TransformerNode -> node.radiusOuter * 2f
                     is GeneratorNode -> node.radius * 2f
@@ -422,9 +438,31 @@ fun InteractiveCanvas(
                     else -> NODE_WIDTH
                 }
 
-                val displayName = if (node is ShieldNode) ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name } else node.name
+                val displayName = if (node is ShieldNode) {
+                    ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
+                } else {
+                    node.name
+                }
 
-                RightSideNameText(displayName, screenPos, nodeWidthForLabel * scale, nodeHeight, scale)
+                val isEditing = state.inlineEditingNodeId == node.id
+
+                RightSideNameText(
+                    name = displayName,
+                    screenPos = screenPos,
+                    nodeWidthOnScreen = nodeWidthForLabel * scale,
+                    nodeHeight = nodeHeight,
+                    scale = scale,
+                    isEditing = isEditing,
+                    editingText = if (isEditing) state.inlineEditingText else "",
+                    onEditingTextChanged = { state.inlineEditingText = it },
+                    onStartEdit = {
+                        state.inlineEditingNodeId = node.id
+                        state.inlineEditingText = displayName
+                    },
+                    onFinishEdit = {
+                        state.finishInlineEditing()
+                    }
+                )
             }
         }
     }

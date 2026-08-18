@@ -124,7 +124,9 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
             conn.toId,
             SerializableAnchorSide.valueOf(conn.fromSide.name),
             SerializableAnchorSide.valueOf(conn.toSide.name),
-            conn.waypoints.map { wp -> SerializablePoint(wp.x, wp.y) }
+            conn.waypoints.map { wp -> SerializablePoint(wp.x, wp.y) },
+            conn.fromSubId,
+            conn.toSubId
         )
     }
 
@@ -155,7 +157,9 @@ private fun ProjectCanvasState.loadFromProjectFile(file: ProjectFile) {
             conn.toId,
             AnchorSide.valueOf(conn.fromSide.name),
             AnchorSide.valueOf(conn.toSide.name),
-            conn.waypoints.map { wp -> Point(wp.x, wp.y) }
+            conn.waypoints.map { wp -> Point(wp.x, wp.y) },
+            conn.fromSubId,
+            conn.toSubId
         )
     })
     levels.addAll(file.levels.map { LevelLine(it.id, it.yPosition) })

@@ -180,7 +180,9 @@ data class SerializableConnection(
     val toId: Int,
     val fromSide: SerializableAnchorSide = SerializableAnchorSide.BOTTOM,
     val toSide: SerializableAnchorSide = SerializableAnchorSide.TOP,
-    val waypoints: List<SerializablePoint> = emptyList()
+    val waypoints: List<SerializablePoint> = emptyList(),
+    val fromSubId: Int? = null,
+    val toSubId: Int? = null
 )
 
 @Serializable

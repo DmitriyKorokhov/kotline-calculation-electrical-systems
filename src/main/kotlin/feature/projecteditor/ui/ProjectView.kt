@@ -25,7 +25,6 @@ import feature.projecteditor.ui.canvas.InteractiveCanvas
 import feature.projecteditor.ui.menus.NodeContextMenu
 import feature.projecteditor.ui.components.palettes.NodesPalette
 import feature.projecteditor.ui.components.palettes.PaletteNodeType
-import feature.projecteditor.ui.menus.RenameNodeDialog
 import feature.projecteditor.ui.drawing.*
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.drawscope.scale
@@ -75,21 +74,29 @@ fun ProjectView(
                 }
             }
             .onPreviewKeyEvent { event ->
+                if (state.inlineEditingNodeId != null) return@onPreviewKeyEvent false
+
                 if (event.type == KeyEventType.KeyDown) {
-                    // Обработка ESCAPE (снять выделение)
                     if (event.key == Key.Escape) {
                         state.clearSelection()
                         return@onPreviewKeyEvent true
                     }
-                    // Обработка DELETE или BACKSPACE (Удалить выделенное)
                     if (event.key == Key.Delete || event.key == Key.Backspace) {
-                        // Проверяем, есть ли что удалять, чтобы зря не засорять историю (Undo/Redo)
                         if (state.selectedNodeIds.isNotEmpty() || state.selectedConnections.isNotEmpty()) {
                             state.deleteSelectedNodes()
                         }
                         return@onPreviewKeyEvent true
                     }
-                    // Обработка Ctrl + Z (Отмена/Повтор)
+                    // Ctrl + C
+                    if (event.isCtrlPressed && event.key == Key.C) {
+                        state.copySelectedNodes()
+                        return@onPreviewKeyEvent true
+                    }
+                    // Ctrl + V
+                    if (event.isCtrlPressed && event.key == Key.V) {
+                        state.pasteNodes()
+                        return@onPreviewKeyEvent true
+                    }
                     if (event.isCtrlPressed && event.key == Key.Z) {
                         if (event.isShiftPressed) state.redo() else state.undo()
                         return@onPreviewKeyEvent true
@@ -199,7 +206,6 @@ fun ProjectView(
             NodeContextMenu(state, onOpenShield)
             MultiSelectContextMenu(state)
             ConnectionContextMenu(state)
-            RenameNodeDialog(state)
             if (state.showRackSettingsDialog) {
                 ItRackRowSettingsWindow(
                     state = state,

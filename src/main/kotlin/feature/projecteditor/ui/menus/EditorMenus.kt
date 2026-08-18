@@ -39,8 +39,6 @@ fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (Int) -> Unit) {
             expanded = state.showNodeContextMenu,
             onDismissRequest = { state.showNodeContextMenu = false }
         ) {
-            DropdownMenuItem(onClick = { state.showRenameDialog = true; state.showNodeContextMenu = false }) { Text("Изменить название") }
-
             if (state.selectedNode is ItRackRowNode) {
                 DropdownMenuItem(onClick = {
                     state.showRackSettingsDialog = true
@@ -62,31 +60,6 @@ fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (Int) -> Unit) {
 
             DropdownMenuItem(onClick = { state.deleteSelectedNode(); state.showNodeContextMenu = false }) { Text("Удалить") }
         }
-    }
-}
-
-@Composable
-fun RenameNodeDialog(state: ProjectCanvasState) {
-    if (state.showRenameDialog && state.selectedNode != null) {
-        var newName by remember(state.selectedNode) { mutableStateOf(state.selectedNode!!.name) }
-        AlertDialog(
-            onDismissRequest = { state.showRenameDialog = false },
-            title = { Text("Изменить название") },
-            text = { OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Новое название") }, singleLine = true) },
-            confirmButton = {
-                Button(onClick = {
-                    val sel = state.selectedNode
-                    if (sel is ShieldNode) {
-                        val data = ShieldStorage.loadOrCreate(sel.id)
-                        data.shieldName = newName
-                        ShieldStorage.save(sel.id, data)
-                    }
-                    state.updateSelectedNodeName(newName)
-                    state.showRenameDialog = false
-                }) { Text("Сохранить") }
-            },
-            dismissButton = { Button(onClick = { state.showRenameDialog = false }) { Text("Отмена") } }
-        )
     }
 }
 

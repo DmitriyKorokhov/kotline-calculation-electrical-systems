@@ -26,7 +26,6 @@ class ProjectCanvasState {
     var showCanvasContextMenu by mutableStateOf(false)
     var contextMenuPosition by mutableStateOf(Point.Zero)
     var selectedNode by mutableStateOf<ProjectNode?>(null)
-    var showRenameDialog by mutableStateOf(false)
     var connectingFromNodeId by mutableStateOf<Int?>(null)
     val selectedNodeIds = mutableStateListOf<Int>()
     var selectionStartScreen by mutableStateOf<Point?>(null)
@@ -42,6 +41,9 @@ class ProjectCanvasState {
     var hoveredPin by mutableStateOf<PinId?>(null)
     var isDraggingLineEnd by mutableStateOf(false)
     var draggingEndpointNodeId by mutableStateOf<Int?>(null)
+    var clipboardConnections by mutableStateOf<List<Connection>>(emptyList())
+    var inlineEditingNodeId by mutableStateOf<Int?>(null)
+    var inlineEditingText by mutableStateOf("")
 
     private val historyManager = core.utils.ProjectHistoryManager()
 
@@ -200,7 +202,6 @@ class ProjectCanvasState {
             val index = nodes.indexOf(it)
             if (index != -1) nodes[index] = updatedNode
         }
-        showRenameDialog = false
     }
 
     fun addUpsNode(worldPos: Point) {
@@ -321,42 +322,80 @@ class ProjectCanvasState {
     // 2. Копировать выделенное
     fun copySelectedNodes() {
         clipboardNodes = nodes.filter { it.id in selectedNodeIds }
+
+        if (clipboardNodes.isNotEmpty()) {
+            // Копируем линию ТОЛЬКО если оба её конца привязаны к скопированным моделям
+            clipboardConnections = connections.filter { conn ->
+                clipboardNodes.any { it.id == conn.fromId } && clipboardNodes.any { it.id == conn.toId }
+            }
+        } else {
+            clipboardConnections = emptyList()
+        }
     }
 
     // 3. Вставить скопированное
-    fun pasteNodes(screenPos: Point) {
+    fun pasteNodes(screenPos: Point? = null) {
         if (clipboardNodes.isEmpty()) return
         saveHistory()
 
-        val worldPos = screenToWorld(screenPos)
-
-        // Находим левый верхний угол скопированной группы, чтобы вставить ровно под курсор
         val minX = clipboardNodes.minOf { it.position.x }
         val minY = clipboardNodes.minOf { it.position.y }
-        val deltaX = worldPos.x - minX
-        val deltaY = worldPos.y - minY
+
+        val deltaX: Float
+        val deltaY: Float
+
+        if (screenPos != null) {
+            val worldPos = screenToWorld(screenPos)
+            deltaX = worldPos.x - minX
+            deltaY = worldPos.y - minY
+        } else {
+            // Сдвиг при вставке через клавиатуру
+            deltaX = 50f
+            deltaY = 50f
+        }
 
         clearSelection()
+        val idMapping = mutableMapOf<Int, Int>() // Маппинг старых ID на новые
 
+        // Вставляем узлы
         clipboardNodes.forEach { node ->
             val newPos = Point(node.position.x + deltaX, node.position.y + deltaY)
+            val newNodeId = nextId++
+            idMapping[node.id] = newNodeId
 
-            // Копируем узел, присваиваем новый ID и новые координаты
             val newNode = when (node) {
-                is ShieldNode -> node.copy(id = nextId, position = newPos)
-                is TransformerNode -> node.copy(id = nextId, position = newPos)
-                is GeneratorNode -> node.copy(id = nextId, position = newPos)
-                is UpsNode -> node.copy(id = nextId, position = newPos)
-                is BatteryNode -> node.copy(id = nextId, position = newPos)
-                is SolarPanelNode -> node.copy(id = nextId, position = newPos)
-                is InverterNode -> node.copy(id = nextId, position = newPos)
-                is SystemNode -> node.copy(id = nextId, position = newPos)
-                else -> node // Запасной вариант
+                is ShieldNode -> node.copy(id = newNodeId, position = newPos)
+                is TransformerNode -> node.copy(id = newNodeId, position = newPos)
+                is GeneratorNode -> node.copy(id = newNodeId, position = newPos)
+                is UpsNode -> node.copy(id = newNodeId, position = newPos)
+                is BatteryNode -> node.copy(id = newNodeId, position = newPos)
+                is SolarPanelNode -> node.copy(id = newNodeId, position = newPos)
+                is InverterNode -> node.copy(id = newNodeId, position = newPos)
+                is SystemNode -> node.copy(id = newNodeId, position = newPos)
+                is ItRackRowNode -> node.copy(id = newNodeId, position = newPos)
+                is RectifierNode -> node.copy(id = newNodeId, position = newPos)
             }
 
             nodes.add(newNode)
-            selectedNodeIds.add(nextId) // Сразу выделяем вставленные элементы
-            nextId++
+            selectedNodeIds.add(newNodeId)
+        }
+
+        // Вставляем линии
+        clipboardConnections.forEach { conn ->
+            val newFromId = idMapping[conn.fromId] ?: return@forEach
+            val newToId = idMapping[conn.toId] ?: return@forEach
+
+            // Сдвигаем все изломы
+            val newWaypoints = conn.waypoints.map { Point(it.x + deltaX, it.y + deltaY) }
+
+            val newConn = conn.copy(
+                fromId = newFromId,
+                toId = newToId,
+                waypoints = newWaypoints
+            )
+
+            connections.add(newConn)
+            selectedConnections.add(newConn)
         }
     }
 
@@ -729,6 +768,41 @@ class ProjectCanvasState {
         val newWaypoints = if (pts.size <= 2) emptyList() else pts.subList(1, pts.size - 1)
 
         return conn.copy(waypoints = newWaypoints)
+    }
+
+    fun finishInlineEditing() {
+        val nodeId = inlineEditingNodeId ?: return
+        val index = nodes.indexOfFirst { it.id == nodeId }
+
+        if (index != -1 && inlineEditingText.isNotBlank()) {
+            saveHistory()
+            val node = nodes[index]
+
+            // 1. Сохранение имени щита в хранилище (если это щит)
+            if (node is ShieldNode) {
+                val data = feature.shieldeditor.state.ShieldStorage.loadOrCreate(node.id)
+                data.shieldName = inlineEditingText
+                feature.shieldeditor.state.ShieldStorage.save(node.id, data)
+            }
+
+            // 2. Обновление самой модели в графе напрямую по индексу
+            val updatedNode = when (node) {
+                is ShieldNode -> node.copy(name = inlineEditingText)
+                is TransformerNode -> node.copy(name = inlineEditingText)
+                is GeneratorNode -> node.copy(name = inlineEditingText)
+                is UpsNode -> node.copy(name = inlineEditingText)
+                is BatteryNode -> node.copy(name = inlineEditingText)
+                is SolarPanelNode -> node.copy(name = inlineEditingText)
+                is InverterNode -> node.copy(name = inlineEditingText)
+                is SystemNode -> node.copy(name = inlineEditingText)
+                is ItRackRowNode -> node.copy(name = inlineEditingText)
+                is RectifierNode -> node.copy(name = inlineEditingText)
+            }
+            nodes[index] = updatedNode
+        }
+
+        inlineEditingNodeId = null
+        inlineEditingText = ""
     }
 }
 
