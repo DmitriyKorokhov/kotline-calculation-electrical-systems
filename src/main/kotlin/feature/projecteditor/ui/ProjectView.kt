@@ -53,7 +53,7 @@ fun ProjectView(
     var palettePreviewWorldPos by remember { mutableStateOf<Point?>(null) }
     var canvasTopLeft by remember { mutableStateOf(Offset.Zero) }
 
-    var selectedTab by remember { mutableStateOf(EditorTab.EQUIPMENT) }
+
 
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -108,8 +108,8 @@ fun ProjectView(
 
         // 1. ПАНЕЛЬ ВЫБОРА ВКЛАДОК (Риббон-меню)
         EditorTabsPanel(
-            selectedTab = selectedTab,
-            onTabSelected = { selectedTab = it }
+            selectedTab = state.selectedTab,
+            onTabSelected = { state.selectedTab = it }
         )
 
         Divider(color = MaterialTheme.colors.onSurface.copy(alpha = 0.1f), thickness = 1.dp)
@@ -121,7 +121,7 @@ fun ProjectView(
             color = MaterialTheme.colors.surface
         ) {
             // Переключаем панели в зависимости от выбранной вкладки
-            when (selectedTab) {
+            when (state.selectedTab) {
                 EditorTab.EQUIPMENT -> {
                     // Твоя текущая панель с оборудованием
                     NodesPalette(
@@ -150,7 +150,7 @@ fun ProjectView(
                     )
                 }
                 EditorTab.TOOLS -> ToolsPalette()
-                EditorTab.ANNOTATIONS -> AnnotationsPalette()
+                EditorTab.ANNOTATIONS -> AnnotationsPalette(state)
                 EditorTab.CALCULATIONS -> CalculationsPalette()
                 EditorTab.PROJECT -> ProjectPalette()
                 EditorTab.COLLABORATION -> CollaborationPalette()

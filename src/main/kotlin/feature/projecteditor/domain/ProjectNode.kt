@@ -122,3 +122,33 @@ data class RectifierNode(
 data class LevelLine(
     val id: Int, val yPosition: Float
 )
+
+data class TextNode(
+    override val id: Int,
+    override var name: String,
+    override var position: Point,
+    var fontSize: Float = 14f,
+    var colorArgb: Long = 0xFFFFFFFF, // Белый по умолчанию
+    var isBold: Boolean = false,
+    var isItalic: Boolean = false,
+    var isUnderline: Boolean = false,
+    var isStrikethrough: Boolean = false,
+    var align: Int = 0,
+    var hasBackground: Boolean = false,
+    var backgroundColorArgb: Long = 0xFFFFFFFF
+) : ProjectNode
+
+data class CalloutNode(
+    override val id: Int,
+    override var name: String,
+    override var position: Point,
+    var targetPoint: Point,
+    var fontSize: Float = 14f,
+    var colorArgb: Long = 0xFFFFFFFF, // Белый по умолчанию
+    var isBold: Boolean = false,
+    var isItalic: Boolean = false,
+    var isUnderline: Boolean = false,
+    var isStrikethrough: Boolean = false,
+    var hasBackground: Boolean = true,
+    var backgroundColorArgb: Long = 0xFFFFFFFF
+) : ProjectNode

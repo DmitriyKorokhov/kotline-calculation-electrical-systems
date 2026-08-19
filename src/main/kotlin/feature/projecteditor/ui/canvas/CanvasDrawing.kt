@@ -258,7 +258,7 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectN
                 )
             }
             is RectifierNode -> {
-                val height = feature.projecteditor.state.getNodeHeight(node)
+                val height = getNodeHeight(node)
                 drawRectifierShape(
                     textMeasurer = textMeasurer,
                     topLeft = Offset(node.position.x - NODE_WIDTH / 2, node.position.y - height / 2),
@@ -266,6 +266,22 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectN
                     isSelected = isSelected
                 )
             }
+            is CalloutNode -> {
+                val color = Color(node.colorArgb)
+                drawLine(
+                    color = color,
+                    start = node.position.toOffset(),
+                    end = node.targetPoint.toOffset(),
+                    strokeWidth = 2f
+                )
+                drawCircle(
+                    color = color,
+                    radius = 4f,
+                    center = node.targetPoint.toOffset()
+                )
+            }
+            is TextNode -> {
+           }
         }
     }
 }

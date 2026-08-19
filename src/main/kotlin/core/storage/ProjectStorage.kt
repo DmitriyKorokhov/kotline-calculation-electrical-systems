@@ -106,6 +106,19 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
                 node.feeds.map { SerializableRackFeed(it.name, it.connectedRacks, it.isTop, it.colorArgb) } // Добавили it.colorArgb
             )
             is RectifierNode -> SerializableRectifierNode(node.id, node.name, node.position.x, node.position.y, node.nominalPowerW)
+            is TextNode -> SerializableTextNode(
+                node.id, node.name, node.position.x, node.position.y,
+                node.fontSize, node.colorArgb, node.isBold, node.isItalic,
+                node.isUnderline, node.isStrikethrough, // Добавили новые поля
+                node.align, node.hasBackground, node.backgroundColorArgb
+            )
+            is CalloutNode -> SerializableCalloutNode(
+                node.id, node.name, node.position.x, node.position.y,
+                node.targetPoint.x, node.targetPoint.y,
+                node.fontSize, node.colorArgb, node.isBold, node.isItalic,
+                node.isUnderline, node.isStrikethrough, // Добавили новые поля
+                node.hasBackground, node.backgroundColorArgb
+            )
         }
     }
 
@@ -245,6 +258,16 @@ private fun SerializableNode.toDomainNode(): ProjectNode {
             feeds.map { RackFeed(it.name, it.connectedRacks, it.isTop, it.colorArgb) } // Добавили it.colorArgb
         )
         is SerializableRectifierNode -> RectifierNode(id, name, pos, nominalPowerW)
+        is SerializableTextNode -> TextNode(
+            id, name, pos, fontSize, colorArgb, isBold, isItalic,
+            isUnderline, isStrikethrough,
+            align, hasBackground, backgroundColorArgb
+        )
+        is SerializableCalloutNode -> CalloutNode(
+            id, name, pos, Point(targetX, targetY), fontSize, colorArgb, isBold, isItalic,
+            isUnderline, isStrikethrough,
+            hasBackground, backgroundColorArgb
+        )
     }
 }
 

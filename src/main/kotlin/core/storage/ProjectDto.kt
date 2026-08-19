@@ -221,3 +221,40 @@ data class SerializableRectifierNode(
 enum class SerializableAnchorSide {
     TOP, BOTTOM, LEFT, RIGHT
 }
+
+@Serializable
+@SerialName("text_node")
+data class SerializableTextNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val fontSize: Float,
+    val colorArgb: Long,
+    val isBold: Boolean,
+    val isItalic: Boolean,
+    val isUnderline: Boolean,
+    val isStrikethrough: Boolean,
+    val align: Int,
+    val hasBackground: Boolean,
+    val backgroundColorArgb: Long
+) : SerializableNode()
+
+@Serializable
+@SerialName("callout_node")
+data class SerializableCalloutNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val targetX: Float,
+    val targetY: Float,
+    val fontSize: Float,
+    val colorArgb: Long,
+    val isBold: Boolean,
+    val isItalic: Boolean,
+    val isUnderline: Boolean,
+    val isStrikethrough: Boolean,
+    val hasBackground: Boolean,
+    val backgroundColorArgb: Long
+) : SerializableNode()

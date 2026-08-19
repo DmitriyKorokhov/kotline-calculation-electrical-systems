@@ -24,6 +24,7 @@ import androidx.compose.ui.input.pointer.isTertiaryPressed
 import feature.projecteditor.state.ConnectionHit
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import feature.projecteditor.state.CanvasToolMode
 import java.awt.Cursor
 
 private const val NODE_WIDTH = 120f
@@ -69,6 +70,38 @@ fun InteractiveCanvas(
                         }
                     },
                     onTap = { offset ->
+                        val worldPos = state.screenToWorld(offset.toPoint())
+
+                        // 1. ПЕРЕХВАТ КЛИКА ДЛЯ ВСТАВКИ ИНСТРУМЕНТОВ АННОТАЦИЙ
+                        when (state.currentToolMode) {
+                            CanvasToolMode.ADD_TEXT -> {
+                                state.saveHistory()
+                                val newNode = TextNode(id = state.nextId++, name = "Текст", position = worldPos)
+                                state.nodes.add(newNode)
+                                state.clearSelection()
+                                state.selectedNodeIds.add(newNode.id)
+                                // Сразу переходим в режим редактирования
+                                state.inlineEditingNodeId = newNode.id
+                                state.inlineEditingText = newNode.name
+                                state.currentToolMode = CanvasToolMode.SELECT
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.ADD_CALLOUT -> {
+                                state.saveHistory()
+                                // Текст выноски ставим чуть правее и выше, а саму стрелку (targetPoint) - куда кликнули
+                                val textPos = Point(worldPos.x + 80f, worldPos.y - 80f)
+                                val newNode = CalloutNode(id = state.nextId++, name = "Выноска", position = textPos, targetPoint = worldPos)
+                                state.nodes.add(newNode)
+                                state.clearSelection()
+                                state.selectedNodeIds.add(newNode.id)
+                                // Сразу переходим в режим редактирования
+                                state.inlineEditingNodeId = newNode.id
+                                state.inlineEditingText = newNode.name
+                                state.currentToolMode = CanvasToolMode.SELECT
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.SELECT -> { /* продолжаем обычную обработку */ }
+                        }
                         // Если мы в режиме редактирования текста - завершаем его при клике куда угодно
                         if (state.inlineEditingNodeId != null) {
                             state.finishInlineEditing()
@@ -458,6 +491,8 @@ fun InteractiveCanvas(
                     onStartEdit = {
                         state.inlineEditingNodeId = node.id
                         state.inlineEditingText = displayName
+                        // АВТО-ПЕРЕКЛЮЧЕНИЕ ВКЛАДКИ
+                        state.selectedTab = feature.projecteditor.ui.components.EditorTab.ANNOTATIONS
                     },
                     onFinishEdit = {
                         state.finishInlineEditing()

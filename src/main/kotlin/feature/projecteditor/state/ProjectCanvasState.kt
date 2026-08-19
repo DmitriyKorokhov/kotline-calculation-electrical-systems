@@ -12,6 +12,11 @@ import feature.projecteditor.ui.selection.getNodesInSelectionBox
 private const val NODE_WIDTH = 120f
 private const val NODE_HEIGHT = 80f
 
+enum class CanvasToolMode {
+    SELECT,     // Обычный режим (выделение, драг-н-дроп)
+    ADD_TEXT,   // Ожидание клика для вставки текста
+    ADD_CALLOUT // Ожидание клика для вставки выноски
+}
 /**
  * Класс-хранитель состояния (State Holder).
  */
@@ -44,6 +49,10 @@ class ProjectCanvasState {
     var clipboardConnections by mutableStateOf<List<Connection>>(emptyList())
     var inlineEditingNodeId by mutableStateOf<Int?>(null)
     var inlineEditingText by mutableStateOf("")
+    // Управление активной вкладкой меню (переносим из ProjectView)
+    var selectedTab by mutableStateOf(feature.projecteditor.ui.components.EditorTab.EQUIPMENT)
+    // Текущий инструмент для Аннотаций
+    var currentToolMode by mutableStateOf(CanvasToolMode.SELECT)
 
     private val historyManager = core.utils.ProjectHistoryManager()
 
@@ -96,6 +105,13 @@ class ProjectCanvasState {
                 }
                 is GeneratorNode -> (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
                 is SystemNode -> (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
+                is TextNode, is CalloutNode -> {
+                    // Пока используем стандартный BoundingBox,
+                    // на этапе отрисовки мы сделаем его точным по размеру текста
+                    val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
+                    worldPos.x >= bounds.left && worldPos.x <= bounds.right &&
+                            worldPos.y >= bounds.top && worldPos.y <= bounds.bottom
+                }
                 else -> {
                     // Теперь зона клика идеально совпадает с визуальной моделью!
                     val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
@@ -124,7 +140,15 @@ class ProjectCanvasState {
                 is SystemNode -> node.copy(position = newPosition)
                 is ItRackRowNode -> node.copy(position = newPosition)
                 is RectifierNode -> node.copy(position = newPosition)
-                else -> node
+                is TextNode -> node.copy(position = newPosition)
+                is CalloutNode -> {
+                    val deltaX = newPosition.x - node.position.x
+                    val deltaY = newPosition.y - node.position.y
+                    node.copy(
+                        position = newPosition,
+                        targetPoint = Point(node.targetPoint.x + deltaX, node.targetPoint.y + deltaY)
+                    )
+                }
             }
             nodes[index] = updatedNode
         }
@@ -197,7 +221,8 @@ class ProjectCanvasState {
                 is SystemNode -> it.copy(name = newName)
                 is ItRackRowNode -> it.copy(name = newName)
                 is RectifierNode -> it.copy(name = newName)
-                else -> it
+                is TextNode -> it.copy(name = newName)
+                is CalloutNode -> it.copy(name = newName)
             }
             val index = nodes.indexOf(it)
             if (index != -1) nodes[index] = updatedNode
@@ -374,6 +399,11 @@ class ProjectCanvasState {
                 is SystemNode -> node.copy(id = newNodeId, position = newPos)
                 is ItRackRowNode -> node.copy(id = newNodeId, position = newPos)
                 is RectifierNode -> node.copy(id = newNodeId, position = newPos)
+                is TextNode -> node.copy(id = newNodeId, position = newPos)
+                is CalloutNode -> {
+                    val newTarget = Point(node.targetPoint.x + deltaX, node.targetPoint.y + deltaY)
+                    node.copy(id = newNodeId, position = newPos, targetPoint = newTarget)
+                }
             }
 
             nodes.add(newNode)
@@ -598,7 +628,7 @@ class ProjectCanvasState {
         if (node.feeds.isEmpty() || feedIndex !in node.feeds.indices) return null
         val feed = node.feeds[feedIndex]
 
-        val (totalWidth, totalHeight) = feature.projecteditor.ui.selection.getItRackRowSize(node)
+        val (_, totalHeight) = getItRackRowSize(node)
         val topLeftY = node.position.y - totalHeight / 2
         val racksWidth = (node.racks.size * feature.projecteditor.ui.selection.RACK_WIDTH) + ((node.racks.size - 1) * feature.projecteditor.ui.selection.RACK_GAP)
         val racksStartX = node.position.x - racksWidth / 2
@@ -797,12 +827,72 @@ class ProjectCanvasState {
                 is SystemNode -> node.copy(name = inlineEditingText)
                 is ItRackRowNode -> node.copy(name = inlineEditingText)
                 is RectifierNode -> node.copy(name = inlineEditingText)
+                is TextNode -> node.copy(name = inlineEditingText)
+                is CalloutNode -> node.copy(name = inlineEditingText)
             }
             nodes[index] = updatedNode
         }
 
         inlineEditingNodeId = null
         inlineEditingText = ""
+    }
+
+    fun updateSelectedTextProperties(
+        fontSize: Float? = null,
+        colorArgb: Long? = null,
+        isBold: Boolean? = null,
+        isItalic: Boolean? = null,
+        isUnderline: Boolean? = null,     // НОВОЕ
+        isStrikethrough: Boolean? = null, // НОВОЕ
+        align: Int? = null,
+        hasBackground: Boolean? = null,
+        backgroundColorArgb: Long? = null
+    ) {
+        val nodeIds = selectedNodeIds.toList()
+        if (nodeIds.isEmpty()) return
+
+        saveHistory()
+        var changed = false
+
+        for (nodeId in nodeIds) {
+            val index = nodes.indexOfFirst { it.id == nodeId }
+            if (index != -1) {
+                val node = nodes[index]
+                val updated = when (node) {
+                    is TextNode -> node.copy(
+                        fontSize = fontSize ?: node.fontSize,
+                        colorArgb = colorArgb ?: node.colorArgb,
+                        isBold = isBold ?: node.isBold,
+                        isItalic = isItalic ?: node.isItalic,
+                        isUnderline = isUnderline ?: node.isUnderline,
+                        isStrikethrough = isStrikethrough ?: node.isStrikethrough,
+                        align = align ?: node.align,
+                        hasBackground = hasBackground ?: node.hasBackground,
+                        backgroundColorArgb = backgroundColorArgb ?: node.backgroundColorArgb
+                    )
+                    is CalloutNode -> node.copy(
+                        fontSize = fontSize ?: node.fontSize,
+                        colorArgb = colorArgb ?: node.colorArgb,
+                        isBold = isBold ?: node.isBold,
+                        isItalic = isItalic ?: node.isItalic,
+                        isUnderline = isUnderline ?: node.isUnderline,
+                        isStrikethrough = isStrikethrough ?: node.isStrikethrough,
+                        hasBackground = hasBackground ?: node.hasBackground,
+                        backgroundColorArgb = backgroundColorArgb ?: node.backgroundColorArgb
+                    )
+                    else -> node
+                }
+                if (node != updated) {
+                    nodes[index] = updated
+                    changed = true
+                }
+            }
+        }
+        if (changed) {
+            val oldSel = selectedNodeIds.toList()
+            selectedNodeIds.clear()
+            selectedNodeIds.addAll(oldSel)
+        }
     }
 }
 
