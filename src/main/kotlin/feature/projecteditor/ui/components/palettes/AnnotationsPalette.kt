@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import core.view.CompactOutlinedTextField
 import feature.projecteditor.domain.CalloutNode
 import feature.projecteditor.domain.TextNode
 import feature.projecteditor.state.CanvasToolMode
@@ -37,26 +38,23 @@ import feature.projecteditor.state.ProjectCanvasState
 fun AnnotationsPalette(state: ProjectCanvasState) {
     val selectedNodes = state.nodes.filter { it.id in state.selectedNodeIds }
     val selectedTextNode = selectedNodes.firstOrNull { it is TextNode || it is CalloutNode }
-    val isTextSelect = selectedTextNode is TextNode
 
-    val currentFontSize = (selectedTextNode as? TextNode)?.fontSize ?: (selectedTextNode as? CalloutNode)?.fontSize ?: 14f
-    val isBold = (selectedTextNode as? TextNode)?.isBold ?: (selectedTextNode as? CalloutNode)?.isBold ?: false
-    val isItalic = (selectedTextNode as? TextNode)?.isItalic ?: (selectedTextNode as? CalloutNode)?.isItalic ?: false
-    val isUnderline = (selectedTextNode as? TextNode)?.isUnderline ?: (selectedTextNode as? CalloutNode)?.isUnderline ?: false
-    val isStrikethrough = (selectedTextNode as? TextNode)?.isStrikethrough ?: (selectedTextNode as? CalloutNode)?.isStrikethrough ?: false
-    val align = (selectedTextNode as? TextNode)?.align ?: 0
-    val currentColor = (selectedTextNode as? TextNode)?.colorArgb ?: (selectedTextNode as? CalloutNode)?.colorArgb ?: 0xFFFFFFFF
-    val hasBg = (selectedTextNode as? TextNode)?.hasBackground ?: (selectedTextNode as? CalloutNode)?.hasBackground ?: false
-    val bgColor = (selectedTextNode as? TextNode)?.backgroundColorArgb ?: (selectedTextNode as? CalloutNode)?.backgroundColorArgb ?: 0xFFFFFFFF
-
-    val formattingEnabled = selectedTextNode != null
+    // Читаем из выделенной модели ИЛИ из настроек по умолчанию (если ничего не выделено)
+    val displayFontSize = (selectedTextNode as? TextNode)?.fontSize ?: (selectedTextNode as? CalloutNode)?.fontSize ?: state.defaultFontSize
+    val displayIsBold = (selectedTextNode as? TextNode)?.isBold ?: (selectedTextNode as? CalloutNode)?.isBold ?: state.defaultIsBold
+    val displayIsItalic = (selectedTextNode as? TextNode)?.isItalic ?: (selectedTextNode as? CalloutNode)?.isItalic ?: state.defaultIsItalic
+    val displayIsUnderline = (selectedTextNode as? TextNode)?.isUnderline ?: (selectedTextNode as? CalloutNode)?.isUnderline ?: state.defaultIsUnderline
+    val displayIsStrikethrough = (selectedTextNode as? TextNode)?.isStrikethrough ?: (selectedTextNode as? CalloutNode)?.isStrikethrough ?: state.defaultIsStrikethrough
+    val displayAlign = (selectedTextNode as? TextNode)?.align ?: state.defaultAlign
+    val displayColor = (selectedTextNode as? TextNode)?.colorArgb ?: (selectedTextNode as? CalloutNode)?.colorArgb ?: state.defaultColorArgb
+    val displayHasBg = (selectedTextNode as? TextNode)?.hasBackground ?: (selectedTextNode as? CalloutNode)?.hasBackground ?: state.defaultHasBackground
+    val displayBgColor = (selectedTextNode as? TextNode)?.backgroundColorArgb ?: (selectedTextNode as? CalloutNode)?.backgroundColorArgb ?: state.defaultBackgroundColorArgb
 
     var fontDropdownExpanded by remember { mutableStateOf(false) }
     var selectedFont by remember { mutableStateOf("ISOCPEUR") }
     var searchQuery by remember { mutableStateOf("") }
 
-    // Состояние для текстового поля ввода размера шрифта
-    var sizeInputValue by remember(currentFontSize) { mutableStateOf(currentFontSize.toInt().toString()) }
+    var sizeInputValue by remember(displayFontSize) { mutableStateOf(displayFontSize.toInt().toString()) }
 
     Row(
         modifier = Modifier
@@ -76,7 +74,7 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                 text = "АБС",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colors.onSurface,
+                color = Color.Black, // Иконка черная
                 modifier = Modifier.offset(x = 0.dp, y = (-6).dp)
             )
         }
@@ -87,27 +85,27 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
             modifier = Modifier.width(160.dp)
         ) {
             // Выпадающий список шрифта
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp))
-                    .background(Color.White, RoundedCornerShape(4.dp))
-                    .clickable { fontDropdownExpanded = true },
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                ) {
-                    Text(
-                        text = selectedFont,
-                        fontSize = 13.sp,
-                        color = Color.Black,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Gray)
-                }
+            Box(modifier = Modifier.fillMaxWidth()) {
+                CompactOutlinedTextField(
+                    label = "",
+                    value = selectedFont,
+                    onValueChange = {},
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                        .background(Color.White, RoundedCornerShape(4.dp)),
+                    textColor = Color.Black, // Текст шрифта черный
+                    focusedBorderColor = Color.LightGray,
+                    unfocusedBorderColor = Color.LightGray,
+                    fontSizeSp = 13,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Black) }
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable { fontDropdownExpanded = true }
+                )
                 DropdownMenu(
                     expanded = fontDropdownExpanded,
                     onDismissRequest = { fontDropdownExpanded = false },
@@ -119,17 +117,18 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
             }
 
             // Поле поиска текста
+            // Поле поиска текста (без анимации, с плейсхолдером)
             BasicTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 singleLine = true,
                 textStyle = TextStyle(
                     fontSize = 13.sp,
-                    color = Color.Black
+                    color = Color.Black // Вводимый текст - черный
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(34.dp),
+                    .height(42.dp),
                 decorationBox = { innerTextField ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -139,16 +138,23 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                             .background(Color.White, RoundedCornerShape(4.dp))
                             .padding(horizontal = 8.dp)
                     ) {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                        // Увеличенная черная лупа
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Поиск",
+                            tint = Color.Black,
+                            modifier = Modifier.size(22.dp)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
                         Box(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentAlignment = Alignment.CenterStart
                         ) {
+                            // Плейсхолдер показывается только если поле пустое
                             if (searchQuery.isEmpty()) {
                                 Text(
                                     text = "Поиск текста",
-                                    color = Color.DarkGray,
+                                    color = Color.DarkGray, // Темно-серый, хорошо виден на белом
                                     fontSize = 13.sp
                                 )
                             }
@@ -171,29 +177,33 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                     modifier = Modifier
                         .size(28.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(if (formattingEnabled) MaterialTheme.colors.primary else Color.LightGray)
-                        .clickable(enabled = formattingEnabled) { state.updateSelectedTextProperties(fontSize = currentFontSize - 2f) },
+                        .background(MaterialTheme.colors.primary)
+                        .clickable {
+                            val newSize = maxOf(2f, displayFontSize - 2f)
+                            state.defaultFontSize = newSize
+                            if (selectedTextNode != null) state.updateSelectedTextProperties(fontSize = newSize)
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Text("-", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
                 }
 
-                // Значение (с вводом с клавиатуры)
+                // Значение
                 BasicTextField(
                     value = sizeInputValue,
                     onValueChange = { newValue ->
                         sizeInputValue = newValue
                         val newSize = newValue.toFloatOrNull()
-                        if (newSize != null && newSize > 0f && formattingEnabled) {
-                            state.updateSelectedTextProperties(fontSize = newSize)
+                        if (newSize != null && newSize > 0f) {
+                            state.defaultFontSize = newSize
+                            if (selectedTextNode != null) state.updateSelectedTextProperties(fontSize = newSize)
                         }
                     },
                     singleLine = true,
-                    enabled = formattingEnabled,
                     textStyle = TextStyle(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black,
+                        color = Color.Black, // Цифры размера черные
                         textAlign = TextAlign.Center
                     ),
                     modifier = Modifier
@@ -202,12 +212,7 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                         .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp))
                         .background(Color.White, RoundedCornerShape(4.dp)),
                     decorationBox = { innerTextField ->
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            innerTextField()
-                        }
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) { innerTextField() }
                     }
                 )
 
@@ -216,8 +221,12 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                     modifier = Modifier
                         .size(28.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(if (formattingEnabled) MaterialTheme.colors.primary else Color.LightGray)
-                        .clickable(enabled = formattingEnabled) { state.updateSelectedTextProperties(fontSize = currentFontSize + 2f) },
+                        .background(MaterialTheme.colors.primary)
+                        .clickable {
+                            val newSize = displayFontSize + 2f
+                            state.defaultFontSize = newSize
+                            if (selectedTextNode != null) state.updateSelectedTextProperties(fontSize = newSize)
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Text("+", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
@@ -228,20 +237,41 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
         // --- Г: СТИЛИ ---
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                FormatToggleButton(text = "B", isBold = true, isActive = isBold, enabled = formattingEnabled) { state.updateSelectedTextProperties(isBold = !isBold) }
-                FormatToggleButton(text = "I", isItalic = true, isActive = isItalic, enabled = formattingEnabled) { state.updateSelectedTextProperties(isItalic = !isItalic) }
+                FormatToggleButton(text = "B", isBold = true, isActive = displayIsBold) {
+                    state.defaultIsBold = !displayIsBold
+                    if (selectedTextNode != null) state.updateSelectedTextProperties(isBold = state.defaultIsBold)
+                }
+                FormatToggleButton(text = "I", isItalic = true, isActive = displayIsItalic) {
+                    state.defaultIsItalic = !displayIsItalic
+                    if (selectedTextNode != null) state.updateSelectedTextProperties(isItalic = state.defaultIsItalic)
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                FormatToggleButton(text = "U", isUnderline = true, isActive = isUnderline, enabled = formattingEnabled) { state.updateSelectedTextProperties(isUnderline = !isUnderline) }
-                FormatToggleButton(text = "S", isStrikethrough = true, isActive = isStrikethrough, enabled = formattingEnabled) { state.updateSelectedTextProperties(isStrikethrough = !isStrikethrough) }
+                FormatToggleButton(text = "U", isUnderline = true, isActive = displayIsUnderline) {
+                    state.defaultIsUnderline = !displayIsUnderline
+                    if (selectedTextNode != null) state.updateSelectedTextProperties(isUnderline = state.defaultIsUnderline)
+                }
+                FormatToggleButton(text = "S", isStrikethrough = true, isActive = displayIsStrikethrough) {
+                    state.defaultIsStrikethrough = !displayIsStrikethrough
+                    if (selectedTextNode != null) state.updateSelectedTextProperties(isStrikethrough = state.defaultIsStrikethrough)
+                }
             }
         }
 
         // --- Д: ВЫРАВНИВАНИЕ ---
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            AlignToggleButton(type = 0, isActive = align == 0, enabled = formattingEnabled && isTextSelect) { state.updateSelectedTextProperties(align = 0) }
-            AlignToggleButton(type = 1, isActive = align == 1, enabled = formattingEnabled && isTextSelect) { state.updateSelectedTextProperties(align = 1) }
-            AlignToggleButton(type = 2, isActive = align == 2, enabled = formattingEnabled && isTextSelect) { state.updateSelectedTextProperties(align = 2) }
+            AlignToggleButton(type = 0, isActive = displayAlign == 0) {
+                state.defaultAlign = 0
+                if (selectedTextNode != null) state.updateSelectedTextProperties(align = 0)
+            }
+            AlignToggleButton(type = 1, isActive = displayAlign == 1) {
+                state.defaultAlign = 1
+                if (selectedTextNode != null) state.updateSelectedTextProperties(align = 1)
+            }
+            AlignToggleButton(type = 2, isActive = displayAlign == 2) {
+                state.defaultAlign = 2
+                if (selectedTextNode != null) state.updateSelectedTextProperties(align = 2)
+            }
         }
 
         // --- Е: ЦВЕТ ТЕКСТА ---
@@ -249,22 +279,22 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
             Text("Цвет текста", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Medium)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ColorButton(0xFFFFFFFF, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFFFFFFFF) }
-                    ColorButton(0xFF000000, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFF000000) }
-                    ColorButton(0xFFD32F2F, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFFD32F2F) }
-                    ColorButton(0xFF1976D2, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFF1976D2) }
-                    ColorButton(0xFF388E3C, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFF388E3C) }
-                    ColorButton(0xFF757575, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFF757575) }
-                    ColorButton(0xFFF57C00, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFFF57C00) }
+                    val colors1 = listOf(0xFFFFFFFF, 0xFF000000, 0xFFD32F2F, 0xFF1976D2, 0xFF388E3C, 0xFF757575, 0xFFF57C00)
+                    colors1.forEach { colorVal ->
+                        ColorButton(colorVal, displayColor) {
+                            state.defaultColorArgb = colorVal
+                            if (selectedTextNode != null) state.updateSelectedTextProperties(colorArgb = colorVal)
+                        }
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ColorButton(0xFF7B1FA2, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFF7B1FA2) }
-                    ColorButton(0xFFFBC02D, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFFFBC02D) }
-                    ColorButton(0xFF00BCD4, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFF00BCD4) }
-                    ColorButton(0xFF8D6E63, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFF8D6E63) }
-                    ColorButton(0xFFE91E63, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFFE91E63) }
-                    ColorButton(0xFFCDDC39, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFFCDDC39) }
-                    ColorButton(0xFF607D8B, currentColor, formattingEnabled) { state.updateSelectedTextProperties(colorArgb = 0xFF607D8B) }
+                    val colors2 = listOf(0xFF7B1FA2, 0xFFFBC02D, 0xFF00BCD4, 0xFF8D6E63, 0xFFE91E63, 0xFFCDDC39, 0xFF607D8B)
+                    colors2.forEach { colorVal ->
+                        ColorButton(colorVal, displayColor) {
+                            state.defaultColorArgb = colorVal
+                            if (selectedTextNode != null) state.updateSelectedTextProperties(colorArgb = colorVal)
+                        }
+                    }
                 }
             }
         }
@@ -273,14 +303,19 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Фон для текста", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Medium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BgColorButton(isTransparent = true, color = 0xFFFFFFFF, isActive = !hasBg, enabled = formattingEnabled) {
-                    state.updateSelectedTextProperties(hasBackground = false)
+                BgColorButton(isTransparent = true, color = 0xFFFFFFFF, isActive = !displayHasBg) {
+                    state.defaultHasBackground = false
+                    if (selectedTextNode != null) state.updateSelectedTextProperties(hasBackground = false)
                 }
-                BgColorButton(isTransparent = false, color = 0xFFFFFFFF, isActive = hasBg && bgColor == 0xFFFFFFFF, enabled = formattingEnabled) {
-                    state.updateSelectedTextProperties(hasBackground = true, backgroundColorArgb = 0xFFFFFFFF)
+                BgColorButton(isTransparent = false, color = 0xFFFFFFFF, isActive = displayHasBg && displayBgColor == 0xFFFFFFFF) {
+                    state.defaultHasBackground = true
+                    state.defaultBackgroundColorArgb = 0xFFFFFFFF
+                    if (selectedTextNode != null) state.updateSelectedTextProperties(hasBackground = true, backgroundColorArgb = 0xFFFFFFFF)
                 }
-                BgColorButton(isTransparent = false, color = 0xFF424242, isActive = hasBg && bgColor == 0xFF424242, enabled = formattingEnabled) {
-                    state.updateSelectedTextProperties(hasBackground = true, backgroundColorArgb = 0xFF424242)
+                BgColorButton(isTransparent = false, color = 0xFF424242, isActive = displayHasBg && displayBgColor == 0xFF424242) {
+                    state.defaultHasBackground = true
+                    state.defaultBackgroundColorArgb = 0xFF424242
+                    if (selectedTextNode != null) state.updateSelectedTextProperties(hasBackground = true, backgroundColorArgb = 0xFF424242)
                 }
             }
         }
@@ -291,7 +326,7 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
             isActive = state.currentToolMode == CanvasToolMode.ADD_CALLOUT,
             onClick = { state.currentToolMode = if (state.currentToolMode == CanvasToolMode.ADD_CALLOUT) CanvasToolMode.SELECT else CanvasToolMode.ADD_CALLOUT }
         ) {
-            val iconColor = MaterialTheme.colors.onSurface
+            val iconColor = Color.Black // Иконка черная
             Canvas(modifier = Modifier.size(32.dp)) {
                 val r = 4.dp.toPx()
                 val start = Offset(r + 2f, size.height - r - 2f)
@@ -311,11 +346,12 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
 
 @Composable
 private fun RectangularToolButton(label: String, isActive: Boolean, onClick: () -> Unit, iconContent: @Composable () -> Unit) {
+    val bgColor = if (isActive) Color(0xFF81D4FA) else Color(0xFFE3F2FD) // Голубой фон
     Column(
         modifier = Modifier
-            .size(width = 110.dp, height = 80.dp)
+            .size(width = 110.dp, height = 92.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (isActive) MaterialTheme.colors.primary.copy(alpha = 0.15f) else Color.Transparent)
+            .background(bgColor)
             .border(
                 width = if (isActive) 2.dp else 1.dp,
                 color = if (isActive) MaterialTheme.colors.primary else Color.LightGray,
@@ -327,17 +363,18 @@ private fun RectangularToolButton(label: String, isActive: Boolean, onClick: () 
         verticalArrangement = Arrangement.Center
     ) {
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { iconContent() }
-        Text(label, fontSize = 12.sp, color = MaterialTheme.colors.onSurface)
+        Text(label, fontSize = 12.sp, color = Color.Black) // Текст черный
     }
 }
 
 @Composable
 private fun SquareToolButton(label: String, isActive: Boolean, onClick: () -> Unit, iconContent: @Composable () -> Unit) {
+    val bgColor = if (isActive) Color(0xFF81D4FA) else Color(0xFFE3F2FD) // Голубой фон
     Column(
         modifier = Modifier
-            .size(80.dp)
+            .size(width = 80.dp, height = 92.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(if (isActive) MaterialTheme.colors.primary.copy(alpha = 0.15f) else Color.Transparent)
+            .background(bgColor)
             .border(
                 width = if (isActive) 2.dp else 1.dp,
                 color = if (isActive) MaterialTheme.colors.primary else Color.LightGray,
@@ -349,7 +386,7 @@ private fun SquareToolButton(label: String, isActive: Boolean, onClick: () -> Un
         verticalArrangement = Arrangement.Center
     ) {
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { iconContent() }
-        Text(label, fontSize = 12.sp, color = MaterialTheme.colors.onSurface)
+        Text(label, fontSize = 12.sp, color = Color.Black) // Текст черный
     }
 }
 
@@ -361,7 +398,6 @@ private fun FormatToggleButton(
     isUnderline: Boolean = false,
     isStrikethrough: Boolean = false,
     isActive: Boolean,
-    enabled: Boolean,
     onClick: () -> Unit
 ) {
     Box(
@@ -369,7 +405,7 @@ private fun FormatToggleButton(
             .size(26.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(if (isActive) MaterialTheme.colors.primary.copy(alpha = 0.2f) else Color.Transparent)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -377,24 +413,24 @@ private fun FormatToggleButton(
             fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
             fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
             textDecoration = if (isUnderline) TextDecoration.Underline else if (isStrikethrough) TextDecoration.LineThrough else TextDecoration.None,
-            color = if (enabled) MaterialTheme.colors.onSurface else Color.LightGray,
+            color = MaterialTheme.colors.onSurface,
             fontSize = 15.sp
         )
     }
 }
 
 @Composable
-private fun AlignToggleButton(type: Int, isActive: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun AlignToggleButton(type: Int, isActive: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(24.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(if (isActive) MaterialTheme.colors.primary.copy(alpha = 0.2f) else Color.Transparent)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.size(14.dp)) {
-            val color = if (enabled) Color.Black else Color.LightGray
+            val color = Color.Black
             val stroke = 1.5f
             val y1 = size.height * 0.2f
             val y2 = size.height * 0.5f
@@ -422,43 +458,43 @@ private fun AlignToggleButton(type: Int, isActive: Boolean, enabled: Boolean, on
 }
 
 @Composable
-private fun ColorButton(colorArgb: Long, currentColor: Long, enabled: Boolean, onClick: () -> Unit) {
-    val isActive = colorArgb == currentColor && enabled
+private fun ColorButton(colorArgb: Long, currentColor: Long, onClick: () -> Unit) {
+    val isActive = colorArgb == currentColor
     val color = Color(colorArgb)
     Box(
         modifier = Modifier
             .size(24.dp)
             .clip(CircleShape)
-            .background(if (enabled) color else color.copy(alpha = 0.3f))
+            .background(color)
             .border(
                 width = if (isActive) 2.dp else 1.dp,
                 color = if (isActive) MaterialTheme.colors.primary else Color.LightGray,
                 shape = CircleShape
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(onClick = onClick)
     )
 }
 
 @Composable
-private fun BgColorButton(isTransparent: Boolean, color: Long, isActive: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun BgColorButton(isTransparent: Boolean, color: Long, isActive: Boolean, onClick: () -> Unit) {
     val bgColor = Color(color)
     Box(
         modifier = Modifier
             .size(36.dp)
             .clip(RoundedCornerShape(4.dp))
-            .background(if (isTransparent) Color.White else if (enabled) bgColor else bgColor.copy(alpha = 0.5f))
+            .background(if (isTransparent) Color.White else bgColor)
             .border(
                 width = if (isActive) 2.dp else 1.dp,
                 color = if (isActive) MaterialTheme.colors.primary else Color.LightGray,
                 shape = RoundedCornerShape(4.dp)
             )
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (isTransparent) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 drawLine(
-                    color = Color.Red.copy(alpha = if (enabled) 0.6f else 0.3f),
+                    color = Color.Red.copy(alpha = 0.6f),
                     start = Offset(0f, size.height),
                     end = Offset(size.width, 0f),
                     strokeWidth = 2f

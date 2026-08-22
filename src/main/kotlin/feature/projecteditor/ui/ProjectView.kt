@@ -73,33 +73,33 @@ fun ProjectView(
                     }
                 }
             }
-            .onPreviewKeyEvent { event ->
-                if (state.inlineEditingNodeId != null) return@onPreviewKeyEvent false
+            .onKeyEvent { event ->
+                if (state.inlineEditingNodeId != null) return@onKeyEvent false
 
                 if (event.type == KeyEventType.KeyDown) {
                     if (event.key == Key.Escape) {
                         state.clearSelection()
-                        return@onPreviewKeyEvent true
+                        return@onKeyEvent true
                     }
                     if (event.key == Key.Delete || event.key == Key.Backspace) {
                         if (state.selectedNodeIds.isNotEmpty() || state.selectedConnections.isNotEmpty()) {
                             state.deleteSelectedNodes()
                         }
-                        return@onPreviewKeyEvent true
+                        return@onKeyEvent true
                     }
                     // Ctrl + C
                     if (event.isCtrlPressed && event.key == Key.C) {
                         state.copySelectedNodes()
-                        return@onPreviewKeyEvent true
+                        return@onKeyEvent true
                     }
                     // Ctrl + V
                     if (event.isCtrlPressed && event.key == Key.V) {
                         state.pasteNodes()
-                        return@onPreviewKeyEvent true
+                        return@onKeyEvent true
                     }
                     if (event.isCtrlPressed && event.key == Key.Z) {
                         if (event.isShiftPressed) state.redo() else state.undo()
-                        return@onPreviewKeyEvent true
+                        return@onKeyEvent true
                     }
                 }
                 false

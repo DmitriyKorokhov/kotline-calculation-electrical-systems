@@ -54,6 +54,16 @@ class ProjectCanvasState {
     // Текущий инструмент для Аннотаций
     var currentToolMode by mutableStateOf(CanvasToolMode.SELECT)
 
+    var defaultFontSize by mutableStateOf(14f)
+    var defaultColorArgb by mutableStateOf(0xFFFFFFFF)
+    var defaultIsBold by mutableStateOf(false)
+    var defaultIsItalic by mutableStateOf(false)
+    var defaultIsUnderline by mutableStateOf(false)
+    var defaultIsStrikethrough by mutableStateOf(false)
+    var defaultAlign by mutableStateOf(0)
+    var defaultHasBackground by mutableStateOf(false)
+    var defaultBackgroundColorArgb by mutableStateOf(0xFFFFFFFF)
+
     private val historyManager = core.utils.ProjectHistoryManager()
 
     fun saveHistory() {

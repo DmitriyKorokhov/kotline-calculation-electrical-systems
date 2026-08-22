@@ -76,11 +76,23 @@ fun InteractiveCanvas(
                         when (state.currentToolMode) {
                             CanvasToolMode.ADD_TEXT -> {
                                 state.saveHistory()
-                                val newNode = TextNode(id = state.nextId++, name = "Текст", position = worldPos)
+                                val newNode = TextNode(
+                                    id = state.nextId++,
+                                    name = "Текст",
+                                    position = worldPos,
+                                    fontSize = state.defaultFontSize,
+                                    colorArgb = state.defaultColorArgb,
+                                    isBold = state.defaultIsBold,
+                                    isItalic = state.defaultIsItalic,
+                                    isUnderline = state.defaultIsUnderline,
+                                    isStrikethrough = state.defaultIsStrikethrough,
+                                    align = state.defaultAlign,
+                                    hasBackground = state.defaultHasBackground,
+                                    backgroundColorArgb = state.defaultBackgroundColorArgb
+                                )
                                 state.nodes.add(newNode)
                                 state.clearSelection()
                                 state.selectedNodeIds.add(newNode.id)
-                                // Сразу переходим в режим редактирования
                                 state.inlineEditingNodeId = newNode.id
                                 state.inlineEditingText = newNode.name
                                 state.currentToolMode = CanvasToolMode.SELECT
@@ -90,11 +102,23 @@ fun InteractiveCanvas(
                                 state.saveHistory()
                                 // Текст выноски ставим чуть правее и выше, а саму стрелку (targetPoint) - куда кликнули
                                 val textPos = Point(worldPos.x + 80f, worldPos.y - 80f)
-                                val newNode = CalloutNode(id = state.nextId++, name = "Выноска", position = textPos, targetPoint = worldPos)
+                                val newNode = CalloutNode(
+                                    id = state.nextId++,
+                                    name = "Выноска",
+                                    position = textPos,
+                                    targetPoint = worldPos,
+                                    fontSize = state.defaultFontSize,
+                                    colorArgb = state.defaultColorArgb,
+                                    isBold = state.defaultIsBold,
+                                    isItalic = state.defaultIsItalic,
+                                    isUnderline = state.defaultIsUnderline,
+                                    isStrikethrough = state.defaultIsStrikethrough,
+                                    hasBackground = state.defaultHasBackground,
+                                    backgroundColorArgb = state.defaultBackgroundColorArgb
+                                )
                                 state.nodes.add(newNode)
                                 state.clearSelection()
                                 state.selectedNodeIds.add(newNode.id)
-                                // Сразу переходим в режим редактирования
                                 state.inlineEditingNodeId = newNode.id
                                 state.inlineEditingText = newNode.name
                                 state.currentToolMode = CanvasToolMode.SELECT
