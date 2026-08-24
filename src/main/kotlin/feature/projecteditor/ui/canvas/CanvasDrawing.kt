@@ -1,5 +1,6 @@
 package feature.projecteditor.ui.canvas
 
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -25,6 +26,9 @@ import feature.projecteditor.ui.utils.toOffset
 import feature.projecteditor.ui.utils.toPoint
 import kotlin.math.abs
 import kotlin.math.floor
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 
 private const val NODE_WIDTH = 120f
 private const val GRID_WIDTH = 200f
@@ -36,17 +40,39 @@ fun DrawScope.drawProjectCanvas(textMeasurer: TextMeasurer, state: ProjectCanvas
         translate(left = state.offset.x, top = state.offset.y)
         scale(scale = state.scale, pivot = Offset.Zero)
     }) {
-        // Конвертируем Offset Compose в наш Point для запроса к стейту
         val topLeftWorld = state.screenToWorld(Offset.Zero.toPoint())
         val bottomRightWorld = state.screenToWorld(Offset(size.width, size.height).toPoint())
 
-        // Для отрисовки переводим обратно в Offset
         drawGrid(topLeftWorld.toOffset(), bottomRightWorld.toOffset())
         drawLevels(state.levels, topLeftWorld.toOffset(), bottomRightWorld.toOffset(), state.scale)
         drawConnections(state)
-        drawNodes(textMeasurer, state.nodes, state.connectingFromNodeId, state.selectedNodeIds)
+        drawNodes(textMeasurer, state)
         drawPins(state)
         drawSelectionBox(state)
+
+        // --- ДОБАВЛЕННЫЙ БЛОК ВИЗУАЛЬНОГО ФИЛЬТРА (РЕНТГЕН) ---
+        if (state.searchQuery.isNotBlank()) {
+            // Рисуем полупрозрачный белый фон поверх всего чертежа (эффект затемнения)
+            drawRect(Color.White.copy(alpha = 0.8f), topLeft = topLeftWorld.toOffset(), size = Size(bottomRightWorld.x - topLeftWorld.x, bottomRightWorld.y - topLeftWorld.y))
+
+            // Если что-то найдено - перерисовываем только эти узлы поверх рентгена в полном цвете
+            if (state.searchResults.isNotEmpty()) {
+                drawNodes(textMeasurer, state, state.searchResults)
+
+                // Добавляем красную рамку фокуса для ТЕКУЩЕГО элемента
+                val currentTarget = state.searchResults.getOrNull(state.currentSearchIndex)
+                if (currentTarget != null) {
+                    val box = feature.projecteditor.ui.selection.getBoundingBox(currentTarget)
+                    drawRoundRect(
+                        color = Color.Red,
+                        topLeft = Offset(box.left - 4f, box.top - 4f), // Чуть шире модели
+                        size = Size(box.width + 8f, box.height + 8f),
+                        style = Stroke(3f / state.scale),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -212,10 +238,10 @@ private fun DrawScope.drawConnections(state: ProjectCanvasState) {
 }
 
 @OptIn(ExperimentalTextApi::class)
-private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectNode>, connectingFromNodeId: Int?, selectedIds: List<Int>) {
-    nodes.forEach { node ->
+private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, state: ProjectCanvasState, nodesToDraw: List<ProjectNode> = state.nodes) {
+    nodesToDraw.forEach { node ->
         // Модель подсвечивается, если она в массиве выделенных ИЛИ мы тянем от нее линию соединения
-        val isSelected = selectedIds.contains(node.id) || node.id == connectingFromNodeId
+        val isSelected = state.selectedNodeIds.contains(node.id) || node.id == state.connectingFromNodeId
         when (node) {
             is ShieldNode -> {
                 val height = getNodeHeight(node)
@@ -267,21 +293,146 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, nodes: List<ProjectN
                 )
             }
             is CalloutNode -> {
+                val textLayoutResult = textMeasurer.measure(
+                    text = node.name.ifEmpty { "Текст выноски" },
+                    style = TextStyle(
+                        fontSize = node.fontSize.sp,
+                        color = Color(node.colorArgb),
+                        fontWeight = if (node.isBold) FontWeight.Bold else FontWeight.Normal,
+                        fontStyle = if (node.isItalic) FontStyle.Italic else FontStyle.Normal,
+                        textDecoration = TextDecoration.combine(
+                            listOfNotNull(
+                                if (node.isUnderline) TextDecoration.Underline else null,
+                                if (node.isStrikethrough) TextDecoration.LineThrough else null
+                            )
+                        ),
+                        // Убрали node.align, так как у выноски всегда левое выравнивание
+                        textAlign = TextAlign.Left
+                    )
+                )
+
+                val textW = textLayoutResult.size.width.toFloat()
+                val textH = textLayoutResult.size.height.toFloat()
+                val textTopLeft = Offset(node.position.x - textW / 2f, node.position.y - textH / 2f)
+                val target = node.targetPoint.toOffset()
                 val color = Color(node.colorArgb)
-                drawLine(
-                    color = color,
-                    start = node.position.toOffset(),
-                    end = node.targetPoint.toOffset(),
-                    strokeWidth = 2f
-                )
-                drawCircle(
-                    color = color,
-                    radius = 4f,
-                    center = node.targetPoint.toOffset()
-                )
+
+                // 1. Отрисовка линии от текста к цели
+                val closestTextEdgeX = if (target.x < node.position.x) textTopLeft.x else textTopLeft.x + textW
+                drawLine(color = color, start = target, end = Offset(closestTextEdgeX, node.position.y), strokeWidth = 2f / state.scale)
+
+                // 2. Отрисовка наконечника (убрали / state.scale для радиуса и длины, чтобы масштабировалось вместе с чертежом)
+                when (node.startStyle) {
+                    0 -> { // Стрелка
+                        val arrowLen = 15f
+                        val angle = kotlin.math.atan2(node.position.y - target.y, closestTextEdgeX - target.x)
+                        val p1 = Offset(target.x + arrowLen * kotlin.math.cos(angle - Math.PI/6).toFloat(), target.y + arrowLen * kotlin.math.sin(angle - Math.PI/6).toFloat())
+                        val p2 = Offset(target.x + arrowLen * kotlin.math.cos(angle + Math.PI/6).toFloat(), target.y + arrowLen * kotlin.math.sin(angle + Math.PI/6).toFloat())
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(target.x, target.y)
+                            lineTo(p1.x, p1.y)
+                            moveTo(target.x, target.y)
+                            lineTo(p2.x, p2.y)
+                        }
+                        // Но толщину линии (Stroke) оставляем неизменной для четкости
+                        drawPath(path, color, style = Stroke(2f / state.scale))
+                    }
+                    1 -> drawCircle(color = color, radius = 7f, center = target, style = Stroke(2f / state.scale))
+                    2 -> drawCircle(color = color, radius = 5f, center = target)
+                }
+
+                // 3. Отрисовка подложки текста
+                if (node.hasBackground) {
+                    drawRoundRect(
+                        color = Color(node.backgroundColorArgb),
+                        topLeft = textTopLeft,
+                        size = Size(textW, textH),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    )
+                }
+
+                // 4. Отрисовка выделения (подсвечиваем и текст, и целевую точку)
+                if (isSelected) {
+                    if (state.inlineEditingNodeId != node.id) { // Рамку текста прячем при редактировании
+                        drawRoundRect(
+                            color = Color(0x339C27B0),
+                            topLeft = textTopLeft,
+                            size = Size(textW, textH),
+                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = Color(0xFF9C27B0),
+                            topLeft = textTopLeft,
+                            size = Size(textW, textH),
+                            style = Stroke(2f / state.scale),
+                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                        )
+                    }
+                    // кружок на конце выноски оставляем всегда
+                    drawCircle(color = Color(0xFF9C27B0), radius = 8f / state.scale, center = target, style = Stroke(2f / state.scale))
+                }
+
+                // 5. Отрисовка самого текста (если не редактируем)
+                if (state.inlineEditingNodeId != node.id) {
+                    drawText(textLayoutResult = textLayoutResult, topLeft = textTopLeft)
+                }
             }
+
             is TextNode -> {
-           }
+                val textLayoutResult = textMeasurer.measure(
+                    text = node.name.ifEmpty { "Текст" }, // Плейсхолдер виден, пока нет реального текста
+                    style = TextStyle(
+                        fontSize = node.fontSize.sp,
+                        color = Color(node.colorArgb),
+                        fontWeight = if (node.isBold) FontWeight.Bold else FontWeight.Normal,
+                        fontStyle = if (node.isItalic) FontStyle.Italic else FontStyle.Normal,
+                        textDecoration = TextDecoration.combine(
+                            listOfNotNull(
+                                if (node.isUnderline) TextDecoration.Underline else null,
+                                if (node.isStrikethrough) TextDecoration.LineThrough else null
+                            )
+                        ),
+                        textAlign = when (node.align) {
+                            1 -> TextAlign.Center
+                            2 -> TextAlign.Right
+                            else -> TextAlign.Left
+                        }
+                    )
+                )
+
+                val width = textLayoutResult.size.width.toFloat()
+                val height = textLayoutResult.size.height.toFloat()
+                val topLeft = Offset(node.position.x - width / 2f, node.position.y - height / 2f)
+
+                if (node.hasBackground) {
+                    drawRoundRect(
+                        color = Color(node.backgroundColorArgb),
+                        topLeft = topLeft,
+                        size = Size(width, height),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    )
+                }
+
+                if (isSelected && state.inlineEditingNodeId != node.id) {
+                    drawRoundRect(
+                        color = Color(0x339C27B0),
+                        topLeft = topLeft,
+                        size = Size(width, height),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    )
+                    drawRoundRect(
+                        color = Color(0xFF9C27B0), // Яркая фиолетовая рамка
+                        topLeft = topLeft,
+                        size = Size(width, height),
+                        style = Stroke(2f / state.scale),
+                        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                    )
+                }
+
+                if (state.inlineEditingNodeId != node.id) {
+                    drawText(textLayoutResult = textLayoutResult, topLeft = topLeft)
+                }
+            }
         }
     }
 }

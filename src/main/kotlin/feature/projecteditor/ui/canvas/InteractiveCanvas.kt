@@ -24,6 +24,7 @@ import androidx.compose.ui.input.pointer.isTertiaryPressed
 import feature.projecteditor.state.ConnectionHit
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.layout.onSizeChanged
 import feature.projecteditor.state.CanvasToolMode
 import java.awt.Cursor
 
@@ -52,6 +53,7 @@ fun InteractiveCanvas(
 
     Box(
         modifier = modifier
+            .onSizeChanged { state.canvasSize = Point(it.width.toFloat(), it.height.toFloat()) }
             .pointerHoverIcon(currentCursor)
             // 1. КЛИКИ (ЛКМ - выделение/соединение, Двойной клик - открытие щита)
             .pointerInput(Unit) {
@@ -61,24 +63,26 @@ fun InteractiveCanvas(
                         if (node is ShieldNode) {
                             onOpenShield(node.id)
                         } else if (node is ItRackRowNode) {
-                            // Выделяем узел, чтобы диалог знал, чьи данные редактировать
                             state.clearSelection()
                             state.selectedNodeIds.add(node.id)
                             state.selectedNode = node
-                            // Открываем диалог
                             state.showRackSettingsDialog = true
+                        } else if (node is TextNode || node is CalloutNode) {
+                            state.inlineEditingNodeId = node.id
+                            state.inlineEditingText = node.name
+                            state.previousTab = state.selectedTab // ЗАПОМИНАЕМ ПАНЕЛЬ
+                            state.selectedTab = feature.projecteditor.ui.components.EditorTab.ANNOTATIONS
                         }
                     },
                     onTap = { offset ->
                         val worldPos = state.screenToWorld(offset.toPoint())
 
-                        // 1. ПЕРЕХВАТ КЛИКА ДЛЯ ВСТАВКИ ИНСТРУМЕНТОВ АННОТАЦИЙ
                         when (state.currentToolMode) {
                             CanvasToolMode.ADD_TEXT -> {
                                 state.saveHistory()
                                 val newNode = TextNode(
                                     id = state.nextId++,
-                                    name = "Текст",
+                                    name = "", // Изначально пустая строка (без слова "Текст")
                                     position = worldPos,
                                     fontSize = state.defaultFontSize,
                                     colorArgb = state.defaultColorArgb,
@@ -94,17 +98,17 @@ fun InteractiveCanvas(
                                 state.clearSelection()
                                 state.selectedNodeIds.add(newNode.id)
                                 state.inlineEditingNodeId = newNode.id
-                                state.inlineEditingText = newNode.name
+                                state.inlineEditingText = ""
                                 state.currentToolMode = CanvasToolMode.SELECT
                                 return@detectTapGestures
                             }
                             CanvasToolMode.ADD_CALLOUT -> {
                                 state.saveHistory()
-                                // Текст выноски ставим чуть правее и выше, а саму стрелку (targetPoint) - куда кликнули
+                                // Текст появится со смещением, а сама стрелка останется там, куда кликнули
                                 val textPos = Point(worldPos.x + 80f, worldPos.y - 80f)
                                 val newNode = CalloutNode(
                                     id = state.nextId++,
-                                    name = "Выноска",
+                                    name = "",
                                     position = textPos,
                                     targetPoint = worldPos,
                                     fontSize = state.defaultFontSize,
@@ -114,13 +118,14 @@ fun InteractiveCanvas(
                                     isUnderline = state.defaultIsUnderline,
                                     isStrikethrough = state.defaultIsStrikethrough,
                                     hasBackground = state.defaultHasBackground,
-                                    backgroundColorArgb = state.defaultBackgroundColorArgb
+                                    backgroundColorArgb = state.defaultBackgroundColorArgb,
+                                    startStyle = state.defaultCalloutStartStyle
                                 )
                                 state.nodes.add(newNode)
                                 state.clearSelection()
                                 state.selectedNodeIds.add(newNode.id)
                                 state.inlineEditingNodeId = newNode.id
-                                state.inlineEditingText = newNode.name
+                                state.inlineEditingText = ""
                                 state.currentToolMode = CanvasToolMode.SELECT
                                 return@detectTapGestures
                             }
@@ -253,6 +258,20 @@ fun InteractiveCanvas(
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { position ->
+                        val worldPos = state.screenToWorld(position.toPoint())
+                        // Проверяем, тянем ли мы за маркер выноски
+                        if (state.selectedNodeIds.size == 1) {
+                            val singleNode = state.nodes.find { it.id == state.selectedNodeIds.first() }
+                            if (singleNode is CalloutNode) {
+                                val distSq = (worldPos - singleNode.targetPoint).getDistanceSquared()
+                                val threshold = (15f / state.scale) // Зона захвата кружка
+                                if (distSq < threshold * threshold) {
+                                    state.saveHistory()
+                                    dragTarget = "CalloutTargetPoint"
+                                    return@detectDragGestures // Прерываем дальнейший поиск
+                                }
+                            }
+                        }
                         val node = state.findNodeAtScreenPosition(position.toPoint())
                         val connHit = state.hitTestConnections(position.toPoint())
 
@@ -386,7 +405,16 @@ fun InteractiveCanvas(
                         val scale = state.scale
                         val deltaWorld = Point(deltaScreen.x / scale, deltaScreen.y / scale)
 
-                        if (dragTarget == "Nodes") {
+                        if (dragTarget == "CalloutTargetPoint") {
+                            val id = state.selectedNodeIds.firstOrNull() ?: return@detectDragGestures
+                            val node = state.nodes.find { it.id == id } as? CalloutNode ?: return@detectDragGestures
+                            val newTarget = Point(node.targetPoint.x + deltaWorld.x, node.targetPoint.y + deltaWorld.y)
+                            val index = state.nodes.indexOf(node)
+                            if (index != -1) {
+                                state.nodes[index] = node.copy(targetPoint = newTarget)
+                            }
+                        }
+                        else if (dragTarget == "Nodes") {
                             state.selectedNodeIds.forEach { id ->
                                 val n = state.nodes.find { it.id == id }
                                 if (n != null) state.updateNodePosition(
@@ -477,9 +505,28 @@ fun InteractiveCanvas(
             drawGridHeaders(textMeasurer, state)
         }
 
-        // УНИФИЦИРОВАННАЯ ОТРИСОВКА ПОДПИСЕЙ (Всегда справа)
+        // УНИФИЦИРОВАННАЯ ОТРИСОВКА ПОДПИСЕЙ И РЕДАКТОРОВ
         state.nodes.forEach { node ->
-            if (node.name.isNotBlank() || node is ShieldNode) {
+
+            if (state.searchQuery.isNotBlank() && !state.searchResults.contains(node)) return@forEach
+
+            val isEditing = state.inlineEditingNodeId == node.id
+
+            // Теперь редактор открывается И для текста, И для выноски!
+            if (node is TextNode || node is CalloutNode) {
+                if (isEditing) {
+                    val screenPos = state.worldToScreen(node.position).toOffset()
+                    feature.projecteditor.ui.labels.AnnotationTextEditor(
+                        node = node,
+                        screenPos = screenPos,
+                        scale = state.scale,
+                        editingText = state.inlineEditingText,
+                        onEditingTextChanged = { state.inlineEditingText = it },
+                        onFinishEdit = { state.finishInlineEditing() }
+                    )
+                }
+            } else if (node.name.isNotBlank() || node is ShieldNode) {
+                // Для всех остальных узлов (оборудование) рисуем стандартный ярлык справа
                 val screenPos = state.worldToScreen(node.position).toOffset()
                 val scale = state.scale
                 val nodeHeight = NODE_HEIGHT * scale
@@ -496,12 +543,10 @@ fun InteractiveCanvas(
                 }
 
                 val displayName = if (node is ShieldNode) {
-                    ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
+                    feature.shieldeditor.state.ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
                 } else {
                     node.name
                 }
-
-                val isEditing = state.inlineEditingNodeId == node.id
 
                 RightSideNameText(
                     name = displayName,
@@ -515,7 +560,7 @@ fun InteractiveCanvas(
                     onStartEdit = {
                         state.inlineEditingNodeId = node.id
                         state.inlineEditingText = displayName
-                        // АВТО-ПЕРЕКЛЮЧЕНИЕ ВКЛАДКИ
+                        state.previousTab = state.selectedTab
                         state.selectedTab = feature.projecteditor.ui.components.EditorTab.ANNOTATIONS
                     },
                     onFinishEdit = {

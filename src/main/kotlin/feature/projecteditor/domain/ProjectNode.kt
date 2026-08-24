@@ -144,11 +144,12 @@ data class CalloutNode(
     override var position: Point,
     var targetPoint: Point,
     var fontSize: Float = 14f,
-    var colorArgb: Long = 0xFFFFFFFF, // Белый по умолчанию
+    var colorArgb: Long = 0xFFFFFFFF,
     var isBold: Boolean = false,
     var isItalic: Boolean = false,
     var isUnderline: Boolean = false,
     var isStrikethrough: Boolean = false,
     var hasBackground: Boolean = true,
-    var backgroundColorArgb: Long = 0xFFFFFFFF
+    var backgroundColorArgb: Long = 0xFFFFFFFF,
+    var startStyle: Int = 0 // 0 = Стрелка, 1 = Пустой круг, 2 = Закрашенный круг
 ) : ProjectNode

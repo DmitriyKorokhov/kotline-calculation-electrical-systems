@@ -49,11 +49,10 @@ class ProjectCanvasState {
     var clipboardConnections by mutableStateOf<List<Connection>>(emptyList())
     var inlineEditingNodeId by mutableStateOf<Int?>(null)
     var inlineEditingText by mutableStateOf("")
-    // Управление активной вкладкой меню (переносим из ProjectView)
+    // Управление активной вкладкой меню
     var selectedTab by mutableStateOf(feature.projecteditor.ui.components.EditorTab.EQUIPMENT)
     // Текущий инструмент для Аннотаций
     var currentToolMode by mutableStateOf(CanvasToolMode.SELECT)
-
     var defaultFontSize by mutableStateOf(14f)
     var defaultColorArgb by mutableStateOf(0xFFFFFFFF)
     var defaultIsBold by mutableStateOf(false)
@@ -63,8 +62,56 @@ class ProjectCanvasState {
     var defaultAlign by mutableStateOf(0)
     var defaultHasBackground by mutableStateOf(false)
     var defaultBackgroundColorArgb by mutableStateOf(0xFFFFFFFF)
+    var previousTab by mutableStateOf<feature.projecteditor.ui.components.EditorTab?>(null)
+    var defaultCalloutStartStyle by mutableStateOf(0)
+    // --- ПОИСК И НАВИГАЦИЯ ---
+    var canvasSize by mutableStateOf(Point(1000f, 1000f)) // Запоминаем размер экрана
+    var searchQuery by mutableStateOf("")
+    var searchResults by mutableStateOf<List<ProjectNode>>(emptyList())
+    var currentSearchIndex by mutableStateOf(0)
 
     private val historyManager = core.utils.ProjectHistoryManager()
+
+    fun updateSearch(query: String) {
+        searchQuery = query
+        searchResults = emptyList()
+        currentSearchIndex = 0
+
+        if (query.isBlank()) return
+
+        // Оставляем только поиск текста в узлах
+        val q = query.lowercase()
+        searchResults = nodes.filter { node ->
+            val name = if (node is ShieldNode) {
+                feature.shieldeditor.state.ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
+            } else {
+                node.name
+            }
+            name.lowercase().contains(q)
+        }
+
+        if (searchResults.isNotEmpty()) {
+            centerOn(searchResults[0].position)
+        }
+    }
+
+    fun nextSearchResult() {
+        if (searchResults.isEmpty()) return
+        currentSearchIndex = (currentSearchIndex + 1) % searchResults.size
+        centerOn(searchResults[currentSearchIndex].position)
+    }
+
+    fun prevSearchResult() {
+        if (searchResults.isEmpty()) return
+        currentSearchIndex = if (currentSearchIndex - 1 < 0) searchResults.size - 1 else currentSearchIndex - 1
+        centerOn(searchResults[currentSearchIndex].position)
+    }
+
+    private fun centerOn(worldPos: Point) {
+        val screenCenterX = canvasSize.x / 2f
+        val screenCenterY = canvasSize.y / 2f
+        offset = Point(screenCenterX - worldPos.x * scale, screenCenterY - worldPos.y * scale)
+    }
 
     fun saveHistory() {
         historyManager.pushState(this)
@@ -170,6 +217,9 @@ class ProjectCanvasState {
     fun snapNodeToEndPosition(nodeId: Int) {
         val node = nodes.find { it.id == nodeId }
         node?.let {
+            // Текст и выноски НЕ привязываем к сетке, оставляем свободное перемещение
+            if (it is TextNode || it is CalloutNode) return
+
             val snappedPosition = snapToGrid(it.position)
             updateNodePosition(it.id, snappedPosition)
         }
@@ -814,94 +864,97 @@ class ProjectCanvasState {
         val nodeId = inlineEditingNodeId ?: return
         val index = nodes.indexOfFirst { it.id == nodeId }
 
-        if (index != -1 && inlineEditingText.isNotBlank()) {
-            saveHistory()
-            val node = nodes[index]
+        if (index != -1) {
+            val textToSave = inlineEditingText.trim()
 
-            // 1. Сохранение имени щита в хранилище (если это щит)
-            if (node is ShieldNode) {
-                val data = feature.shieldeditor.state.ShieldStorage.loadOrCreate(node.id)
-                data.shieldName = inlineEditingText
-                feature.shieldeditor.state.ShieldStorage.save(node.id, data)
-            }
+            if (textToSave.isNotBlank()) {
+                saveHistory()
+                val node = nodes[index]
 
-            // 2. Обновление самой модели в графе напрямую по индексу
-            val updatedNode = when (node) {
-                is ShieldNode -> node.copy(name = inlineEditingText)
-                is TransformerNode -> node.copy(name = inlineEditingText)
-                is GeneratorNode -> node.copy(name = inlineEditingText)
-                is UpsNode -> node.copy(name = inlineEditingText)
-                is BatteryNode -> node.copy(name = inlineEditingText)
-                is SolarPanelNode -> node.copy(name = inlineEditingText)
-                is InverterNode -> node.copy(name = inlineEditingText)
-                is SystemNode -> node.copy(name = inlineEditingText)
-                is ItRackRowNode -> node.copy(name = inlineEditingText)
-                is RectifierNode -> node.copy(name = inlineEditingText)
-                is TextNode -> node.copy(name = inlineEditingText)
-                is CalloutNode -> node.copy(name = inlineEditingText)
+                if (node is ShieldNode) {
+                    val data = feature.shieldeditor.state.ShieldStorage.loadOrCreate(node.id)
+                    data.shieldName = textToSave
+                    feature.shieldeditor.state.ShieldStorage.save(node.id, data)
+                }
+
+                val updatedNode = when (node) {
+                    is ShieldNode -> node.copy(name = textToSave)
+                    is TransformerNode -> node.copy(name = textToSave)
+                    is GeneratorNode -> node.copy(name = textToSave)
+                    is UpsNode -> node.copy(name = textToSave)
+                    is BatteryNode -> node.copy(name = textToSave)
+                    is SolarPanelNode -> node.copy(name = textToSave)
+                    is InverterNode -> node.copy(name = textToSave)
+                    is SystemNode -> node.copy(name = textToSave)
+                    is ItRackRowNode -> node.copy(name = textToSave)
+                    is RectifierNode -> node.copy(name = textToSave)
+                    is TextNode -> node.copy(name = textToSave)
+                    is CalloutNode -> node.copy(name = textToSave)
+                }
+                nodes[index] = updatedNode
+            } else {
+                // Если текст полностью стерли - удаляем узел с холста!
+                saveHistory()
+                val nodeToDelete = nodes[index]
+                nodes.removeAt(index)
+                selectedNodeIds.remove(nodeToDelete.id)
             }
-            nodes[index] = updatedNode
         }
 
         inlineEditingNodeId = null
         inlineEditingText = ""
+
+        // Возвращаемся на предыдущую панель, если она была сохранена
+        if (previousTab != null) {
+            selectedTab = previousTab!!
+            previousTab = null
+        }
     }
 
-    fun updateSelectedTextProperties(
+    fun updateInlineEditingTextProperties(
         fontSize: Float? = null,
         colorArgb: Long? = null,
         isBold: Boolean? = null,
         isItalic: Boolean? = null,
-        isUnderline: Boolean? = null,     // НОВОЕ
-        isStrikethrough: Boolean? = null, // НОВОЕ
+        isUnderline: Boolean? = null,
+        isStrikethrough: Boolean? = null,
         align: Int? = null,
         hasBackground: Boolean? = null,
-        backgroundColorArgb: Long? = null
+        backgroundColorArgb: Long? = null,
+        calloutStartStyle: Int? = null
     ) {
-        val nodeIds = selectedNodeIds.toList()
-        if (nodeIds.isEmpty()) return
+        val nodeId = inlineEditingNodeId ?: return // Прерываем, если сейчас ничего не редактируем
 
         saveHistory()
-        var changed = false
-
-        for (nodeId in nodeIds) {
-            val index = nodes.indexOfFirst { it.id == nodeId }
-            if (index != -1) {
-                val node = nodes[index]
-                val updated = when (node) {
-                    is TextNode -> node.copy(
-                        fontSize = fontSize ?: node.fontSize,
-                        colorArgb = colorArgb ?: node.colorArgb,
-                        isBold = isBold ?: node.isBold,
-                        isItalic = isItalic ?: node.isItalic,
-                        isUnderline = isUnderline ?: node.isUnderline,
-                        isStrikethrough = isStrikethrough ?: node.isStrikethrough,
-                        align = align ?: node.align,
-                        hasBackground = hasBackground ?: node.hasBackground,
-                        backgroundColorArgb = backgroundColorArgb ?: node.backgroundColorArgb
-                    )
-                    is CalloutNode -> node.copy(
-                        fontSize = fontSize ?: node.fontSize,
-                        colorArgb = colorArgb ?: node.colorArgb,
-                        isBold = isBold ?: node.isBold,
-                        isItalic = isItalic ?: node.isItalic,
-                        isUnderline = isUnderline ?: node.isUnderline,
-                        isStrikethrough = isStrikethrough ?: node.isStrikethrough,
-                        hasBackground = hasBackground ?: node.hasBackground,
-                        backgroundColorArgb = backgroundColorArgb ?: node.backgroundColorArgb
-                    )
-                    else -> node
-                }
-                if (node != updated) {
-                    nodes[index] = updated
-                    changed = true
-                }
+        val index = nodes.indexOfFirst { it.id == nodeId }
+        if (index != -1) {
+            val node = nodes[index]
+            val updated = when (node) {
+                is TextNode -> node.copy(
+                    fontSize = fontSize ?: node.fontSize,
+                    colorArgb = colorArgb ?: node.colorArgb,
+                    isBold = isBold ?: node.isBold,
+                    isItalic = isItalic ?: node.isItalic,
+                    isUnderline = isUnderline ?: node.isUnderline,
+                    isStrikethrough = isStrikethrough ?: node.isStrikethrough,
+                    align = align ?: node.align,
+                    hasBackground = hasBackground ?: node.hasBackground,
+                    backgroundColorArgb = backgroundColorArgb ?: node.backgroundColorArgb
+                )
+                is CalloutNode -> node.copy(
+                    fontSize = fontSize ?: node.fontSize,
+                    colorArgb = colorArgb ?: node.colorArgb,
+                    isBold = isBold ?: node.isBold,
+                    isItalic = isItalic ?: node.isItalic,
+                    isUnderline = isUnderline ?: node.isUnderline,
+                    isStrikethrough = isStrikethrough ?: node.isStrikethrough,
+                    hasBackground = hasBackground ?: node.hasBackground,
+                    backgroundColorArgb = backgroundColorArgb ?: node.backgroundColorArgb,
+                    startStyle = calloutStartStyle ?: node.startStyle
+                )
+                else -> node
             }
-        }
-        if (changed) {
-            val oldSel = selectedNodeIds.toList()
-            selectedNodeIds.clear()
-            selectedNodeIds.addAll(oldSel)
+            nodes[index] = updated
         }
     }
 }

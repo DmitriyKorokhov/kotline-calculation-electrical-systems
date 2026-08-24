@@ -15,7 +15,20 @@ const val FEED_MARGIN = 20f // Отступ от стоек до первой ш
 
 // 1. Получаем точные границы (Bounding Box) для любой модели
 fun getBoundingBox(node: ProjectNode): Rect {
-    // Точные визуальные ширины с учетом масштабирования при отрисовке
+    // Особый расчет для выноски (охватывает линию и текст)
+    if (node is CalloutNode) {
+        val textW = maxOf(30f, (node.name.split("\n").maxOfOrNull { it.length } ?: 1) * (node.fontSize * 0.55f))
+        val textH = maxOf(node.fontSize, node.name.split("\n").size * (node.fontSize * 1.2f))
+
+        val minX = minOf(node.position.x - textW / 2, node.targetPoint.x)
+        val maxX = maxOf(node.position.x + textW / 2, node.targetPoint.x)
+        val minY = minOf(node.position.y - textH / 2, node.targetPoint.y)
+        val maxY = maxOf(node.position.y + textH / 2, node.targetPoint.y)
+
+        // Возвращаем коробку с небольшим запасом для комфортного клика
+        return Rect(minX - 10f, minY - 10f, maxX + 10f, maxY + 10f)
+    }
+
     val width = when (node) {
         is TransformerNode -> (node.radiusOuter * 0.8f) * 2f
         is GeneratorNode -> (node.radius * 0.85f) * 2f
@@ -24,21 +37,19 @@ fun getBoundingBox(node: ProjectNode): Rect {
         is BatteryNode -> NODE_WIDTH * 0.5f
         is UpsNode -> 80f
         is SolarPanelNode -> NODE_WIDTH * 0.8f
+        is TextNode -> maxOf(30f, (node.name.split("\n").maxOfOrNull { it.length } ?: 1) * (node.fontSize * 0.55f))
         else -> NODE_WIDTH
     }
 
-    // Точные визуальные высоты моделей
     val height = when (node) {
-        is TransformerNode -> {
-            val drawRadius = node.radiusOuter * 0.8f
-            drawRadius * 3.2f
-        }
+        is TransformerNode -> (node.radiusOuter * 0.8f) * 3.2f
         is GeneratorNode -> (node.radius * 0.85f) * 2f
         is SystemNode -> (node.radius * 0.85f) * 2f
         is ShieldNode -> getNodeHeight(node)
         is ItRackRowNode -> getItRackRowSize(node).second
         is BatteryNode -> 80f * 0.9f
-        else -> 80f // Базовая высота NODE_HEIGHT
+        is TextNode -> maxOf(node.fontSize, node.name.split("\n").size * (node.fontSize * 1.2f))
+        else -> 80f
     }
 
     val left = node.position.x - width / 2

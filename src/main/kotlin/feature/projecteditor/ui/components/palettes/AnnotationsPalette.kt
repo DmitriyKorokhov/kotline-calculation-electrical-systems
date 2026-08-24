@@ -13,6 +13,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,23 +38,23 @@ import feature.projecteditor.state.ProjectCanvasState
 
 @Composable
 fun AnnotationsPalette(state: ProjectCanvasState) {
-    val selectedNodes = state.nodes.filter { it.id in state.selectedNodeIds }
-    val selectedTextNode = selectedNodes.firstOrNull { it is TextNode || it is CalloutNode }
+    // 1. СМОТРИМ ТОЛЬКО НА ТОТ УЗЕЛ, КОТОРЫЙ СЕЙЧАС РЕДАКТИРУЕТСЯ
+    val editingNode = state.nodes.find { it.id == state.inlineEditingNodeId }
+    val editingTextNode = if (editingNode is TextNode || editingNode is CalloutNode) editingNode else null
 
-    // Читаем из выделенной модели ИЛИ из настроек по умолчанию (если ничего не выделено)
-    val displayFontSize = (selectedTextNode as? TextNode)?.fontSize ?: (selectedTextNode as? CalloutNode)?.fontSize ?: state.defaultFontSize
-    val displayIsBold = (selectedTextNode as? TextNode)?.isBold ?: (selectedTextNode as? CalloutNode)?.isBold ?: state.defaultIsBold
-    val displayIsItalic = (selectedTextNode as? TextNode)?.isItalic ?: (selectedTextNode as? CalloutNode)?.isItalic ?: state.defaultIsItalic
-    val displayIsUnderline = (selectedTextNode as? TextNode)?.isUnderline ?: (selectedTextNode as? CalloutNode)?.isUnderline ?: state.defaultIsUnderline
-    val displayIsStrikethrough = (selectedTextNode as? TextNode)?.isStrikethrough ?: (selectedTextNode as? CalloutNode)?.isStrikethrough ?: state.defaultIsStrikethrough
-    val displayAlign = (selectedTextNode as? TextNode)?.align ?: state.defaultAlign
-    val displayColor = (selectedTextNode as? TextNode)?.colorArgb ?: (selectedTextNode as? CalloutNode)?.colorArgb ?: state.defaultColorArgb
-    val displayHasBg = (selectedTextNode as? TextNode)?.hasBackground ?: (selectedTextNode as? CalloutNode)?.hasBackground ?: state.defaultHasBackground
-    val displayBgColor = (selectedTextNode as? TextNode)?.backgroundColorArgb ?: (selectedTextNode as? CalloutNode)?.backgroundColorArgb ?: state.defaultBackgroundColorArgb
+    // Читаем из редактируемой модели ИЛИ из настроек по умолчанию
+    val displayFontSize = (editingTextNode as? TextNode)?.fontSize ?: (editingTextNode as? CalloutNode)?.fontSize ?: state.defaultFontSize
+    val displayIsBold = (editingTextNode as? TextNode)?.isBold ?: (editingTextNode as? CalloutNode)?.isBold ?: state.defaultIsBold
+    val displayIsItalic = (editingTextNode as? TextNode)?.isItalic ?: (editingTextNode as? CalloutNode)?.isItalic ?: state.defaultIsItalic
+    val displayIsUnderline = (editingTextNode as? TextNode)?.isUnderline ?: (editingTextNode as? CalloutNode)?.isUnderline ?: state.defaultIsUnderline
+    val displayIsStrikethrough = (editingTextNode as? TextNode)?.isStrikethrough ?: (editingTextNode as? CalloutNode)?.isStrikethrough ?: state.defaultIsStrikethrough
+    val displayAlign = (editingTextNode as? TextNode)?.align ?: state.defaultAlign
+    val displayColor = (editingTextNode as? TextNode)?.colorArgb ?: (editingTextNode as? CalloutNode)?.colorArgb ?: state.defaultColorArgb
+    val displayHasBg = (editingTextNode as? TextNode)?.hasBackground ?: (editingTextNode as? CalloutNode)?.hasBackground ?: state.defaultHasBackground
+    val displayBgColor = (editingTextNode as? TextNode)?.backgroundColorArgb ?: (editingTextNode as? CalloutNode)?.backgroundColorArgb ?: state.defaultBackgroundColorArgb
 
     var fontDropdownExpanded by remember { mutableStateOf(false) }
     var selectedFont by remember { mutableStateOf("ISOCPEUR") }
-    var searchQuery by remember { mutableStateOf("") }
 
     var sizeInputValue by remember(displayFontSize) { mutableStateOf(displayFontSize.toInt().toString()) }
 
@@ -74,7 +76,7 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                 text = "АБС",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.Black, // Иконка черная
+                color = Color.Black,
                 modifier = Modifier.offset(x = 0.dp, y = (-6).dp)
             )
         }
@@ -94,7 +96,7 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                         .fillMaxWidth()
                         .height(42.dp)
                         .background(Color.White, RoundedCornerShape(4.dp)),
-                    textColor = Color.Black, // Текст шрифта черный
+                    textColor = Color.Black,
                     focusedBorderColor = Color.LightGray,
                     unfocusedBorderColor = Color.LightGray,
                     fontSizeSp = 13,
@@ -117,18 +119,12 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
             }
 
             // Поле поиска текста
-            // Поле поиска текста (без анимации, с плейсхолдером)
             BasicTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
+                value = state.searchQuery, // Теперь берем из state
+                onValueChange = { state.updateSearch(it) }, // Обновляем через state
                 singleLine = true,
-                textStyle = TextStyle(
-                    fontSize = 13.sp,
-                    color = Color.Black // Вводимый текст - черный
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp),
+                textStyle = TextStyle(fontSize = 13.sp, color = Color.Black),
+                modifier = Modifier.fillMaxWidth().height(42.dp),
                 decorationBox = { innerTextField ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -138,27 +134,37 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                             .background(Color.White, RoundedCornerShape(4.dp))
                             .padding(horizontal = 8.dp)
                     ) {
-                        // Увеличенная черная лупа
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Поиск",
-                            tint = Color.Black,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Icon(Icons.Default.Search, contentDescription = "Поиск", tint = Color.Black, modifier = Modifier.size(22.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Box(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentAlignment = Alignment.CenterStart
                         ) {
-                            // Плейсхолдер показывается только если поле пустое
-                            if (searchQuery.isEmpty()) {
-                                Text(
-                                    text = "Поиск текста",
-                                    color = Color.DarkGray, // Темно-серый, хорошо виден на белом
-                                    fontSize = 13.sp
-                                )
+                            if (state.searchQuery.isEmpty()) {
+                                Text("Поиск", color = Color.DarkGray, fontSize = 13.sp)
                             }
                             innerTextField()
+                        }
+
+                        if (state.searchResults.isNotEmpty()) {
+                            Text(
+                                text = "${state.currentSearchIndex + 1} / ${state.searchResults.size}",
+                                fontSize = 12.sp,
+                                color = Color.Black,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Prev",
+                                tint = Color.Black,
+                                modifier = Modifier.clickable { state.prevSearchResult() }
+                            )
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Next",
+                                tint = Color.Black,
+                                modifier = Modifier.clickable { state.nextSearchResult() }
+                            )
                         }
                     }
                 }
@@ -181,7 +187,7 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                         .clickable {
                             val newSize = maxOf(2f, displayFontSize - 2f)
                             state.defaultFontSize = newSize
-                            if (selectedTextNode != null) state.updateSelectedTextProperties(fontSize = newSize)
+                            state.updateInlineEditingTextProperties(fontSize = newSize) // Меняем целевой узел
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -196,14 +202,14 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                         val newSize = newValue.toFloatOrNull()
                         if (newSize != null && newSize > 0f) {
                             state.defaultFontSize = newSize
-                            if (selectedTextNode != null) state.updateSelectedTextProperties(fontSize = newSize)
+                            state.updateInlineEditingTextProperties(fontSize = newSize)
                         }
                     },
                     singleLine = true,
                     textStyle = TextStyle(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black, // Цифры размера черные
+                        color = Color.Black,
                         textAlign = TextAlign.Center
                     ),
                     modifier = Modifier
@@ -225,7 +231,7 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                         .clickable {
                             val newSize = displayFontSize + 2f
                             state.defaultFontSize = newSize
-                            if (selectedTextNode != null) state.updateSelectedTextProperties(fontSize = newSize)
+                            state.updateInlineEditingTextProperties(fontSize = newSize)
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -239,21 +245,21 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 FormatToggleButton(text = "B", isBold = true, isActive = displayIsBold) {
                     state.defaultIsBold = !displayIsBold
-                    if (selectedTextNode != null) state.updateSelectedTextProperties(isBold = state.defaultIsBold)
+                    state.updateInlineEditingTextProperties(isBold = state.defaultIsBold)
                 }
                 FormatToggleButton(text = "I", isItalic = true, isActive = displayIsItalic) {
                     state.defaultIsItalic = !displayIsItalic
-                    if (selectedTextNode != null) state.updateSelectedTextProperties(isItalic = state.defaultIsItalic)
+                    state.updateInlineEditingTextProperties(isItalic = state.defaultIsItalic)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 FormatToggleButton(text = "U", isUnderline = true, isActive = displayIsUnderline) {
                     state.defaultIsUnderline = !displayIsUnderline
-                    if (selectedTextNode != null) state.updateSelectedTextProperties(isUnderline = state.defaultIsUnderline)
+                    state.updateInlineEditingTextProperties(isUnderline = state.defaultIsUnderline)
                 }
                 FormatToggleButton(text = "S", isStrikethrough = true, isActive = displayIsStrikethrough) {
                     state.defaultIsStrikethrough = !displayIsStrikethrough
-                    if (selectedTextNode != null) state.updateSelectedTextProperties(isStrikethrough = state.defaultIsStrikethrough)
+                    state.updateInlineEditingTextProperties(isStrikethrough = state.defaultIsStrikethrough)
                 }
             }
         }
@@ -262,15 +268,15 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             AlignToggleButton(type = 0, isActive = displayAlign == 0) {
                 state.defaultAlign = 0
-                if (selectedTextNode != null) state.updateSelectedTextProperties(align = 0)
+                state.updateInlineEditingTextProperties(align = 0)
             }
             AlignToggleButton(type = 1, isActive = displayAlign == 1) {
                 state.defaultAlign = 1
-                if (selectedTextNode != null) state.updateSelectedTextProperties(align = 1)
+                state.updateInlineEditingTextProperties(align = 1)
             }
             AlignToggleButton(type = 2, isActive = displayAlign == 2) {
                 state.defaultAlign = 2
-                if (selectedTextNode != null) state.updateSelectedTextProperties(align = 2)
+                state.updateInlineEditingTextProperties(align = 2)
             }
         }
 
@@ -283,7 +289,7 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                     colors1.forEach { colorVal ->
                         ColorButton(colorVal, displayColor) {
                             state.defaultColorArgb = colorVal
-                            if (selectedTextNode != null) state.updateSelectedTextProperties(colorArgb = colorVal)
+                            state.updateInlineEditingTextProperties(colorArgb = colorVal)
                         }
                     }
                 }
@@ -292,7 +298,7 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
                     colors2.forEach { colorVal ->
                         ColorButton(colorVal, displayColor) {
                             state.defaultColorArgb = colorVal
-                            if (selectedTextNode != null) state.updateSelectedTextProperties(colorArgb = colorVal)
+                            state.updateInlineEditingTextProperties(colorArgb = colorVal)
                         }
                     }
                 }
@@ -305,36 +311,74 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BgColorButton(isTransparent = true, color = 0xFFFFFFFF, isActive = !displayHasBg) {
                     state.defaultHasBackground = false
-                    if (selectedTextNode != null) state.updateSelectedTextProperties(hasBackground = false)
+                    state.updateInlineEditingTextProperties(hasBackground = false)
                 }
                 BgColorButton(isTransparent = false, color = 0xFFFFFFFF, isActive = displayHasBg && displayBgColor == 0xFFFFFFFF) {
                     state.defaultHasBackground = true
                     state.defaultBackgroundColorArgb = 0xFFFFFFFF
-                    if (selectedTextNode != null) state.updateSelectedTextProperties(hasBackground = true, backgroundColorArgb = 0xFFFFFFFF)
+                    state.updateInlineEditingTextProperties(hasBackground = true, backgroundColorArgb = 0xFFFFFFFF)
                 }
                 BgColorButton(isTransparent = false, color = 0xFF424242, isActive = displayHasBg && displayBgColor == 0xFF424242) {
                     state.defaultHasBackground = true
                     state.defaultBackgroundColorArgb = 0xFF424242
-                    if (selectedTextNode != null) state.updateSelectedTextProperties(hasBackground = true, backgroundColorArgb = 0xFF424242)
+                    state.updateInlineEditingTextProperties(hasBackground = true, backgroundColorArgb = 0xFF424242)
                 }
             }
         }
 
         // --- Б, З: ВЫНОСКА ---
-        SquareToolButton(
-            label = "Выноска",
-            isActive = state.currentToolMode == CanvasToolMode.ADD_CALLOUT,
-            onClick = { state.currentToolMode = if (state.currentToolMode == CanvasToolMode.ADD_CALLOUT) CanvasToolMode.SELECT else CanvasToolMode.ADD_CALLOUT }
+        val displayStartStyle = (editingTextNode as? CalloutNode)?.startStyle ?: state.defaultCalloutStartStyle
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val iconColor = Color.Black // Иконка черная
-            Canvas(modifier = Modifier.size(32.dp)) {
-                val r = 4.dp.toPx()
-                val start = Offset(r + 2f, size.height - r - 2f)
-                val end = Offset(size.width, 0f)
-                drawCircle(color = iconColor, radius = r, center = start, style = Stroke(2.5f))
-                drawLine(color = iconColor, start = start, end = end, strokeWidth = 2.5f)
-                drawLine(color = iconColor, start = end, end = Offset(size.width - 10f, 2f), strokeWidth = 2.5f)
-                drawLine(color = iconColor, start = end, end = Offset(size.width - 2f, 10f), strokeWidth = 2.5f)
+            SquareToolButton(
+                label = "Выноска",
+                isActive = state.currentToolMode == CanvasToolMode.ADD_CALLOUT,
+                onClick = { state.currentToolMode = if (state.currentToolMode == CanvasToolMode.ADD_CALLOUT) CanvasToolMode.SELECT else CanvasToolMode.ADD_CALLOUT }
+            ) {
+                val iconColor = Color.Black // Иконка черная
+                Canvas(modifier = Modifier.size(32.dp)) {
+                    // Максимально растягиваем рисунок по холсту
+                    val start = Offset(4.dp.toPx(), size.height - 4.dp.toPx())
+                    val mid = Offset(size.width * 0.35f, 6.dp.toPx())
+                    val end = Offset(size.width, 6.dp.toPx()) // Длинная полка уходит в самый край
+
+                    // Рисуем наконечник
+                    when (displayStartStyle) {
+                        0 -> { // Стрелка
+                            val arrowLen = 8.dp.toPx() // Сделали стрелку больше
+                            val angle = kotlin.math.atan2(mid.y - start.y, mid.x - start.x)
+                            val p1 = Offset(start.x + arrowLen * kotlin.math.cos(angle - Math.PI/6).toFloat(), start.y + arrowLen * kotlin.math.sin(angle - Math.PI/6).toFloat())
+                            val p2 = Offset(start.x + arrowLen * kotlin.math.cos(angle + Math.PI/6).toFloat(), start.y + arrowLen * kotlin.math.sin(angle + Math.PI/6).toFloat())
+                            drawLine(iconColor, start, p1, strokeWidth = 2.5f)
+                            drawLine(iconColor, start, p2, strokeWidth = 2.5f)
+                        }
+                        1 -> drawCircle(color = iconColor, radius = 5.dp.toPx(), center = start, style = Stroke(2.5f))
+                        2 -> drawCircle(color = iconColor, radius = 3.5f.dp.toPx(), center = start)
+                    }
+
+                    // Сама ломаная линия
+                    drawLine(color = iconColor, start = start, end = mid, strokeWidth = 2.5f)
+                    drawLine(color = iconColor, start = mid, end = end, strokeWidth = 2.5f)
+                }
+            }
+
+            // 3 вертикальные кнопки выбора стиля
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                CalloutStyleButton(type = 0, isActive = displayStartStyle == 0) {
+                    state.defaultCalloutStartStyle = 0
+                    state.updateInlineEditingTextProperties(calloutStartStyle = 0)
+                }
+                CalloutStyleButton(type = 1, isActive = displayStartStyle == 1) {
+                    state.defaultCalloutStartStyle = 1
+                    state.updateInlineEditingTextProperties(calloutStartStyle = 1)
+                }
+                CalloutStyleButton(type = 2, isActive = displayStartStyle == 2) {
+                    state.defaultCalloutStartStyle = 2
+                    state.updateInlineEditingTextProperties(calloutStartStyle = 2)
+                }
             }
         }
     }
@@ -343,6 +387,41 @@ fun AnnotationsPalette(state: ProjectCanvasState) {
 // ==========================================
 // ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ
 // ==========================================
+
+@Composable
+private fun CalloutStyleButton(type: Int, isActive: Boolean, onClick: () -> Unit) {
+    val bgColor = if (isActive) Color(0xFF81D4FA) else Color(0xFFE3F2FD)
+    Box(
+        modifier = Modifier
+            .size(28.dp) // Три кнопки по 28dp + 2 отступа по 4dp = ровно 92dp (высота большой кнопки)
+            .clip(RoundedCornerShape(4.dp))
+            .background(bgColor)
+            .border(1.dp, if (isActive) MaterialTheme.colors.primary else Color.LightGray, RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val color = Color.Black
+            val centerPt = Offset(size.width / 2, size.height / 2)
+            when (type) {
+                0 -> {
+                    val arrowLen = 5.dp.toPx()
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(centerPt.x, centerPt.y - arrowLen/2)
+                        lineTo(centerPt.x - arrowLen/1.5f, centerPt.y + arrowLen/1.5f)
+                        moveTo(centerPt.x, centerPt.y - arrowLen/2)
+                        lineTo(centerPt.x + arrowLen/1.5f, centerPt.y + arrowLen/1.5f)
+                        moveTo(centerPt.x, centerPt.y - arrowLen/2)
+                        lineTo(centerPt.x, centerPt.y + arrowLen)
+                    }
+                    drawPath(path, color, style = Stroke(1.5f))
+                }
+                1 -> drawCircle(color, 4.dp.toPx(), centerPt, style = Stroke(1.5f))
+                2 -> drawCircle(color, 2.5f.dp.toPx(), centerPt)
+            }
+        }
+    }
+}
 
 @Composable
 private fun RectangularToolButton(label: String, isActive: Boolean, onClick: () -> Unit, iconContent: @Composable () -> Unit) {
@@ -363,13 +442,13 @@ private fun RectangularToolButton(label: String, isActive: Boolean, onClick: () 
         verticalArrangement = Arrangement.Center
     ) {
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { iconContent() }
-        Text(label, fontSize = 12.sp, color = Color.Black) // Текст черный
+        Text(label, fontSize = 12.sp, color = Color.Black)
     }
 }
 
 @Composable
 private fun SquareToolButton(label: String, isActive: Boolean, onClick: () -> Unit, iconContent: @Composable () -> Unit) {
-    val bgColor = if (isActive) Color(0xFF81D4FA) else Color(0xFFE3F2FD) // Голубой фон
+    val bgColor = if (isActive) Color(0xFF81D4FA) else Color(0xFFE3F2FD)
     Column(
         modifier = Modifier
             .size(width = 80.dp, height = 92.dp)
@@ -386,7 +465,7 @@ private fun SquareToolButton(label: String, isActive: Boolean, onClick: () -> Un
         verticalArrangement = Arrangement.Center
     ) {
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { iconContent() }
-        Text(label, fontSize = 12.sp, color = Color.Black) // Текст черный
+        Text(label, fontSize = 12.sp, color = Color.Black)
     }
 }
 
