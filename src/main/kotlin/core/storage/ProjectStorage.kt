@@ -119,6 +119,9 @@ private fun ProjectCanvasState.toProjectFile(): ProjectFile {
                 node.isUnderline, node.isStrikethrough, // Добавили новые поля
                 node.hasBackground, node.backgroundColorArgb
             )
+            is CircleNode -> SerializableCircleNode(node.id, node.name, node.position.x, node.position.y, node.radius, node.colorArgb, node.lineWeight, node.lineType)
+            is RectangleNode -> SerializableRectangleNode(node.id, node.name, node.position.x, node.position.y, node.width, node.height, node.colorArgb, node.lineWeight, node.lineType, node.rotationDegrees)
+            is PolylineNode -> SerializablePolylineNode(node.id, node.name, node.position.x, node.position.y, node.points.map { SerializablePoint(it.x, it.y) }, node.colorArgb, node.lineWeight, node.lineType)
         }
     }
 
@@ -268,6 +271,9 @@ private fun SerializableNode.toDomainNode(): ProjectNode {
             isUnderline, isStrikethrough,
             hasBackground, backgroundColorArgb
         )
+        is SerializableCircleNode -> CircleNode(id, name, pos, radius, colorArgb, lineWeight, lineType)
+        is SerializableRectangleNode -> RectangleNode(id, name, pos, width, height, colorArgb, lineWeight, lineType, rotationDegrees)
+        is SerializablePolylineNode -> PolylineNode(id, name, pos, points.map { Point(it.x, it.y) }, colorArgb, lineWeight, lineType)
     }
 }
 

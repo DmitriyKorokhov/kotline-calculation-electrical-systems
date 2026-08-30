@@ -14,7 +14,8 @@ private const val NODE_HEIGHT = 80f
 enum class CanvasToolMode {
     SELECT,     // Обычный режим (выделение, драг-н-дроп)
     ADD_TEXT,   // Ожидание клика для вставки текста
-    ADD_CALLOUT // Ожидание клика для вставки выноски
+    ADD_CALLOUT, // Ожидание клика для вставки выноски
+    DRAW_POLYLINE, DRAW_CIRCLE, DRAW_RECTANGLE, ADD_LEVEL
 }
 
 /**
@@ -83,6 +84,15 @@ class ProjectCanvasState {
     var searchQuery by mutableStateOf("")
     var searchResults by mutableStateOf<List<ProjectNode>>(emptyList())
     var currentSearchIndex by mutableStateOf(0)
+
+    // --- СТИЛИ ИЗ TOOLS ПАЛИТРЫ ---
+    var currentLineType by mutableStateOf(0)
+    var currentLineWeight by mutableStateOf(1)
+    var currentLineColor by mutableStateOf(0xFF000000)
+
+    // --- ВРЕМЕННОЕ СОСТОЯНИЕ РИСОВАНИЯ ---
+    val tempPoints = mutableStateListOf<Point>()
+    var currentMousePos by mutableStateOf<Point?>(null)
 
     // ==========================================
     // ДЕЛЕГИРОВАНИЕ ОПЕРАЦИЙ В РЕПОЗИТОРИЙ
@@ -227,6 +237,16 @@ class ProjectCanvasState {
                     targetPoint = Point(node.targetPoint.x + deltaX, node.targetPoint.y + deltaY)
                 )
             }
+            is CircleNode -> node.copy(position = newPosition)
+            is RectangleNode -> node.copy(position = newPosition)
+            is PolylineNode -> {
+                val dx = newPosition.x - node.position.x
+                val dy = newPosition.y - node.position.y
+                node.copy(
+                    position = newPosition,
+                    points = node.points.map { Point(it.x + dx, it.y + dy) }
+                )
+            }
         }
         ProjectRepository.updateNode(updatedNode)
     }
@@ -243,6 +263,36 @@ class ProjectCanvasState {
     fun clearSelection() {
         selectedNodeIds.clear()
         selectedConnections.clear()
+    }
+
+    fun finishPolyline() {
+        if (currentToolMode == CanvasToolMode.DRAW_POLYLINE) {
+            if (tempPoints.size > 1) {
+                saveHistory()
+                feature.projecteditor.state.ProjectRepository.addNode(
+                    PolylineNode(
+                        id = nextId++,
+                        name = "",
+                        position = tempPoints[0],
+                        points = tempPoints.toList(),
+                        colorArgb = currentLineColor,
+                        lineWeight = currentLineWeight,
+                        lineType = currentLineType
+                    )
+                )
+            }
+            tempPoints.clear()
+            currentToolMode = CanvasToolMode.SELECT
+        }
+    }
+
+    fun cancelTool() {
+        if (currentToolMode != CanvasToolMode.SELECT) {
+            tempPoints.clear()
+            currentToolMode = CanvasToolMode.SELECT
+        } else {
+            clearSelection()
+        }
     }
 
     fun screenToWorld(screenPos: Point): Point {
@@ -427,6 +477,17 @@ class ProjectCanvasState {
                 is CalloutNode -> {
                     val newTarget = Point(node.targetPoint.x + deltaX, node.targetPoint.y + deltaY)
                     node.copy(id = newNodeId, position = newPos, targetPoint = newTarget)
+                }
+                is CircleNode -> node.copy(id = newNodeId, position = newPos)
+                is RectangleNode -> node.copy(id = newNodeId, position = newPos)
+                is PolylineNode -> {
+                    val dx = newPos.x - node.position.x
+                    val dy = newPos.y - node.position.y
+                    node.copy(
+                        id = newNodeId,
+                        position = newPos,
+                        points = node.points.map { Point(it.x + dx, it.y + dy) }
+                    )
                 }
             }
 
@@ -762,6 +823,9 @@ class ProjectCanvasState {
                     is RectifierNode -> node.copy(name = textToSave)
                     is TextNode -> node.copy(name = textToSave)
                     is CalloutNode -> node.copy(name = textToSave)
+                    is CircleNode -> node.copy(name = textToSave)
+                    is RectangleNode -> node.copy(name = textToSave)
+                    is PolylineNode -> node.copy(name = textToSave)
                 }
                 ProjectRepository.updateNode(updatedNode)
             } else {
@@ -821,6 +885,22 @@ class ProjectCanvasState {
             else -> node
         }
         ProjectRepository.updateNode(updated)
+    }
+
+    fun duplicateSelected() {
+        copySelectedNodes()
+        pasteNodes()
+    }
+
+    fun rotateSelectedNodes() {
+        saveHistory()
+        selectedNodeIds.forEach { id ->
+            val node = nodes.find { it.id == id }
+            if (node is RectangleNode) {
+                ProjectRepository.updateNode(node.copy(rotationDegrees = node.rotationDegrees + 90f))
+            }
+            // Можно добавить поворот и для других узлов по необходимости
+        }
     }
 }
 

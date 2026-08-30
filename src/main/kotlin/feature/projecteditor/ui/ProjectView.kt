@@ -77,10 +77,16 @@ fun ProjectView(
                 if (state.inlineEditingNodeId != null) return@onKeyEvent false
 
                 if (event.type == KeyEventType.KeyDown) {
-                    if (event.key == Key.Escape) {
-                        state.clearSelection()
+                    if (event.key == Key.Enter || event.key == Key.NumPadEnter) {
+                        state.finishPolyline()
                         return@onKeyEvent true
                     }
+
+                    if (event.key == Key.Escape) {
+                        state.cancelTool()
+                        return@onKeyEvent true
+                    }
+
                     if (event.key == Key.Delete || event.key == Key.Backspace) {
                         if (state.selectedNodeIds.isNotEmpty() || state.selectedConnections.isNotEmpty()) {
                             state.deleteSelectedNodes()
@@ -149,7 +155,7 @@ fun ProjectView(
                         onCancel = { paletteDragType = null; palettePreviewWorldPos = null }
                     )
                 }
-                EditorTab.TOOLS -> ToolsPalette()
+                EditorTab.TOOLS -> ToolsPalette(state)
                 EditorTab.ANNOTATIONS -> AnnotationsPalette(state)
                 EditorTab.CALCULATIONS -> CalculationsPalette()
                 EditorTab.PROJECT -> ProjectPalette()

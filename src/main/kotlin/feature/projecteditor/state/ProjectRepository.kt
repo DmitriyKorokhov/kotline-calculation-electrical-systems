@@ -45,6 +45,11 @@ object ProjectRepository {
         connections.add(connection)
     }
 
+    fun addLevel(level: LevelLine) {
+        saveHistory()
+        levels.add(level)
+    }
+
     fun removeNodes(nodeIds: Set<Int>) {
         saveHistory()
         nodes.removeAll { it.id in nodeIds }

@@ -65,6 +65,9 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
                 is RectifierNode -> node.copy()
                 is TextNode -> node.copy()
                 is CalloutNode -> node.copy(targetPoint = node.targetPoint.copy())
+                is CircleNode -> node.copy()
+                is RectangleNode -> node.copy()
+                is PolylineNode -> node.copy(points = node.points.toList())
             }
         }
         return ProjectSnapshot(
@@ -95,6 +98,9 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
                 is RectifierNode -> node.copy()
                 is TextNode -> node.copy()
                 is CalloutNode -> node.copy(targetPoint = node.targetPoint.copy())
+                is CircleNode -> node.copy()
+                is RectangleNode -> node.copy()
+                is PolylineNode -> node.copy(points = node.points.toList())
             }
         })
 

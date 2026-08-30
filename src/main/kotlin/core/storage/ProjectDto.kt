@@ -258,3 +258,44 @@ data class SerializableCalloutNode(
     val hasBackground: Boolean,
     val backgroundColorArgb: Long
 ) : SerializableNode()
+
+@Serializable
+@SerialName("circle_node")
+data class SerializableCircleNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val radius: Float,
+    val colorArgb: Long,
+    val lineWeight: Int,
+    val lineType: Int
+) : SerializableNode()
+
+@Serializable
+@SerialName("rectangle_node")
+data class SerializableRectangleNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val width: Float,
+    val height: Float,
+    val colorArgb: Long,
+    val lineWeight: Int,
+    val lineType: Int,
+    val rotationDegrees: Float
+) : SerializableNode()
+
+@Serializable
+@SerialName("polyline_node")
+data class SerializablePolylineNode(
+    override val id: Int,
+    override val name: String,
+    override val x: Float,
+    override val y: Float,
+    val points: List<SerializablePoint>,
+    val colorArgb: Long,
+    val lineWeight: Int,
+    val lineType: Int
+) : SerializableNode()

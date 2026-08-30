@@ -30,13 +30,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import feature.projecteditor.state.CanvasToolMode
+import feature.projecteditor.state.ProjectCanvasState
 
 @Composable
-fun ToolsPalette() {
-    var selectedLineType by remember { mutableStateOf(0) }
-    var selectedLineWeight by remember { mutableStateOf(1) }
-    var selectedColor by remember { mutableStateOf(0xFF000000) }
-
+fun ToolsPalette(state: ProjectCanvasState) { // <-- Принимаем State
     var lineTypeExpanded by remember { mutableStateOf(false) }
     var lineWeightExpanded by remember { mutableStateOf(false) }
 
@@ -48,97 +46,100 @@ fun ToolsPalette() {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Полилиния
+        // 1. Привязываем инструменты геометрии
         ToolButton(
             icon = Icons.Default.Timeline,
             label = "Полилиния",
-            onClick = { /* TODO */ },
+            isActive = state.currentToolMode == CanvasToolMode.DRAW_POLYLINE,
+            onClick = {
+                state.currentToolMode = if (state.currentToolMode == CanvasToolMode.DRAW_POLYLINE) CanvasToolMode.SELECT else CanvasToolMode.DRAW_POLYLINE
+                state.tempPoints.clear()
+            },
             width = 80.dp
         )
 
-        // 2. Круг
         ToolButton(
             icon = Icons.Default.RadioButtonUnchecked,
             label = "Круг",
-            onClick = { /* TODO */ },
+            isActive = state.currentToolMode == CanvasToolMode.DRAW_CIRCLE,
+            onClick = {
+                state.currentToolMode = if (state.currentToolMode == CanvasToolMode.DRAW_CIRCLE) CanvasToolMode.SELECT else CanvasToolMode.DRAW_CIRCLE
+                state.tempPoints.clear()
+            },
             width = 80.dp
         )
 
-        // 3. Прямоугольник
         ToolButton(
             icon = Icons.Default.CheckBoxOutlineBlank,
             label = "Прямоугольник",
-            onClick = { /* TODO */ },
+            isActive = state.currentToolMode == CanvasToolMode.DRAW_RECTANGLE,
+            onClick = {
+                state.currentToolMode = if (state.currentToolMode == CanvasToolMode.DRAW_RECTANGLE) CanvasToolMode.SELECT else CanvasToolMode.DRAW_RECTANGLE
+                state.tempPoints.clear()
+            },
             width = 96.dp
         )
 
-        // 4. Маленькие кнопки
+        // 2. Инструменты редактирования
         Column(
             modifier = Modifier.height(92.dp),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             SmallToolButton(icon = Icons.Default.FormatPaint, tooltip = "Свойства", onClick = { /* TODO */ })
-            SmallToolButton(icon = Icons.Default.ContentCopy, tooltip = "Копировать", onClick = { /* TODO */ })
-            SmallToolButton(icon = Icons.Outlined.Refresh, tooltip = "Поворот", onClick = { /* TODO */ })
+            SmallToolButton(icon = Icons.Default.ContentCopy, tooltip = "Копировать", onClick = { state.duplicateSelected() })
+            SmallToolButton(icon = Icons.Outlined.Refresh, tooltip = "Поворот", onClick = { state.rotateSelectedNodes() })
         }
 
-        // --- БЛОК СВОЙСТВ ЛИНИЙ ---
-
-        // 5. Стиль линии (Тип и Вес)
+        // --- БЛОК СВОЙСТВ ЛИНИЙ (Читаем и пишем в state) ---
         Column(
             modifier = Modifier.height(92.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Text("Стиль линии", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
-
-            // 💡 ОТСТУП 1: Между текстом "Стиль линии" и первым списком (Тип линии)
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Первый список: Тип линии
             LinePropertyDropdown(
                 expanded = lineTypeExpanded,
                 onExpandChange = { lineTypeExpanded = it },
-                width = 100.dp,  // 💡 РАЗМЕР: Ширина первого списка
-                height = 26.dp,  // 💡 РАЗМЕР: Высота первого списка
-                currentDraw = { drawLineType(selectedLineType) }
+                width = 100.dp,
+                height = 26.dp,
+                currentDraw = { drawLineType(state.currentLineType) } // <-- Читаем из стейта
             ) {
-                DropdownMenuItem(onClick = { selectedLineType = 0; lineTypeExpanded = false }) {
+                DropdownMenuItem(onClick = { state.currentLineType = 0; lineTypeExpanded = false }) { // <-- Пишем в стейт
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(0) }
                 }
-                DropdownMenuItem(onClick = { selectedLineType = 1; lineTypeExpanded = false }) {
+                DropdownMenuItem(onClick = { state.currentLineType = 1; lineTypeExpanded = false }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(1) }
                 }
-                DropdownMenuItem(onClick = { selectedLineType = 2; lineTypeExpanded = false }) {
+                DropdownMenuItem(onClick = { state.currentLineType = 2; lineTypeExpanded = false }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(2) }
                 }
             }
 
-            // 💡 ОТСТУП 2: Между первым (Тип) и вторым (Вес) списками
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Второй список: Вес линии
             LinePropertyDropdown(
                 expanded = lineWeightExpanded,
                 onExpandChange = { lineWeightExpanded = it },
-                width = 100.dp,  // 💡 РАЗМЕР: Ширина второго списка (сейчас равна первому)
-                height = 26.dp,  // 💡 РАЗМЕР: Высота второго списка (сейчас равна первому)
-                currentDraw = { drawLineWeight(selectedLineWeight) }
+                width = 100.dp,
+                height = 26.dp,
+                currentDraw = { drawLineWeight(state.currentLineWeight) } // <-- Читаем из стейта
             ) {
-                DropdownMenuItem(onClick = { selectedLineWeight = 0; lineWeightExpanded = false }) {
+                DropdownMenuItem(onClick = { state.currentLineWeight = 0; lineWeightExpanded = false }) { // <-- Пишем в стейт
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(0) }
                 }
-                DropdownMenuItem(onClick = { selectedLineWeight = 1; lineWeightExpanded = false }) {
+                DropdownMenuItem(onClick = { state.currentLineWeight = 1; lineWeightExpanded = false }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(1) }
                 }
-                DropdownMenuItem(onClick = { selectedLineWeight = 2; lineWeightExpanded = false }) {
+                DropdownMenuItem(onClick = { state.currentLineWeight = 2; lineWeightExpanded = false }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(2) }
                 }
             }
         }
 
-        // 6. Цвета линий
+        // --- Цвета (Читаем и пишем в state) ---
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -150,22 +151,25 @@ fun ToolsPalette() {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     val colors1 = listOf(0xFFFFFFFF, 0xFF000000, 0xFFD32F2F, 0xFF1976D2, 0xFF388E3C, 0xFF757575, 0xFFF57C00)
                     colors1.forEach { colorVal ->
-                        ToolsColorButton(colorVal, selectedColor) { selectedColor = colorVal }
+                        ToolsColorButton(colorVal, state.currentLineColor) { state.currentLineColor = colorVal } // <-- Пишем в стейт
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     val colors2 = listOf(0xFF7B1FA2, 0xFFFBC02D, 0xFF00BCD4, 0xFF8D6E63, 0xFFE91E63, 0xFFCDDC39, 0xFF607D8B)
                     colors2.forEach { colorVal ->
-                        ToolsColorButton(colorVal, selectedColor) { selectedColor = colorVal }
+                        ToolsColorButton(colorVal, state.currentLineColor) { state.currentLineColor = colorVal } // <-- Пишем в стейт
                     }
                 }
             }
         }
 
-        // 7. Уровень
+        // 3. Инструмент Уровень
         RectangularToolButtonWithCustomIcon(
             label = "Уровень",
-            onClick = { /* TODO */ },
+            isActive = state.currentToolMode == CanvasToolMode.ADD_LEVEL,
+            onClick = {
+                state.currentToolMode = if (state.currentToolMode == CanvasToolMode.ADD_LEVEL) CanvasToolMode.SELECT else CanvasToolMode.ADD_LEVEL
+            },
             width = 88.dp,
             iconDraw = {
                 val lineColor = Color.Gray
@@ -186,13 +190,18 @@ fun ToolsPalette() {
 // ==========================================
 
 @Composable
-private fun ToolButton(icon: ImageVector, label: String, onClick: () -> Unit, width: Dp = 80.dp) {
+private fun ToolButton(icon: ImageVector, label: String, isActive: Boolean, onClick: () -> Unit, width: Dp = 80.dp) {
+    val bgColor = if (isActive) Color(0xFF81D4FA) else Color(0xFFE3F2FD) // Голубой для активного
     Column(
         modifier = Modifier
             .size(width = width, height = 92.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(Color(0xFFE3F2FD))
-            .border(1.dp, Color.LightGray, RoundedCornerShape(6.dp))
+            .background(bgColor)
+            .border(
+                width = if (isActive) 2.dp else 1.dp,
+                color = if (isActive) MaterialTheme.colors.primary else Color.LightGray,
+                shape = RoundedCornerShape(6.dp)
+            )
             .clickable { onClick() }
             .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -220,16 +229,22 @@ private fun ToolButton(icon: ImageVector, label: String, onClick: () -> Unit, wi
 @Composable
 private fun RectangularToolButtonWithCustomIcon(
     label: String,
+    isActive: Boolean,
     onClick: () -> Unit,
     width: Dp = 88.dp,
     iconDraw: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit
 ) {
+    val bgColor = if (isActive) Color(0xFF81D4FA) else Color(0xFFE3F2FD)
     Column(
         modifier = Modifier
             .size(width = width, height = 92.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(Color(0xFFE3F2FD))
-            .border(1.dp, Color.LightGray, RoundedCornerShape(6.dp))
+            .background(bgColor)
+            .border(
+                width = if (isActive) 2.dp else 1.dp,
+                color = if (isActive) MaterialTheme.colors.primary else Color.LightGray,
+                shape = RoundedCornerShape(6.dp)
+            )
             .clickable { onClick() }
             .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally

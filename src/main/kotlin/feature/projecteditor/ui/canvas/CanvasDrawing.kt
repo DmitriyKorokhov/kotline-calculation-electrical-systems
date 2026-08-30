@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import feature.projecteditor.ui.utils.toOffset
 import feature.projecteditor.ui.utils.toPoint
@@ -29,6 +30,8 @@ import kotlin.math.floor
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import feature.projecteditor.state.CanvasToolMode
+import kotlin.math.sqrt
 
 private const val NODE_WIDTH = 120f
 private const val GRID_WIDTH = 200f
@@ -50,27 +53,53 @@ fun DrawScope.drawProjectCanvas(textMeasurer: TextMeasurer, state: ProjectCanvas
         drawPins(state)
         drawSelectionBox(state)
 
-        // --- ДОБАВЛЕННЫЙ БЛОК ВИЗУАЛЬНОГО ФИЛЬТРА (РЕНТГЕН) ---
+        // --- БЛОК ВИЗУАЛЬНОГО ФИЛЬТРА (РЕНТГЕН) ---
         if (state.searchQuery.isNotBlank()) {
-            // Рисуем полупрозрачный белый фон поверх всего чертежа (эффект затемнения)
             drawRect(Color.White.copy(alpha = 0.8f), topLeft = topLeftWorld.toOffset(), size = Size(bottomRightWorld.x - topLeftWorld.x, bottomRightWorld.y - topLeftWorld.y))
-
-            // Если что-то найдено - перерисовываем только эти узлы поверх рентгена в полном цвете
             if (state.searchResults.isNotEmpty()) {
                 drawNodes(textMeasurer, state, state.searchResults)
-
-                // Добавляем красную рамку фокуса для ТЕКУЩЕГО элемента
                 val currentTarget = state.searchResults.getOrNull(state.currentSearchIndex)
                 if (currentTarget != null) {
                     val box = feature.projecteditor.ui.selection.getBoundingBox(currentTarget)
                     drawRoundRect(
                         color = Color.Red,
-                        topLeft = Offset(box.left - 4f, box.top - 4f), // Чуть шире модели
+                        topLeft = Offset(box.left - 4f, box.top - 4f),
                         size = Size(box.width + 8f, box.height + 8f),
                         style = Stroke(3f / state.scale),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
                     )
                 }
+            }
+        }
+
+        // --- ИСПРАВЛЕНИЕ: ПРЕВЬЮ РИСУЕТСЯ ВНУТРИ withTransform ---
+        val mousePos = state.currentMousePos
+        if (mousePos != null && state.tempPoints.isNotEmpty()) {
+            val stroke = getCustomStroke(state.currentLineWeight, state.currentLineType, state.scale)
+            val color = Color(state.currentLineColor).copy(alpha = 0.6f) // Полупрозрачное превью
+
+            when (state.currentToolMode) {
+                CanvasToolMode.DRAW_CIRCLE -> {
+                    val center = state.tempPoints[0]
+                    val radius = kotlin.math.sqrt(1.0 * (mousePos.x - center.x) * (mousePos.x - center.x) + (mousePos.y - center.y) * (mousePos.y - center.y)).toFloat()
+                    drawCircle(color, radius, center.toOffset(), style = stroke)
+                }
+                CanvasToolMode.DRAW_RECTANGLE -> {
+                    val p1 = state.tempPoints[0]
+                    val w = kotlin.math.abs(mousePos.x - p1.x)
+                    val h = kotlin.math.abs(mousePos.y - p1.y)
+                    val rectTopLeft = Offset(minOf(p1.x, mousePos.x), minOf(p1.y, mousePos.y))
+                    drawRect(color, rectTopLeft, Size(w, h), style = stroke)
+                }
+                CanvasToolMode.DRAW_POLYLINE -> {
+                    val path = Path().apply {
+                        moveTo(state.tempPoints.first().x, state.tempPoints.first().y)
+                        for (i in 1 until state.tempPoints.size) lineTo(state.tempPoints[i].x, state.tempPoints[i].y)
+                        lineTo(mousePos.x, mousePos.y) // Линия к курсору
+                    }
+                    drawPath(path, color, style = stroke)
+                }
+                else -> {}
             }
         }
     }
@@ -433,6 +462,41 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, state: ProjectCanvas
                     drawText(textLayoutResult = textLayoutResult, topLeft = topLeft)
                 }
             }
+            is CircleNode -> {
+                drawCircle(
+                    color = Color(node.colorArgb),
+                    radius = node.radius,
+                    center = node.position.toOffset(),
+                    style = getCustomStroke(node.lineWeight, node.lineType, state.scale)
+                )
+                if (isSelected) drawCircle(Color.Blue, node.radius, node.position.toOffset(), style = Stroke(2f / state.scale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f/state.scale, 10f/state.scale))))
+            }
+            is RectangleNode -> {
+                withTransform({
+                    rotate(node.rotationDegrees, node.position.toOffset())
+                }) {
+                    val topLeft = Offset(node.position.x - node.width / 2, node.position.y - node.height / 2)
+                    drawRect(
+                        color = Color(node.colorArgb),
+                        topLeft = topLeft,
+                        size = androidx.compose.ui.geometry.Size(node.width, node.height),
+                        style = getCustomStroke(node.lineWeight, node.lineType, state.scale)
+                    )
+                    if (isSelected) drawRect(Color.Blue, topLeft, androidx.compose.ui.geometry.Size(node.width, node.height), style = Stroke(2f / state.scale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f/state.scale, 10f/state.scale))))
+                }
+            }
+            is PolylineNode -> {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    if (node.points.isNotEmpty()) {
+                        moveTo(node.points.first().x, node.points.first().y)
+                        for (i in 1 until node.points.size) {
+                            lineTo(node.points[i].x, node.points[i].y)
+                        }
+                    }
+                }
+                drawPath(path, Color(node.colorArgb), style = getCustomStroke(node.lineWeight, node.lineType, state.scale))
+                if (isSelected) drawPath(path, Color.Blue, style = Stroke(2f / state.scale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f/state.scale, 10f/state.scale))))
+            }
         }
     }
 }
@@ -584,4 +648,14 @@ private fun DrawScope.drawSelectionBox(state: ProjectCanvasState) {
             )
         )
     }
+}
+
+private fun getCustomStroke(weight: Int, type: Int, scale: Float): Stroke {
+    val strokeWidth = when (weight) { 0 -> 1.5f; 1 -> 4f; 2 -> 8f; else -> 4f } / scale
+    val pathEffect = when (type) {
+        1 -> PathEffect.dashPathEffect(floatArrayOf(15f / scale, 10f / scale), 0f)
+        2 -> PathEffect.dashPathEffect(floatArrayOf(15f / scale, 8f / scale, 3f / scale, 8f / scale), 0f)
+        else -> null
+    }
+    return Stroke(width = strokeWidth, pathEffect = pathEffect)
 }

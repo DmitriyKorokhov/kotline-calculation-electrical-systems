@@ -38,6 +38,9 @@ fun getBoundingBox(node: ProjectNode): Rect {
         is UpsNode -> 80f
         is SolarPanelNode -> NODE_WIDTH * 0.8f
         is TextNode -> maxOf(30f, (node.name.split("\n").maxOfOrNull { it.length } ?: 1) * (node.fontSize * 0.55f))
+        is RectangleNode -> node.width
+        is CircleNode -> node.radius * 2f
+        is PolylineNode -> node.points.maxOf { it.x } - node.points.minOf { it.x }
         else -> NODE_WIDTH
     }
 
@@ -49,11 +52,21 @@ fun getBoundingBox(node: ProjectNode): Rect {
         is ItRackRowNode -> getItRackRowSize(node).second
         is BatteryNode -> 80f * 0.9f
         is TextNode -> maxOf(node.fontSize, node.name.split("\n").size * (node.fontSize * 1.2f))
+        is RectangleNode -> node.height
+        is CircleNode -> node.radius * 2f
+        is PolylineNode -> node.points.maxOf { it.y } - node.points.minOf { it.y }
         else -> 80f
     }
 
-    val left = node.position.x - width / 2
-    val top = node.position.y - height / 2
+    val left = when (node) {
+        is PolylineNode -> node.points.minOf { it.x }
+        else -> node.position.x - width / 2
+    }
+
+    val top = when (node) {
+        is PolylineNode -> node.points.minOf { it.y }
+        else -> node.position.y - height / 2
+    }
     return Rect(left, top, left + width, top + height)
 }
 
@@ -185,29 +198,23 @@ fun calculateFeedAssignments(feeds: List<RackFeed>, racks: List<Rack>): Map<Int,
         }
         if (connected.isNotEmpty()) {
             val interval = connected.minOrNull()!!..connected.maxOrNull()!!
-            var assigned = false
             var level = 0
 
-            while (!assigned) {
-                // Пробуем положить на текущий уровень СВЕРХУ
+            while (true) {
                 if (topTracks.size <= level) topTracks.add(mutableListOf())
                 if (!topTracks[level].any { maxOf(it.first, interval.first) <= minOf(it.last, interval.last) }) {
                     topTracks[level].add(interval)
                     assignments[feedIndex] = FeedAssignment(isTop = true, trackIndex = level)
-                    assigned = true
                     break
                 }
 
-                // Пробуем положить на текущий уровень СНИЗУ
                 if (bottomTracks.size <= level) bottomTracks.add(mutableListOf())
                 if (!bottomTracks[level].any { maxOf(it.first, interval.first) <= minOf(it.last, interval.last) }) {
                     bottomTracks[level].add(interval)
                     assignments[feedIndex] = FeedAssignment(isTop = false, trackIndex = level)
-                    assigned = true
                     break
                 }
 
-                // Если оба заняты, переходим на уровень выше
                 level++
             }
         }

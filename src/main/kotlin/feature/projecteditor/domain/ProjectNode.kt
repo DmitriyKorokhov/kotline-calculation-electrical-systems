@@ -153,3 +153,35 @@ data class CalloutNode(
     var backgroundColorArgb: Long = 0xFFFFFFFF,
     var startStyle: Int = 0 // 0 = Стрелка, 1 = Пустой круг, 2 = Закрашенный круг
 ) : ProjectNode
+
+data class CircleNode(
+    override val id: Int,
+    override var name: String = "",
+    override var position: Point, // Центр круга
+    var radius: Float,
+    var colorArgb: Long,
+    var lineWeight: Int,
+    var lineType: Int
+) : ProjectNode
+
+data class RectangleNode(
+    override val id: Int,
+    override var name: String = "",
+    override var position: Point, // Центр прямоугольника
+    var width: Float,
+    var height: Float,
+    var colorArgb: Long,
+    var lineWeight: Int,
+    var lineType: Int,
+    var rotationDegrees: Float = 0f
+) : ProjectNode
+
+data class PolylineNode(
+    override val id: Int,
+    override var name: String = "",
+    override var position: Point, // Точка привязки (обычно первая точка)
+    var points: List<Point>, // Абсолютные координаты всех изломов
+    var colorArgb: Long,
+    var lineWeight: Int,
+    var lineType: Int
+) : ProjectNode

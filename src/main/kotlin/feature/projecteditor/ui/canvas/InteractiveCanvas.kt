@@ -78,6 +78,44 @@ fun InteractiveCanvas(
                         val worldPos = state.screenToWorld(offset.toPoint())
 
                         when (state.currentToolMode) {
+                            CanvasToolMode.DRAW_CIRCLE -> {
+                                if (state.tempPoints.isEmpty()) {
+                                    state.tempPoints.add(worldPos)
+                                } else {
+                                    val center = state.tempPoints[0]
+                                    val radius = kotlin.math.sqrt(1.0 * (worldPos.x - center.x) * (worldPos.x - center.x) + (worldPos.y - center.y) * (worldPos.y - center.y)).toFloat()
+                                    state.saveHistory()
+                                    feature.projecteditor.state.ProjectRepository.addNode(CircleNode(state.nextId++, "", center, radius, state.currentLineColor, state.currentLineWeight, state.currentLineType))
+                                    state.tempPoints.clear()
+                                    state.currentToolMode = CanvasToolMode.SELECT
+                                }
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.DRAW_RECTANGLE -> {
+                                if (state.tempPoints.isEmpty()) {
+                                    state.tempPoints.add(worldPos)
+                                } else {
+                                    val p1 = state.tempPoints[0]
+                                    val width = kotlin.math.abs(worldPos.x - p1.x)
+                                    val height = kotlin.math.abs(worldPos.y - p1.y)
+                                    val center = Point((p1.x + worldPos.x) / 2, (p1.y + worldPos.y) / 2)
+                                    state.saveHistory()
+                                    feature.projecteditor.state.ProjectRepository.addNode(RectangleNode(state.nextId++, "", center, width, height, state.currentLineColor, state.currentLineWeight, state.currentLineType))
+                                    state.tempPoints.clear()
+                                    state.currentToolMode = CanvasToolMode.SELECT
+                                }
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.DRAW_POLYLINE -> {
+                                state.tempPoints.add(worldPos)
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.ADD_LEVEL -> {
+                                state.saveHistory()
+                                feature.projecteditor.state.ProjectRepository.levels.add(LevelLine(state.nextId++, worldPos.y))
+                                state.currentToolMode = CanvasToolMode.SELECT
+                                return@detectTapGestures
+                            }
                             CanvasToolMode.ADD_TEXT -> {
                                 state.saveHistory()
                                 val newNode = TextNode(
@@ -209,6 +247,7 @@ fun InteractiveCanvas(
                         } else if (event.type == PointerEventType.Move && !isPanning) {
                             isZooming = false // Сбрасываем курсор масштаба, если просто двигаем мышью
                             state.updateHoveredPin(position.toPoint())
+                            state.currentMousePos = state.screenToWorld(position.toPoint())
                         }
 
                         // ПЕРЕМЕЩЕНИЕ ХОЛСТА (Средняя кнопка мыши / Tertiary)
