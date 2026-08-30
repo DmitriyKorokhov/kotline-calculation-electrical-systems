@@ -85,61 +85,55 @@ fun ToolsPalette() {
 
         // --- БЛОК СВОЙСТВ ЛИНИЙ ---
 
-        // 5. Тип и Вес линии
+        // 5. Стиль линии (Тип и Вес)
         Column(
             modifier = Modifier.height(92.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Тип линии (Уменьшена ширина и высота рамки)
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+            Text("Стиль линии", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
+
+            // 💡 ОТСТУП 1: Между текстом "Стиль линии" и первым списком (Тип линии)
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Первый список: Тип линии
+            LinePropertyDropdown(
+                expanded = lineTypeExpanded,
+                onExpandChange = { lineTypeExpanded = it },
+                width = 100.dp,  // 💡 РАЗМЕР: Ширина первого списка
+                height = 26.dp,  // 💡 РАЗМЕР: Высота первого списка
+                currentDraw = { drawLineType(selectedLineType) }
             ) {
-                Text("Тип линии", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
-                LinePropertyDropdown(
-                    expanded = lineTypeExpanded,
-                    onExpandChange = { lineTypeExpanded = it },
-                    width = 90.dp, // Уменьшенная ширина
-                    height = 24.dp, // Уменьшенная высота
-                    currentDraw = { drawLineType(selectedLineType) }
-                ) {
-                    DropdownMenuItem(onClick = { selectedLineType = 0; lineTypeExpanded = false }) {
-                        Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(0) }
-                    }
-                    DropdownMenuItem(onClick = { selectedLineType = 1; lineTypeExpanded = false }) {
-                        Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(1) }
-                    }
-                    DropdownMenuItem(onClick = { selectedLineType = 2; lineTypeExpanded = false }) {
-                        Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(2) }
-                    }
+                DropdownMenuItem(onClick = { selectedLineType = 0; lineTypeExpanded = false }) {
+                    Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(0) }
+                }
+                DropdownMenuItem(onClick = { selectedLineType = 1; lineTypeExpanded = false }) {
+                    Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(1) }
+                }
+                DropdownMenuItem(onClick = { selectedLineType = 2; lineTypeExpanded = false }) {
+                    Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(2) }
                 }
             }
 
+            // 💡 ОТСТУП 2: Между первым (Тип) и вторым (Вес) списками
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Вес линии (Увеличена ширина и высота рамки)
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+            // Второй список: Вес линии
+            LinePropertyDropdown(
+                expanded = lineWeightExpanded,
+                onExpandChange = { lineWeightExpanded = it },
+                width = 100.dp,  // 💡 РАЗМЕР: Ширина второго списка (сейчас равна первому)
+                height = 26.dp,  // 💡 РАЗМЕР: Высота второго списка (сейчас равна первому)
+                currentDraw = { drawLineWeight(selectedLineWeight) }
             ) {
-                Text("Вес линии", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
-                LinePropertyDropdown(
-                    expanded = lineWeightExpanded,
-                    onExpandChange = { lineWeightExpanded = it },
-                    width = 110.dp, // Увеличенная ширина
-                    height = 28.dp, // Увеличенная высота
-                    currentDraw = { drawLineWeight(selectedLineWeight) }
-                ) {
-                    DropdownMenuItem(onClick = { selectedLineWeight = 0; lineWeightExpanded = false }) {
-                        Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(0) }
-                    }
-                    DropdownMenuItem(onClick = { selectedLineWeight = 1; lineWeightExpanded = false }) {
-                        Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(1) }
-                    }
-                    DropdownMenuItem(onClick = { selectedLineWeight = 2; lineWeightExpanded = false }) {
-                        Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(2) }
-                    }
+                DropdownMenuItem(onClick = { selectedLineWeight = 0; lineWeightExpanded = false }) {
+                    Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(0) }
+                }
+                DropdownMenuItem(onClick = { selectedLineWeight = 1; lineWeightExpanded = false }) {
+                    Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(1) }
+                }
+                DropdownMenuItem(onClick = { selectedLineWeight = 2; lineWeightExpanded = false }) {
+                    Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(2) }
                 }
             }
         }
