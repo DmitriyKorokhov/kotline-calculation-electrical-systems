@@ -10,6 +10,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import feature.projecteditor.state.ProjectRepository
+import feature.projecteditor.state.ProjectCanvasState
 import data.DatabaseFactory
 import kotlinx.coroutines.runBlocking
 import feature.home.HomeScreen
@@ -40,15 +41,17 @@ fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
         state = windowState,
-        undecorated = true // ОТКЛЮЧАЕМ СИСТЕМНУЮ РАМКУ!
+        undecorated = true
     ) {
         var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
+
+        // 1. СОЗДАЕМ СОСТОЯНИЕ ОКНА ЗДЕСЬ
+        val canvasState = remember { ProjectCanvasState() }
 
         MaterialTheme(colors = AppDarkColors) {
             Surface(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize()) {
 
-                    // 1. ДИНАМИЧЕСКАЯ ШАПКА ОКНА
                     when (currentScreen) {
                         is Screen.Home -> {
                             HomeTitleBar(windowState, onClose = ::exitApplication)
@@ -57,33 +60,35 @@ fun main() = application {
                             ProjectTitleBar(
                                 windowState = windowState,
                                 onClose = ::exitApplication,
-                                onSaveProject = { ProjectStorage.saveProject(ProjectRepository.canvasState) },
-                                onLoadProject = { ProjectStorage.loadProject(ProjectRepository.canvasState) }
+                                // 2. ПЕРЕДАЕМ СОСТОЯНИЕ
+                                onSaveProject = { ProjectStorage.saveProject(canvasState) },
+                                onLoadProject = { ProjectStorage.loadProject(canvasState) }
                             )
                         }
                         is Screen.ShieldEditor -> {
-                            // Временно ставим шапку от Home, чтобы окно можно было таскать и закрывать
                             HomeTitleBar(windowState, onClose = ::exitApplication)
                         }
                     }
 
-                    // 2. ОСНОВНОЙ КОНТЕНТ (занимает всё оставшееся место)
                     Box(modifier = Modifier.weight(1f)) {
                         when (val screen = currentScreen) {
                             is Screen.Home -> {
                                 HomeScreen(
+                                    canvasState = canvasState, // 3. ПЕРЕДАЕМ В HOME
                                     onNewProject = {
                                         ProjectRepository.createNewProject()
+                                        canvasState.resetCamera()
                                         currentScreen = Screen.ProjectEditor
                                     },
                                     onOpenProject = {
+                                        canvasState.resetCamera()
                                         currentScreen = Screen.ProjectEditor
                                     }
                                 )
                             }
                             is Screen.ProjectEditor -> {
                                 ProjectView(
-                                    state = ProjectRepository.canvasState,
+                                    state = canvasState, // 4. ПЕРЕДАЕМ В ПРОЕКТ
                                     onOpenShield = { shieldId ->
                                         currentScreen = Screen.ShieldEditor(shieldId)
                                     }
@@ -93,7 +98,8 @@ fun main() = application {
                                 ShieldEditorView(
                                     shieldId = screen.shieldId,
                                     onBack = { currentScreen = Screen.ProjectEditor },
-                                    onSaveProject = { ProjectStorage.saveProject(ProjectRepository.canvasState) }
+                                    // 5. ПЕРЕДАЕМ ДЛЯ СОХРАНЕНИЯ
+                                    onSaveProject = { ProjectStorage.saveProject(canvasState) }
                                 )
                             }
                         }

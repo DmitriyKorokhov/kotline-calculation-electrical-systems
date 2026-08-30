@@ -20,6 +20,9 @@ import feature.shieldeditor.state.ShieldData
 import core.utils.HistoryAwareCompactTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import feature.projecteditor.state.ProjectRepository
+import feature.projecteditor.domain.ShieldNode
+import feature.shieldeditor.ui.calculation.ProtectionNumberingEngine
 
 private val FIELD_CONTENT_PADDING = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
 private val BLOCK_BORDER = Color(0xFFB0BEC5)
@@ -29,6 +32,7 @@ private val BLOCK_WHITE = Color.White.copy(alpha = 0.15f)
 
 @Composable
 fun ShieldLeftPanel(
+    shieldId: Int?,
     data: ShieldData,
     onSave: () -> Unit,
     onOpenInputTypeDialog: () -> Unit,
@@ -37,7 +41,6 @@ fun ShieldLeftPanel(
 ) {
     val textColor = Color.White
     val borderColor = Color.White
-    // Создаем состояние для отслеживания прокрутки
     val scrollState = rememberScrollState()
 
     Column(
@@ -60,11 +63,17 @@ fun ShieldLeftPanel(
         HistoryAwareCompactTextField(
             label = "Наименование щита",
             value = data.shieldName,
-            onValueChange = {
-                data.shieldName = it
-                // Мгновенно пересчитываем нумерацию с новым именем щита
-                feature.shieldeditor.ui.calculation.ProtectionNumberingEngine.applyNumbering(data)
+            onValueChange = { newName ->
+                data.shieldName = newName
+                ProtectionNumberingEngine.applyNumbering(data)
                 onSave()
+
+                if (shieldId != null) {
+                    val canvasNode = ProjectRepository.nodes.find { it.id == shieldId }
+                    if (canvasNode is ShieldNode) {
+                        ProjectRepository.updateNode(canvasNode.copy(name = newName))
+                    }
+                }
             },
             onPushHistory = onPushHistory,
             historyTrigger = historyTrigger,

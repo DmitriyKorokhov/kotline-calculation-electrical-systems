@@ -52,6 +52,23 @@ fun NodeContextMenu(state: ProjectCanvasState, onOpenShield: (Int) -> Unit) {
                 DropdownMenuItem(onClick = { state.selectedNode?.let { onOpenShield(it.id) }; state.showNodeContextMenu = false }) { Text("Открыть") }
             }
 
+            DropdownMenuItem(onClick = {
+                state.selectedNode?.let { node ->
+                    state.inlineEditingNodeId = node.id
+                    state.inlineEditingText = if (node is ShieldNode) {
+                        ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
+                    } else {
+                        node.name
+                    }
+
+                    state.previousTab = state.selectedTab
+                    state.selectedTab = feature.projecteditor.ui.components.EditorTab.ANNOTATIONS
+                }
+                state.showNodeContextMenu = false
+            }) {
+                Text("Изменить название")
+            }
+
             DropdownMenuItem(onClick = { state.startConnecting(); state.showNodeContextMenu = false }) { Text("Соединить") }
             DropdownMenuItem(onClick = {
                 state.copySelectedNodes()

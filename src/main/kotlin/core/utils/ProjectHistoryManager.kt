@@ -1,12 +1,12 @@
 package core.utils
 
 import feature.projecteditor.domain.*
-import feature.projecteditor.state.ProjectCanvasState
+import feature.projecteditor.state.ProjectRepository
 
 /**
- * Иммутабельный слепок состояния холста.
+ * Иммутабельный слепок фундаментальных данных проекта (без UI-состояния).
  */
-data class CanvasSnapshot(
+data class ProjectSnapshot(
     val nodes: List<ProjectNode>,
     val connections: List<Connection>,
     val levels: List<LevelLine>,
@@ -14,35 +14,40 @@ data class CanvasSnapshot(
 )
 
 class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
-    private val undoStack = ArrayDeque<CanvasSnapshot>()
-    private val redoStack = ArrayDeque<CanvasSnapshot>()
+    private val undoStack = ArrayDeque<ProjectSnapshot>()
+    private val redoStack = ArrayDeque<ProjectSnapshot>()
 
-    fun pushState(currentState: ProjectCanvasState) {
+    fun pushState(repository: ProjectRepository) {
         redoStack.clear()
         if (undoStack.size >= maxHistorySize) {
             undoStack.removeFirst()
         }
-        undoStack.addLast(currentState.createSnapshot())
+        undoStack.addLast(repository.createSnapshot())
     }
 
-    fun undo(currentState: ProjectCanvasState) {
+    fun undo(repository: ProjectRepository) {
         if (undoStack.isNotEmpty()) {
             val previousState = undoStack.removeLast()
-            redoStack.addLast(currentState.createSnapshot())
-            currentState.restoreFrom(previousState)
+            redoStack.addLast(repository.createSnapshot())
+            repository.restoreFrom(previousState)
         }
     }
 
-    fun redo(currentState: ProjectCanvasState) {
+    fun redo(repository: ProjectRepository) {
         if (redoStack.isNotEmpty()) {
             val nextState = redoStack.removeLast()
-            undoStack.addLast(currentState.createSnapshot())
-            currentState.restoreFrom(nextState)
+            undoStack.addLast(repository.createSnapshot())
+            repository.restoreFrom(nextState)
         }
     }
 
-    private fun ProjectCanvasState.createSnapshot(): CanvasSnapshot {
-        // Глубокое копирование узлов (так как их координаты меняются)
+    fun clear() {
+        undoStack.clear()
+        redoStack.clear()
+    }
+
+    private fun ProjectRepository.createSnapshot(): ProjectSnapshot {
+        // Глубокое копирование узлов, так как их координаты и свойства меняются
         val copiedNodes = this.nodes.map { node ->
             when (node) {
                 is ShieldNode -> node.copy()
@@ -62,7 +67,7 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
                 is CalloutNode -> node.copy(targetPoint = node.targetPoint.copy())
             }
         }
-        return CanvasSnapshot(
+        return ProjectSnapshot(
             nodes = copiedNodes,
             connections = this.connections.toList(), // Связи иммутабельны, достаточно shallow copy
             levels = this.levels.toList(),           // Уровни иммутабельны
@@ -70,9 +75,9 @@ class ProjectHistoryManager(private val maxHistorySize: Int = 50) {
         )
     }
 
-    private fun ProjectCanvasState.restoreFrom(snapshot: CanvasSnapshot) {
+    private fun ProjectRepository.restoreFrom(snapshot: ProjectSnapshot) {
         this.nodes.clear()
-        // Опять глубокое копирование при восстановлении, чтобы не связать стейт со слепком в истории
+        // Снова глубокое копирование при восстановлении, чтобы не связать стейт со слепком в истории
         this.nodes.addAll(snapshot.nodes.map { node ->
             when (node) {
                 is ShieldNode -> node.copy()

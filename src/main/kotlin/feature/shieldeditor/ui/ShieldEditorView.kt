@@ -197,6 +197,7 @@ fun ShieldEditorView(shieldId: Int?, onBack: () -> Unit, onSaveProject: () -> Un
                         when (currentSidebarTab) {
                             SidebarTab.SHIELD_DATA -> {
                                 ShieldLeftPanel(
+                                    shieldId = shieldId,
                                     data = data,
                                     onSave = { saveNow() },
                                     onOpenInputTypeDialog = { showInputTypeDialog = true },
