@@ -4,9 +4,11 @@ import androidx.compose.runtime.*
 import feature.projecteditor.domain.*
 import kotlin.math.floor
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.geometry.Offset
 import feature.projecteditor.ui.selection.getConnectionsInSelectionBox
 import feature.projecteditor.ui.selection.getItRackRowSize
 import feature.projecteditor.ui.selection.getNodesInSelectionBox
+import feature.projecteditor.ui.utils.toPoint
 
 // Константы размеров объектов и сетки
 private const val NODE_HEIGHT = 80f
@@ -108,6 +110,7 @@ class ProjectCanvasState {
     var activeHandleHit by mutableStateOf<HandleHitType>(HandleHitType.NONE)
     var activeHandleNodeId by mutableStateOf<Int?>(null)
     var activeHandleIndex by mutableStateOf<Int>(-1) // Для полилинии
+    var draggingLabelNodeId by mutableStateOf<Int?>(null)
 
     // ==========================================
     // ДЕЛЕГИРОВАНИЕ ОПЕРАЦИЙ В РЕПОЗИТОРИЙ
@@ -994,6 +997,46 @@ class ProjectCanvasState {
             }
             ProjectRepository.updateNode(updated)
         }
+    }
+
+    fun snapLabelToClosestSide(nodeId: Int, dropScreenPos: Offset) {
+        val node = nodes.find { it.id == nodeId } ?: return
+        val dropWorldPos = screenToWorld(dropScreenPos.toPoint())
+
+        // ИСПРАВЛЕНИЕ 3: Вычисляем 4 независимых пина для подписей
+        val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
+
+        val topPin = Point(bounds.left + bounds.width / 2f, bounds.top)
+        val bottomPin = Point(bounds.left + bounds.width / 2f, bounds.bottom)
+        val leftPin = Point(bounds.left, bounds.top + bounds.height / 2f)
+        val rightPin = Point(bounds.right, bounds.top + bounds.height / 2f)
+
+        // Ищем минимальное расстояние от отпущенной МЫШКИ до пина
+        val distances = mapOf(
+            AnchorSide.TOP to (dropWorldPos - topPin).getDistanceSquared(),
+            AnchorSide.BOTTOM to (dropWorldPos - bottomPin).getDistanceSquared(),
+            AnchorSide.LEFT to (dropWorldPos - leftPin).getDistanceSquared(),
+            AnchorSide.RIGHT to (dropWorldPos - rightPin).getDistanceSquared()
+        )
+
+        val closestSide = distances.minByOrNull { it.value }?.key ?: AnchorSide.RIGHT
+
+        // Сохраняем новую позицию
+        saveHistory()
+        val updatedNode = when (node) {
+            is ShieldNode -> node.copy(labelSide = closestSide)
+            is TransformerNode -> node.copy(labelSide = closestSide)
+            is GeneratorNode -> node.copy(labelSide = closestSide)
+            is UpsNode -> node.copy(labelSide = closestSide)
+            is BatteryNode -> node.copy(labelSide = closestSide)
+            is SolarPanelNode -> node.copy(labelSide = closestSide)
+            is InverterNode -> node.copy(labelSide = closestSide)
+            is SystemNode -> node.copy(labelSide = closestSide)
+            is ItRackRowNode -> node.copy(labelSide = closestSide)
+            is RectifierNode -> node.copy(labelSide = closestSide)
+            else -> node
+        }
+        ProjectRepository.updateNode(updatedNode)
     }
 }
 

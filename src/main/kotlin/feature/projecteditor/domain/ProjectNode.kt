@@ -3,13 +3,14 @@ package feature.projecteditor.domain
 sealed interface ProjectNode {
     val id: Int
     val name: String
-    val position: Point // Изменено с Offset
+    val position: Point
 }
 
 data class ShieldNode(
     override val id: Int,
     override var name: String,
-    override var position: Point
+    override var position: Point,
+    var labelSide: AnchorSide = AnchorSide.RIGHT
 ) : ProjectNode
 
 data class TransformerNode(
@@ -17,20 +18,23 @@ data class TransformerNode(
     override var name: String = "T",
     override var position: Point,
     var radiusOuter: Float = 40f,
-    var radiusInner: Float = 30f
+    var radiusInner: Float = 30f,
+    var labelSide: AnchorSide = AnchorSide.RIGHT
 ) : ProjectNode
 
 data class GeneratorNode(
     override val id: Int,
     override val name: String,
     override val position: Point,
-    val radius: Float = 50f
+    val radius: Float = 50f,
+    var labelSide: AnchorSide = AnchorSide.RIGHT
 ) : ProjectNode
 
 data class UpsNode(
     override val id: Int,
     override var name: String,
     override var position: Point,
+    var labelSide: AnchorSide = AnchorSide.RIGHT,
     // Задел для расчетов
     var activePowerW: Float = 0f,
     var batteryVoltageV: Float = 48f
@@ -40,6 +44,7 @@ data class BatteryNode(
     override val id: Int,
     override var name: String,
     override var position: Point,
+    var labelSide: AnchorSide = AnchorSide.RIGHT,
     // Задел для расчетов
     var capacityAh: Float = 100f,
     var voltageV: Float = 12f
@@ -49,6 +54,7 @@ data class SolarPanelNode(
     override val id: Int,
     override var name: String,
     override var position: Point,
+    var labelSide: AnchorSide = AnchorSide.RIGHT,
     // Задел для расчетов
     var maxPowerW: Float = 400f,
     var vocV: Float = 37f // Напряжение холостого хода
@@ -58,6 +64,7 @@ data class InverterNode(
     override val id: Int,
     override var name: String,
     override var position: Point,
+    var labelSide: AnchorSide = AnchorSide.RIGHT,
     // Задел для расчетов
     var nominalPowerW: Float = 5000f,
     var isGridTie: Boolean = true
@@ -67,6 +74,7 @@ data class SystemNode(
     override val id: Int,
     override val name: String,
     override var position: Point,
+    var labelSide: AnchorSide = AnchorSide.RIGHT,
     val radius: Float = 50f,
     val nominalVoltageV: Float = 400f,
     val shortCircuitPowerMVA: Float = 500f
@@ -108,6 +116,7 @@ data class ItRackRowNode(
     override val id: Int,
     override var name: String = "ИТ-стойки",
     override var position: Point,
+    var labelSide: AnchorSide = AnchorSide.RIGHT,
     val racks: List<Rack> = listOf(Rack(1), Rack(2), Rack(3)),
     val feeds: List<RackFeed> = listOf(RackFeed("Луч А", setOf(1, 2, 3), true), RackFeed("Луч B", setOf(1, 2, 3), false))
 ) : ProjectNode
@@ -116,6 +125,7 @@ data class RectifierNode(
     override val id: Int,
     override var name: String,
     override var position: Point,
+    var labelSide: AnchorSide = AnchorSide.RIGHT,
     var nominalPowerW: Float = 5000f
 ) : ProjectNode
 

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
@@ -18,8 +19,6 @@ import feature.projecteditor.domain.*
 import feature.projecteditor.state.ProjectCanvasState
 import feature.projecteditor.ui.utils.toOffset
 import feature.projecteditor.ui.utils.toPoint
-import feature.projecteditor.ui.labels.RightSideNameText
-import feature.shieldeditor.state.ShieldStorage
 import androidx.compose.ui.input.pointer.isTertiaryPressed
 import feature.projecteditor.state.ConnectionHit
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -27,6 +26,7 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.onSizeChanged
 import feature.projecteditor.state.CanvasToolMode
 import feature.projecteditor.state.HandleHitType
+import feature.projecteditor.state.ProjectRepository
 import java.awt.Cursor
 
 private const val NODE_WIDTH = 120f
@@ -128,8 +128,9 @@ fun InteractiveCanvas(
                             }
                             CanvasToolMode.ADD_LEVEL -> {
                                 state.saveHistory()
-                                feature.projecteditor.state.ProjectRepository.levels.add(LevelLine(state.nextId++, worldPos.y))
-                                skipNextTap = true // ПРОПУСКАЕМ СЛЕДУЮЩИЙ КЛИК
+                                ProjectRepository.levels.add(LevelLine(state.nextId++, worldPos.y))
+                                ProjectRepository.addLevel(LevelLine(state.nextId++, worldPos.y))
+                                skipNextTap = true
                                 state.currentToolMode = CanvasToolMode.SELECT
                                 return@detectTapGestures
                             }
@@ -154,6 +155,7 @@ fun InteractiveCanvas(
                                 state.selectedNodeIds.add(newNode.id)
                                 state.inlineEditingNodeId = newNode.id
                                 state.inlineEditingText = ""
+                                ProjectRepository.addNode(newNode)
                                 skipNextTap = true
                                 state.currentToolMode = CanvasToolMode.SELECT
                                 return@detectTapGestures
@@ -181,6 +183,7 @@ fun InteractiveCanvas(
                                 state.selectedNodeIds.add(newNode.id)
                                 state.inlineEditingNodeId = newNode.id
                                 state.inlineEditingText = ""
+                                ProjectRepository.addNode(newNode)
                                 skipNextTap = true
                                 state.currentToolMode = CanvasToolMode.SELECT
                                 return@detectTapGestures
@@ -812,8 +815,29 @@ fun InteractiveCanvas(
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawProjectCanvas(textMeasurer, state)
             drawGridHeaders(textMeasurer, state)
-        }
+            if (state.draggingLabelNodeId != null) {
+                val dragNode = state.nodes.find { it.id == state.draggingLabelNodeId }
+                if (dragNode != null) {
+                    val bounds = feature.projecteditor.ui.selection.getBoundingBox(dragNode)
 
+                    val labelPins = listOf(
+                        Point(bounds.left + bounds.width / 2f, bounds.top),
+                        Point(bounds.left + bounds.width / 2f, bounds.bottom),
+                        Point(bounds.left, bounds.top + bounds.height / 2f),
+                        Point(bounds.right, bounds.top + bounds.height / 2f)
+                    )
+
+                    labelPins.forEach { pt ->
+                        val screenPt = state.worldToScreen(pt).toOffset()
+                        drawCircle(
+                            color = Color.Blue.copy(alpha = 0.5f),
+                            radius = maxOf(10f, 8f / state.scale),
+                            center = screenPt
+                        )
+                    }
+                }
+            }
+        }
         // УНИФИЦИРОВАННАЯ ОТРИСОВКА ПОДПИСЕЙ И РЕДАКТОРОВ
         state.nodes.forEach { node ->
 
@@ -857,12 +881,28 @@ fun InteractiveCanvas(
                     node.name
                 }
 
-                RightSideNameText(
+                val labelSide = when (node) {
+                    is ShieldNode -> node.labelSide
+                    is TransformerNode -> node.labelSide
+                    is GeneratorNode -> node.labelSide
+                    is UpsNode -> node.labelSide
+                    is BatteryNode -> node.labelSide
+                    is SolarPanelNode -> node.labelSide
+                    is InverterNode -> node.labelSide
+                    is SystemNode -> node.labelSide
+                    is ItRackRowNode -> node.labelSide
+                    is RectifierNode -> node.labelSide
+                    else -> AnchorSide.RIGHT
+                }
+
+                // ВЫЗЫВАЕМ НОВЫЙ КОМПОНЕНТ
+                feature.projecteditor.ui.labels.NodeLabelText(
                     name = displayName,
-                    screenPos = screenPos,
+                    nodePosScreen = screenPos,
                     nodeWidthOnScreen = nodeWidthForLabel * scale,
-                    nodeHeight = nodeHeight,
+                    nodeHeightOnScreen = nodeHeight,
                     scale = scale,
+                    labelSide = labelSide,
                     isEditing = isEditing,
                     editingText = if (isEditing) state.inlineEditingText else "",
                     onEditingTextChanged = { state.inlineEditingText = it },
@@ -872,8 +912,11 @@ fun InteractiveCanvas(
                         state.previousTab = state.selectedTab
                         state.selectedTab = feature.projecteditor.ui.components.EditorTab.ANNOTATIONS
                     },
-                    onFinishEdit = {
-                        state.finishInlineEditing()
+                    onFinishEdit = { state.finishInlineEditing() },
+                    onDragStart = { state.draggingLabelNodeId = node.id },
+                    onDragEnd = { dropPosScreen ->
+                        state.snapLabelToClosestSide(node.id, dropPosScreen)
+                        state.draggingLabelNodeId = null
                     }
                 )
             }

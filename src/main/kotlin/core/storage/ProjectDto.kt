@@ -36,6 +36,7 @@ data class SerializableSystemNode(
     override val x: Float,
     override val y: Float,
     val radius: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT,
     val nominalVoltageV: Float,
     val shortCircuitPowerMVA: Float
 ) : SerializableNode()
@@ -46,7 +47,8 @@ data class SerializableShieldNode(
     override val id: Int,
     override val name: String,
     override val x: Float,
-    override val y: Float
+    override val y: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT
 ) : SerializableNode()
 
 @Serializable
@@ -57,7 +59,8 @@ data class SerializableTransformerNode(
     override val x: Float,
     override val y: Float,
     val radiusOuter: Float,
-    val radiusInner: Float
+    val radiusInner: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT
 ) : SerializableNode()
 
 @Serializable
@@ -67,7 +70,8 @@ data class SerializableGeneratorNode(
     override val name: String,
     override val x: Float,
     override val y: Float,
-    val radius: Float
+    val radius: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT
 ) : SerializableNode()
 
 @Serializable
@@ -77,6 +81,7 @@ data class SerializableUpsNode(
     override val name: String,
     override val x: Float,
     override val y: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT,
     val activePowerW: Float,
     val batteryVoltageV: Float
 ) : SerializableNode()
@@ -88,6 +93,7 @@ data class SerializableBatteryNode(
     override val name: String,
     override val x: Float,
     override val y: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT,
     val capacityAh: Float,
     val voltageV: Float
 ) : SerializableNode()
@@ -99,6 +105,7 @@ data class SerializableSolarPanelNode(
     override val name: String,
     override val x: Float,
     override val y: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT,
     val maxPowerW: Float,
     val vocV: Float
 ) : SerializableNode()
@@ -110,6 +117,7 @@ data class SerializableInverterNode(
     override val name: String,
     override val x: Float,
     override val y: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT,
     val nominalPowerW: Float,
     val isGridTie: Boolean
 ) : SerializableNode()
@@ -203,6 +211,7 @@ data class SerializableItRackRowNode(
     override val name: String,
     override val x: Float,
     override val y: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT,
     val racks: List<SerializableRack>,
     val feeds: List<SerializableRackFeed>
 ) : SerializableNode()
@@ -214,6 +223,7 @@ data class SerializableRectifierNode(
     override val name: String,
     override val x: Float,
     override val y: Float,
+    val labelSide: SerializableAnchorSide = SerializableAnchorSide.RIGHT,
     val nominalPowerW: Float
 ) : SerializableNode()
 

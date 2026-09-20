@@ -76,36 +76,39 @@ object ProjectStorage {
 private fun ProjectCanvasState.toProjectFile(): ProjectFile {
     val serializableNodes = nodes.map { node ->
         when (node) {
-            is ShieldNode -> SerializableShieldNode(node.id, node.name, node.position.x, node.position.y)
+            is ShieldNode -> SerializableShieldNode(node.id, node.name, node.position.x, node.position.y, SerializableAnchorSide.valueOf(node.labelSide.name))
             is TransformerNode -> SerializableTransformerNode(
                 node.id,
                 node.name,
                 node.position.x,
                 node.position.y,
                 node.radiusOuter,
-                node.radiusInner
+                node.radiusInner,
+                SerializableAnchorSide.valueOf(node.labelSide.name)
             )
             is GeneratorNode -> SerializableGeneratorNode(
                 node.id,
                 node.name,
                 node.position.x,
                 node.position.y,
-                node.radius
+                node.radius,
+                SerializableAnchorSide.valueOf(node.labelSide.name)
             )
-            is UpsNode -> SerializableUpsNode(node.id, node.name, node.position.x, node.position.y, node.activePowerW, node.batteryVoltageV)
-            is BatteryNode -> SerializableBatteryNode(node.id, node.name, node.position.x, node.position.y, node.capacityAh, node.voltageV)
-            is SolarPanelNode -> SerializableSolarPanelNode(node.id, node.name, node.position.x, node.position.y, node.maxPowerW, node.vocV)
-            is InverterNode -> SerializableInverterNode(node.id, node.name, node.position.x, node.position.y, node.nominalPowerW, node.isGridTie)
-            is SystemNode -> SerializableSystemNode(node.id, node.name, node.position.x, node.position.y, node.radius, node.nominalVoltageV, node.shortCircuitPowerMVA)
+            is UpsNode -> SerializableUpsNode(node.id, node.name, node.position.x, node.position.y,SerializableAnchorSide.valueOf(node.labelSide.name), node.activePowerW, node.batteryVoltageV)
+            is BatteryNode -> SerializableBatteryNode(node.id, node.name, node.position.x, node.position.y, SerializableAnchorSide.valueOf(node.labelSide.name), node.capacityAh, node.voltageV)
+            is SolarPanelNode -> SerializableSolarPanelNode(node.id, node.name, node.position.x, node.position.y, SerializableAnchorSide.valueOf(node.labelSide.name), node.maxPowerW, node.vocV)
+            is InverterNode -> SerializableInverterNode(node.id, node.name, node.position.x, node.position.y, SerializableAnchorSide.valueOf(node.labelSide.name), node.nominalPowerW, node.isGridTie)
+            is SystemNode -> SerializableSystemNode(id = node.id, name = node.name, x = node.position.x, y = node.position.y, radius = node.radius, nominalVoltageV = node.nominalVoltageV, shortCircuitPowerMVA = node.shortCircuitPowerMVA, labelSide = SerializableAnchorSide.valueOf(node.labelSide.name))
             is ItRackRowNode -> SerializableItRackRowNode(
                 node.id,
                 node.name,
                 node.position.x,
                 node.position.y,
+                SerializableAnchorSide.valueOf(node.labelSide.name),
                 node.racks.map { SerializableRack(it.index, it.powerW) },
                 node.feeds.map { SerializableRackFeed(it.name, it.connectedRacks, it.isTop, it.colorArgb) } // Добавили it.colorArgb
             )
-            is RectifierNode -> SerializableRectifierNode(node.id, node.name, node.position.x, node.position.y, node.nominalPowerW)
+            is RectifierNode -> SerializableRectifierNode(node.id, node.name, node.position.x, node.position.y, SerializableAnchorSide.valueOf(node.labelSide.name), node.nominalPowerW)
             is TextNode -> SerializableTextNode(
                 node.id, node.name, node.position.x, node.position.y,
                 node.fontSize, node.colorArgb, node.isBold, node.isItalic,
@@ -248,19 +251,20 @@ private fun SerializableNode.toDomainNode(): ProjectNode {
         is SerializableShieldNode -> ShieldNode(id, name, pos)
         is SerializableTransformerNode -> TransformerNode(id, name, pos, radiusOuter, radiusInner)
         is SerializableGeneratorNode -> GeneratorNode(id, name, pos, radius)
-        is SerializableUpsNode -> UpsNode(id, name, pos, activePowerW, batteryVoltageV)
-        is SerializableBatteryNode -> BatteryNode(id, name, pos, capacityAh, voltageV)
-        is SerializableSolarPanelNode -> SolarPanelNode(id, name, pos, maxPowerW, vocV)
-        is SerializableInverterNode -> InverterNode(id, name, pos, nominalPowerW, isGridTie)
-        is SerializableSystemNode -> SystemNode(id, name, pos, radius, nominalVoltageV, shortCircuitPowerMVA)
+        is SerializableUpsNode -> UpsNode(id = id, name = name, position = pos, activePowerW = activePowerW, batteryVoltageV = batteryVoltageV, labelSide = AnchorSide.valueOf(labelSide.name))
+        is SerializableBatteryNode -> BatteryNode(id, name, pos, AnchorSide.valueOf(labelSide.name), capacityAh, voltageV)
+        is SerializableSolarPanelNode -> SolarPanelNode(id, name, pos, AnchorSide.valueOf(labelSide.name), maxPowerW, vocV)
+        is SerializableInverterNode -> InverterNode(id, name, pos, AnchorSide.valueOf(labelSide.name), nominalPowerW, isGridTie)
+        is SerializableSystemNode -> SystemNode(id = id, name = name, position = pos, radius = radius, nominalVoltageV = nominalVoltageV, shortCircuitPowerMVA = shortCircuitPowerMVA, labelSide = AnchorSide.valueOf(labelSide.name))
         is SerializableItRackRowNode -> ItRackRowNode(
             id,
             name,
             pos,
+            AnchorSide.valueOf(labelSide.name),
             racks.map { Rack(it.index, it.powerW) },
-            feeds.map { RackFeed(it.name, it.connectedRacks, it.isTop, it.colorArgb) } // Добавили it.colorArgb
+            feeds.map { RackFeed(it.name, it.connectedRacks, it.isTop, it.colorArgb) }
         )
-        is SerializableRectifierNode -> RectifierNode(id, name, pos, nominalPowerW)
+        is SerializableRectifierNode -> RectifierNode(id, name, pos, AnchorSide.valueOf(labelSide.name), nominalPowerW)
         is SerializableTextNode -> TextNode(
             id, name, pos, fontSize, colorArgb, isBold, isItalic,
             isUnderline, isStrikethrough,

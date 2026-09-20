@@ -53,7 +53,6 @@ object ProjectRepository {
     fun removeNodes(nodeIds: Set<Int>) {
         saveHistory()
         nodes.removeAll { it.id in nodeIds }
-        // Каскадное удаление связей, привязанных к удаленным узлам
         connections.removeAll { it.fromId in nodeIds || it.toId in nodeIds }
     }
 

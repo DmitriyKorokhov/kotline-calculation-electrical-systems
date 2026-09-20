@@ -2,21 +2,14 @@ package feature.projecteditor.ui.labels
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -24,100 +17,141 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import feature.projecteditor.domain.AnchorSide
 
 @Composable
-fun RightSideNameText(
+fun NodeLabelText(
     name: String,
-    screenPos: Offset,
+    nodePosScreen: Offset, // Координаты ЦЕНТРА модели на экране
     nodeWidthOnScreen: Float,
-    nodeHeight: Float,
+    nodeHeightOnScreen: Float,
     scale: Float,
+    labelSide: AnchorSide, // Текущая сторона привязки
     isEditing: Boolean = false,
     editingText: String = "",
     onEditingTextChanged: (String) -> Unit = {},
     onStartEdit: () -> Unit = {},
-    onFinishEdit: () -> Unit = {}
+    onFinishEdit: () -> Unit = {},
+    onDragStart: () -> Unit = {},
+    onDragEnd: (Offset) -> Unit = {}
 ) {
     val density = LocalDensity.current
-    val gap = 15f * scale
-    val offsetX = with(density) { (screenPos.x + nodeWidthOnScreen / 2f + gap).toDp() }
 
-    val minBoxHeight = (40f * scale).dp
-    val offsetY = with(density) { screenPos.y.toDp() } - (minBoxHeight / 2)
+    // ИСПРАВЛЕНИЕ 2: Разные отступы для боков и верха/низа
+    val horizontalGap = 15f * scale
+    val verticalGap = 4f * scale
 
-    val fontSize = (14f * scale).sp
+    var boxSize by remember { mutableStateOf(IntSize.Zero) }
+    val boxWidth = boxSize.width.toFloat()
+    val boxHeight = boxSize.height.toFloat()
 
-    // 1. Фикс бага: всегда захватываем самую свежую функцию onStartEdit с актуальным именем
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var isDragging by remember { mutableStateOf(false) }
+    var dragTouchLocalPos by remember { mutableStateOf(Offset.Zero) } // Сохраняем координату курсора
+
     val currentOnStartEdit by rememberUpdatedState(onStartEdit)
+
+    val baseX = when (labelSide) {
+        AnchorSide.LEFT -> nodePosScreen.x - nodeWidthOnScreen / 2f - horizontalGap - boxWidth
+        AnchorSide.RIGHT -> nodePosScreen.x + nodeWidthOnScreen / 2f + horizontalGap
+        AnchorSide.TOP -> nodePosScreen.x - boxWidth / 2f
+        AnchorSide.BOTTOM -> nodePosScreen.x - boxWidth / 2f
+    }
+
+    val baseY = when (labelSide) {
+        AnchorSide.LEFT -> nodePosScreen.y - boxHeight / 2f
+        AnchorSide.RIGHT -> nodePosScreen.y - boxHeight / 2f
+        AnchorSide.TOP -> nodePosScreen.y - nodeHeightOnScreen / 2f - verticalGap - boxHeight
+        AnchorSide.BOTTOM -> nodePosScreen.y + nodeHeightOnScreen / 2f + verticalGap
+    }
+
+    val offsetX = with(density) { (baseX + dragOffset.x).toDp() }
+    val offsetY = with(density) { (baseY + dragOffset.y).toDp() }
+    val fontSize = (14f * scale).sp
+    val minBoxHeight = (40f * scale).dp
 
     Box(
         modifier = Modifier
             .offset(x = offsetX, y = offsetY)
             .defaultMinSize(minHeight = minBoxHeight)
             .widthIn(max = (300f * scale).dp)
-            // 2. pointerInput(name) пересоздает детектор, если имя модели изменилось
+            .onSizeChanged { boxSize = it }
+            .graphicsLayer { alpha = if (isDragging) 0.5f else 1f }
             .pointerInput(name) {
                 detectTapGestures(onDoubleTap = { currentOnStartEdit() })
+            }
+            .pointerInput(name) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        isDragging = true
+                        dragTouchLocalPos = offset // Запоминаем, за какую часть текста схватились
+                        onDragStart()
+                    },
+                    onDragEnd = {
+                        isDragging = false
+                        // ИСПРАВЛЕНИЕ 1: Высчитываем АБСОЛЮТНУЮ координату курсора мыши на экране при отпускании!
+                        val pointerScreenX = baseX + dragOffset.x + dragTouchLocalPos.x
+                        val pointerScreenY = baseY + dragOffset.y + dragTouchLocalPos.y
+                        onDragEnd(Offset(pointerScreenX, pointerScreenY))
+                        dragOffset = Offset.Zero
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                        dragOffset = Offset.Zero
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        dragOffset += dragAmount
+                        dragTouchLocalPos = change.position // Обновляем координату курсора
+                    }
+                )
             },
-        contentAlignment = Alignment.CenterStart
+        contentAlignment = Alignment.Center
     ) {
         if (isEditing) {
             val focusRequester = remember { FocusRequester() }
-
-            // 3. Форма с закругленными углами малого радиуса
             val shape = RoundedCornerShape(4.dp)
 
             BasicTextField(
                 value = editingText,
                 onValueChange = onEditingTextChanged,
-                textStyle = TextStyle(
-                    color = MaterialTheme.colors.onSurface,
-                    fontSize = fontSize
-                ),
+                textStyle = TextStyle(color = MaterialTheme.colors.onSurface, fontSize = fontSize),
                 cursorBrush = SolidColor(MaterialTheme.colors.primary),
                 modifier = Modifier
                     .focusRequester(focusRequester)
-                    // 4. Очень прозрачный белый фон (alpha = 0.2f означает прозрачность 80%)
-                    .background(Color.White.copy(alpha = 0.2f), shape)
-                    // 5. Синие края рамки с закруглениями
+                    .background(Color.White.copy(alpha = 0.8f), shape)
                     .border(1.dp, MaterialTheme.colors.primary, shape)
                     .padding(horizontal = 6.dp, vertical = 4.dp)
                     .onPreviewKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyDown) {
-                            if (event.key == Key.Enter) {
-                                onFinishEdit()
-                                return@onPreviewKeyEvent true
-                            }
-                            if (event.key == Key.Escape) {
-                                onFinishEdit()
-                                return@onPreviewKeyEvent true
-                            }
+                        if (event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.Escape)) {
+                            onFinishEdit()
+                            return@onPreviewKeyEvent true
                         }
                         false
                     }
             )
-
-            LaunchedEffect(Unit) {
-                focusRequester.requestFocus()
-            }
+            LaunchedEffect(Unit) { focusRequester.requestFocus() }
         } else {
             Text(
                 text = name,
                 color = MaterialTheme.colors.onSurface,
                 fontSize = fontSize,
                 lineHeight = (16f * scale).sp,
-                textAlign = TextAlign.Start,
+                textAlign = when (labelSide) {
+                    AnchorSide.LEFT -> TextAlign.End
+                    AnchorSide.RIGHT -> TextAlign.Start
+                    else -> TextAlign.Center
+                },
                 softWrap = true,
                 maxLines = 2
             )
