@@ -95,9 +95,18 @@ fun DrawScope.drawProjectCanvas(textMeasurer: TextMeasurer, state: ProjectCanvas
                     val path = Path().apply {
                         moveTo(state.tempPoints.first().x, state.tempPoints.first().y)
                         for (i in 1 until state.tempPoints.size) lineTo(state.tempPoints[i].x, state.tempPoints[i].y)
-                        lineTo(mousePos.x, mousePos.y) // Линия к курсору
+                        lineTo(mousePos.x, mousePos.y)
                     }
                     drawPath(path, color, style = stroke)
+
+                    // Кружок на первой точке для замыкания
+                    val firstPoint = state.tempPoints.first()
+                    drawCircle(
+                        color = Color.Red,
+                        radius = 8f / state.scale,
+                        center = firstPoint.toOffset(),
+                        style = Stroke(2f / state.scale)
+                    )
                 }
                 else -> {}
             }
@@ -469,7 +478,18 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, state: ProjectCanvas
                     center = node.position.toOffset(),
                     style = getCustomStroke(node.lineWeight, node.lineType, state.scale)
                 )
-                if (isSelected) drawCircle(Color.Blue, node.radius, node.position.toOffset(), style = Stroke(2f / state.scale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f/state.scale, 10f/state.scale))))
+                if (isSelected) drawCircle(Color(0xFF9C27B0), node.radius, node.position.toOffset(), style = Stroke(3f / state.scale))
+                val showHandles = isSelected && state.selectedNodeIds.size == 1 && !state.isDraggingNode
+                if (showHandles) {
+                    val r = node.radius
+                    val handleRadius = 6f / state.scale
+                    val cx = node.position.x
+                    val cy = node.position.y
+                    drawCircle(Color.Red, handleRadius, Offset(cx, cy - r))
+                    drawCircle(Color.Red, handleRadius, Offset(cx, cy + r))
+                    drawCircle(Color.Red, handleRadius, Offset(cx - r, cy))
+                    drawCircle(Color.Red, handleRadius, Offset(cx + r, cy))
+                }
             }
             is RectangleNode -> {
                 withTransform({
@@ -482,11 +502,28 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, state: ProjectCanvas
                         size = androidx.compose.ui.geometry.Size(node.width, node.height),
                         style = getCustomStroke(node.lineWeight, node.lineType, state.scale)
                     )
-                    if (isSelected) drawRect(Color.Blue, topLeft, androidx.compose.ui.geometry.Size(node.width, node.height), style = Stroke(2f / state.scale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f/state.scale, 10f/state.scale))))
+                    if (isSelected) drawRect(Color(0xFF9C27B0), topLeft, androidx.compose.ui.geometry.Size(node.width, node.height), style = Stroke(3f / state.scale))
+
+                    // РУЧКИ
+                    val showHandles = isSelected && state.selectedNodeIds.size == 1 && !state.isDraggingNode
+                    if (showHandles) {
+                        val thick = 8f / state.scale
+                        val lineLen = 24f / state.scale
+                        val cx = node.position.x
+                        val cy = node.position.y
+                        val hw = node.width / 2
+                        val hh = node.height / 2
+
+                        // ИЗМЕНЕНО НА Color.Red (Задача 5)
+                        drawLine(Color.Red, Offset(cx - lineLen/2, cy - hh), Offset(cx + lineLen/2, cy - hh), strokeWidth = thick)
+                        drawLine(Color.Red, Offset(cx - lineLen/2, cy + hh), Offset(cx + lineLen/2, cy + hh), strokeWidth = thick)
+                        drawLine(Color.Red, Offset(cx - hw, cy - lineLen/2), Offset(cx - hw, cy + lineLen/2), strokeWidth = thick)
+                        drawLine(Color.Red, Offset(cx + hw, cy - lineLen/2), Offset(cx + hw, cy + lineLen/2), strokeWidth = thick)
+                    }
                 }
             }
             is PolylineNode -> {
-                val path = androidx.compose.ui.graphics.Path().apply {
+                val path = Path().apply {
                     if (node.points.isNotEmpty()) {
                         moveTo(node.points.first().x, node.points.first().y)
                         for (i in 1 until node.points.size) {
@@ -494,8 +531,17 @@ private fun DrawScope.drawNodes(textMeasurer: TextMeasurer, state: ProjectCanvas
                         }
                     }
                 }
+
                 drawPath(path, Color(node.colorArgb), style = getCustomStroke(node.lineWeight, node.lineType, state.scale))
-                if (isSelected) drawPath(path, Color.Blue, style = Stroke(2f / state.scale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f/state.scale, 10f/state.scale))))
+                if (isSelected) drawPath(path, Color(0xFF9C27B0), style = Stroke(3f / state.scale))
+
+                val showHandles = isSelected && state.selectedNodeIds.size == 1 && !state.isDraggingNode
+                if (showHandles) {
+                    val handleRadius = 6f / state.scale
+                    node.points.distinct().forEach { pt ->
+                        drawCircle(Color.Red, handleRadius, pt.toOffset())
+                    }
+                }
             }
         }
     }

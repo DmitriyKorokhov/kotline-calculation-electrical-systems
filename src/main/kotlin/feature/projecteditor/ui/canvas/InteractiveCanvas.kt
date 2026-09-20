@@ -26,6 +26,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.onSizeChanged
 import feature.projecteditor.state.CanvasToolMode
+import feature.projecteditor.state.HandleHitType
 import java.awt.Cursor
 
 private const val NODE_WIDTH = 120f
@@ -42,6 +43,7 @@ fun InteractiveCanvas(
     var dragTarget by remember { mutableStateOf<Any?>(null) }
     var isPanning by remember { mutableStateOf(false) }
     var isZooming by remember { mutableStateOf(false) }
+    var skipNextTap by remember { mutableStateOf(false) }
     // Вычисляем текущий курсор в зависимости от модификаторов и действий
     val currentCursor = remember(isPanning, isZooming) {
         when {
@@ -74,8 +76,132 @@ fun InteractiveCanvas(
                             state.selectedTab = feature.projecteditor.ui.components.EditorTab.ANNOTATIONS
                         }
                     },
-                    onTap = { offset ->
+                    onPress = { offset ->
                         val worldPos = state.screenToWorld(offset.toPoint())
+
+                        when (state.currentToolMode) {
+                            CanvasToolMode.DRAW_CIRCLE -> {
+                                if (state.tempPoints.isEmpty()) {
+                                    state.tempPoints.add(worldPos)
+                                } else {
+                                    val center = state.tempPoints[0]
+                                    val radius = kotlin.math.sqrt(1.0 * (worldPos.x - center.x) * (worldPos.x - center.x) + (worldPos.y - center.y) * (worldPos.y - center.y)).toFloat()
+                                    state.saveHistory()
+                                    feature.projecteditor.state.ProjectRepository.addNode(CircleNode(state.nextId++, "", center, radius, state.currentLineColor, state.currentLineWeight, state.currentLineType))
+                                    state.tempPoints.clear()
+                                    skipNextTap = true // ПРОПУСКАЕМ СЛЕДУЮЩИЙ КЛИК
+                                    state.currentToolMode = CanvasToolMode.SELECT
+                                }
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.DRAW_RECTANGLE -> {
+                                if (state.tempPoints.isEmpty()) {
+                                    state.tempPoints.add(worldPos)
+                                } else {
+                                    val p1 = state.tempPoints[0]
+                                    val width = kotlin.math.abs(worldPos.x - p1.x)
+                                    val height = kotlin.math.abs(worldPos.y - p1.y)
+                                    val center = Point((p1.x + worldPos.x) / 2, (p1.y + worldPos.y) / 2)
+                                    state.saveHistory()
+                                    feature.projecteditor.state.ProjectRepository.addNode(RectangleNode(state.nextId++, "", center, width, height, state.currentLineColor, state.currentLineWeight, state.currentLineType))
+                                    state.tempPoints.clear()
+                                    skipNextTap = true // ПРОПУСКАЕМ СЛЕДУЮЩИЙ КЛИК
+                                    state.currentToolMode = CanvasToolMode.SELECT
+                                }
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.DRAW_POLYLINE -> {
+                                if (state.tempPoints.isNotEmpty()) {
+                                    val firstPoint = state.tempPoints.first()
+                                    // Радиус замыкания
+                                    val snapThreshold = (15f / state.scale)
+                                    if ((worldPos - firstPoint).getDistanceSquared() < snapThreshold * snapThreshold && state.tempPoints.size > 2) {
+                                        // Замыкаем
+                                        state.tempPoints.add(firstPoint)
+                                        state.finishPolyline() // Создаст ноду и очистит tempPoints
+                                        skipNextTap = true
+                                        return@detectTapGestures
+                                    }
+                                }
+                                state.tempPoints.add(worldPos)
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.ADD_LEVEL -> {
+                                state.saveHistory()
+                                feature.projecteditor.state.ProjectRepository.levels.add(LevelLine(state.nextId++, worldPos.y))
+                                skipNextTap = true // ПРОПУСКАЕМ СЛЕДУЮЩИЙ КЛИК
+                                state.currentToolMode = CanvasToolMode.SELECT
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.ADD_TEXT -> {
+                                state.saveHistory()
+                                val newNode = TextNode(
+                                    id = state.nextId++,
+                                    name = "",
+                                    position = worldPos,
+                                    fontSize = state.defaultFontSize,
+                                    colorArgb = state.defaultColorArgb,
+                                    isBold = state.defaultIsBold,
+                                    isItalic = state.defaultIsItalic,
+                                    isUnderline = state.defaultIsUnderline,
+                                    isStrikethrough = state.defaultIsStrikethrough,
+                                    align = state.defaultAlign,
+                                    hasBackground = state.defaultHasBackground,
+                                    backgroundColorArgb = state.defaultBackgroundColorArgb
+                                )
+                                state.nodes.add(newNode)
+                                state.clearSelection()
+                                state.selectedNodeIds.add(newNode.id)
+                                state.inlineEditingNodeId = newNode.id
+                                state.inlineEditingText = ""
+                                skipNextTap = true
+                                state.currentToolMode = CanvasToolMode.SELECT
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.ADD_CALLOUT -> {
+                                state.saveHistory()
+                                val textPos = Point(worldPos.x + 80f, worldPos.y - 80f)
+                                val newNode = CalloutNode(
+                                    id = state.nextId++,
+                                    name = "",
+                                    position = textPos,
+                                    targetPoint = worldPos,
+                                    fontSize = state.defaultFontSize,
+                                    colorArgb = state.defaultColorArgb,
+                                    isBold = state.defaultIsBold,
+                                    isItalic = state.defaultIsItalic,
+                                    isUnderline = state.defaultIsUnderline,
+                                    isStrikethrough = state.defaultIsStrikethrough,
+                                    hasBackground = state.defaultHasBackground,
+                                    backgroundColorArgb = state.defaultBackgroundColorArgb,
+                                    startStyle = state.defaultCalloutStartStyle
+                                )
+                                state.nodes.add(newNode)
+                                state.clearSelection()
+                                state.selectedNodeIds.add(newNode.id)
+                                state.inlineEditingNodeId = newNode.id
+                                state.inlineEditingText = ""
+                                skipNextTap = true
+                                state.currentToolMode = CanvasToolMode.SELECT
+                                return@detectTapGestures
+                            }
+                            CanvasToolMode.SELECT -> { /* Оставляем обработку для onTap */ }
+                        }
+                    },
+                    onTap = { offset ->
+                        if (skipNextTap) {
+                            skipNextTap = false
+                            return@detectTapGestures
+                        }
+                        // ВАЖНО: Если включен инструмент, onTap игнорируется (все обработано в onPress)
+                        if (state.currentToolMode != CanvasToolMode.SELECT) return@detectTapGestures
+
+                        val worldPos = state.screenToWorld(offset.toPoint())
+
+                        // Если мы в режиме редактирования текста - завершаем его при клике куда угодно
+                        if (state.inlineEditingNodeId != null) {
+                            state.finishInlineEditing()
+                        }
 
                         when (state.currentToolMode) {
                             CanvasToolMode.DRAW_CIRCLE -> {
@@ -241,15 +367,16 @@ fun InteractiveCanvas(
                         val position = event.changes.first().position
                         // ЗУМ
                         if (event.type == PointerEventType.Scroll) {
-                            isZooming = true // Включаем курсор масштаба на момент скролла
+                            isZooming = true
                             state.onZoom(event.changes.first().scrollDelta.y, position.toPoint())
                             event.changes.first().consume()
                         } else if (event.type == PointerEventType.Move && !isPanning) {
-                            isZooming = false // Сбрасываем курсор масштаба, если просто двигаем мышью
+                            isZooming = false
                             state.updateHoveredPin(position.toPoint())
-                            state.currentMousePos = state.screenToWorld(position.toPoint())
                         }
-
+                        // ФИКС РЕЗИНКИ: Всегда обновляем мировые координаты курсора,
+                        // даже во время скролла или панорамирования!
+                        state.currentMousePos = state.screenToWorld(position.toPoint())
                         // ПЕРЕМЕЩЕНИЕ ХОЛСТА (Средняя кнопка мыши / Tertiary)
                         if (event.buttons.isTertiaryPressed && event.type == PointerEventType.Move) {
                             val change = event.changes.firstOrNull()
@@ -298,28 +425,110 @@ fun InteractiveCanvas(
                 detectDragGestures(
                     onDragStart = { position ->
                         val worldPos = state.screenToWorld(position.toPoint())
+
                         // Проверяем, тянем ли мы за маркер выноски
                         if (state.selectedNodeIds.size == 1) {
                             val singleNode = state.nodes.find { it.id == state.selectedNodeIds.first() }
                             if (singleNode is CalloutNode) {
                                 val distSq = (worldPos - singleNode.targetPoint).getDistanceSquared()
-                                val threshold = (15f / state.scale) // Зона захвата кружка
+                                val threshold = (15f / state.scale)
                                 if (distSq < threshold * threshold) {
                                     state.saveHistory()
                                     dragTarget = "CalloutTargetPoint"
-                                    return@detectDragGestures // Прерываем дальнейший поиск
+                                    return@detectDragGestures
                                 }
                             }
                         }
+
+                        val handleThresholdSq = (12f / state.scale) * (12f / state.scale)
+                        var foundHandleHit = false
+
+                        for (id in state.selectedNodeIds) {
+                            val selectedNode = state.nodes.find { it.id == id } ?: continue
+
+                            if (selectedNode is PolylineNode) {
+                                for ((index, pt) in selectedNode.points.withIndex()) {
+                                    if ((worldPos - pt).getDistanceSquared() < handleThresholdSq) {
+                                        state.saveHistory()
+                                        state.activeHandleHit = HandleHitType.POLYLINE_POINT
+                                        state.activeHandleNodeId = selectedNode.id
+                                        state.activeHandleIndex = index
+                                        dragTarget = "GeometryHandle"
+                                        foundHandleHit = true
+                                        break
+                                    }
+                                }
+                            } else if (selectedNode is CircleNode) {
+                                val r = selectedNode.radius
+                                val cx = selectedNode.position.x
+                                val cy = selectedNode.position.y
+                                val points = listOf(Point(cx, cy - r), Point(cx, cy + r), Point(cx - r, cy), Point(cx + r, cy))
+                                if (points.any { (worldPos - it).getDistanceSquared() < handleThresholdSq }) {
+                                    state.saveHistory()
+                                    state.activeHandleHit = HandleHitType.CIRCLE_RADIUS
+                                    state.activeHandleNodeId = selectedNode.id
+                                    dragTarget = "GeometryHandle"
+                                    foundHandleHit = true
+                                    break
+                                }
+                            } else if (selectedNode is RectangleNode) {
+                                val cx = selectedNode.position.x
+                                val cy = selectedNode.position.y
+                                val hw = selectedNode.width / 2
+                                val hh = selectedNode.height / 2
+
+                                val topPt = Point(cx, cy - hh)
+                                val botPt = Point(cx, cy + hh)
+                                val leftPt = Point(cx - hw, cy)
+                                val rightPt = Point(cx + hw, cy)
+
+                                if ((worldPos - topPt).getDistanceSquared() < handleThresholdSq) {
+                                    state.activeHandleHit = HandleHitType.RECTANGLE_TOP
+                                } else if ((worldPos - botPt).getDistanceSquared() < handleThresholdSq) {
+                                    state.activeHandleHit = HandleHitType.RECTANGLE_BOTTOM
+                                } else if ((worldPos - leftPt).getDistanceSquared() < handleThresholdSq) {
+                                    state.activeHandleHit = HandleHitType.RECTANGLE_LEFT
+                                } else if ((worldPos - rightPt).getDistanceSquared() < handleThresholdSq) {
+                                    state.activeHandleHit = HandleHitType.RECTANGLE_RIGHT
+                                }
+
+                                if (state.activeHandleHit != HandleHitType.NONE) {
+                                    state.saveHistory()
+                                    state.activeHandleNodeId = selectedNode.id
+                                    dragTarget = "GeometryHandle"
+                                    foundHandleHit = true
+                                    break
+                                }
+                            }
+                            if (foundHandleHit) break
+                        }
+
+                        if (foundHandleHit) return@detectDragGestures
+
+                        // ИСПРАВЛЕНИЕ ЗАДАЧИ 4: Если кликнули в Bounding Box УЖЕ ВЫДЕЛЕННОГО объекта — тянем выделение!
+                        val clickedSelectedNodeId = state.selectedNodeIds.find { id ->
+                            val n = state.nodes.find { it.id == id } ?: return@find false
+                            val box = feature.projecteditor.ui.selection.getBoundingBox(n)
+                            worldPos.x >= box.left && worldPos.x <= box.right && worldPos.y >= box.top && worldPos.y <= box.bottom
+                        }
+
+                        if (clickedSelectedNodeId != null) {
+                            state.saveHistory()
+                            state.isDraggingNode = true
+                            dragTarget = "Nodes"
+                            return@detectDragGestures
+                        }
+
+                        // Иначе проверяем строгое попадание в контуры (чтобы выделить новый объект)
                         val node = state.findNodeAtScreenPosition(position.toPoint())
                         val connHit = state.hitTestConnections(position.toPoint())
-
                         if (node != null) {
                             state.saveHistory()
                             if (!state.selectedNodeIds.contains(node.id)) {
                                 if (!state.isCtrlPressed && !state.isShiftPressed) state.clearSelection()
                                 state.selectedNodeIds.add(node.id)
                             }
+                            state.isDraggingNode = true
                             dragTarget = "Nodes"
                         } else if (connHit != null) {
                             state.saveHistory()
@@ -391,6 +600,8 @@ fun InteractiveCanvas(
                         }
                     },
                     onDragEnd = {
+                        state.isDraggingNode = false
+                        state.activeHandleHit = HandleHitType.NONE
                         if (dragTarget is ConnectionHit.Endpoint) {
                             val target = dragTarget as ConnectionHit.Endpoint
                             val pin = state.hoveredPin
@@ -430,13 +641,19 @@ fun InteractiveCanvas(
                         dragTarget = null
                         state.selectionStartScreen = null
                         state.selectionEndScreen = null
+                        state.activeHandleHit = HandleHitType.NONE
+                        state.activeHandleNodeId = null
                     },
                     onDragCancel = {
+                        state.isDraggingNode = false
+                        state.activeHandleHit = HandleHitType.NONE
                         state.isDraggingLineEnd = false
                         state.draggingEndpointNodeId = null
                         dragTarget = null
                         state.selectionStartScreen = null
                         state.selectionEndScreen = null
+                        state.activeHandleHit = HandleHitType.NONE
+                        state.activeHandleNodeId = null
                     },
                     onDrag = { change, _ ->
                         change.consume()
@@ -451,6 +668,59 @@ fun InteractiveCanvas(
                             val index = state.nodes.indexOf(node)
                             if (index != -1) {
                                 state.nodes[index] = node.copy(targetPoint = newTarget)
+                            }
+                        }
+                        else if (dragTarget == "GeometryHandle") {
+                            val handleNode = state.nodes.find { it.id == state.activeHandleNodeId }
+                            if (handleNode != null) {
+                                when (state.activeHandleHit) {
+                                    HandleHitType.POLYLINE_POINT -> {
+                                        val poly = handleNode as PolylineNode
+                                        val newPoints = poly.points.toMutableList()
+
+                                        // Проверяем, замкнута ли полилиния
+                                        val isClosed = newPoints.size > 2 && newPoints.first() == newPoints.last()
+
+                                        val oldPt = newPoints[state.activeHandleIndex]
+                                        val newPt = Point(oldPt.x + deltaWorld.x, oldPt.y + deltaWorld.y)
+
+                                        newPoints[state.activeHandleIndex] = newPt
+
+                                        // Если замкнута, тянем начальную и конечную точку как единый угол
+                                        if (isClosed) {
+                                            if (state.activeHandleIndex == 0) {
+                                                newPoints[newPoints.lastIndex] = newPt
+                                            } else if (state.activeHandleIndex == newPoints.lastIndex) {
+                                                newPoints[0] = newPt
+                                            }
+                                        }
+
+                                        feature.projecteditor.state.ProjectRepository.updateNode(poly.copy(points = newPoints))
+                                    }
+                                    HandleHitType.CIRCLE_RADIUS -> {
+                                        val circle = handleNode as CircleNode
+                                        val worldPos = state.screenToWorld(change.position.toPoint()) // Текущая позиция курсора
+                                        val newRadius = kotlin.math.sqrt((worldPos - circle.position).getDistanceSquared().toDouble()).toFloat()
+                                        feature.projecteditor.state.ProjectRepository.updateNode(circle.copy(radius = newRadius))
+                                    }
+                                    HandleHitType.RECTANGLE_TOP -> {
+                                        val rect = handleNode as RectangleNode
+                                        feature.projecteditor.state.ProjectRepository.updateNode(rect.copy(height = maxOf(1f, rect.height - deltaWorld.y), position = Point(rect.position.x, rect.position.y + deltaWorld.y / 2)))
+                                    }
+                                    HandleHitType.RECTANGLE_BOTTOM -> {
+                                        val rect = handleNode as RectangleNode
+                                        feature.projecteditor.state.ProjectRepository.updateNode(rect.copy(height = maxOf(1f, rect.height + deltaWorld.y), position = Point(rect.position.x, rect.position.y + deltaWorld.y / 2)))
+                                    }
+                                    HandleHitType.RECTANGLE_LEFT -> {
+                                        val rect = handleNode as RectangleNode
+                                        feature.projecteditor.state.ProjectRepository.updateNode(rect.copy(width = maxOf(1f, rect.width - deltaWorld.x), position = Point(rect.position.x + deltaWorld.x / 2, rect.position.y)))
+                                    }
+                                    HandleHitType.RECTANGLE_RIGHT -> {
+                                        val rect = handleNode as RectangleNode
+                                        feature.projecteditor.state.ProjectRepository.updateNode(rect.copy(width = maxOf(1f, rect.width + deltaWorld.x), position = Point(rect.position.x + deltaWorld.x / 2, rect.position.y)))
+                                    }
+                                    HandleHitType.NONE -> {}
+                                }
                             }
                         }
                         else if (dragTarget == "Nodes") {

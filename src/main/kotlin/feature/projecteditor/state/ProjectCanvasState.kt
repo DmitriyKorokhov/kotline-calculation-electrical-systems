@@ -18,6 +18,16 @@ enum class CanvasToolMode {
     DRAW_POLYLINE, DRAW_CIRCLE, DRAW_RECTANGLE, ADD_LEVEL
 }
 
+enum class HandleHitType {
+    NONE,
+    POLYLINE_POINT,
+    CIRCLE_RADIUS,
+    RECTANGLE_TOP,
+    RECTANGLE_BOTTOM,
+    RECTANGLE_LEFT,
+    RECTANGLE_RIGHT
+}
+
 /**
  * Класс-хранитель состояния (State Holder).
  */
@@ -56,6 +66,7 @@ class ProjectCanvasState {
     var isDraggingLineEnd by mutableStateOf(false)
     var draggingEndpointNodeId by mutableStateOf<Int?>(null)
     var clipboardConnections by mutableStateOf<List<Connection>>(emptyList())
+    var isDraggingNode by mutableStateOf(false)
 
     val selectedNodeIds = mutableStateListOf<Int>()
     val selectedConnections = mutableStateListOf<Connection>()
@@ -93,6 +104,10 @@ class ProjectCanvasState {
     // --- ВРЕМЕННОЕ СОСТОЯНИЕ РИСОВАНИЯ ---
     val tempPoints = mutableStateListOf<Point>()
     var currentMousePos by mutableStateOf<Point?>(null)
+
+    var activeHandleHit by mutableStateOf<HandleHitType>(HandleHitType.NONE)
+    var activeHandleNodeId by mutableStateOf<Int?>(null)
+    var activeHandleIndex by mutableStateOf<Int>(-1) // Для полилинии
 
     // ==========================================
     // ДЕЛЕГИРОВАНИЕ ОПЕРАЦИЙ В РЕПОЗИТОРИЙ
@@ -355,6 +370,9 @@ class ProjectCanvasState {
 
     fun findNodeAtScreenPosition(screenPos: Point): ProjectNode? {
         val worldPos = screenToWorld(screenPos)
+        val strokeTolerance = 15f / scale // Погрешность клика (чтобы было легко попадать по тонким линиям)
+        val strokeToleranceSq = strokeTolerance * strokeTolerance
+
         return nodes.findLast { node ->
             when (node) {
                 is TransformerNode -> {
@@ -365,11 +383,53 @@ class ProjectCanvasState {
                 }
                 is GeneratorNode -> (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
                 is SystemNode -> (worldPos - node.position).getDistanceSquared() < node.radius * node.radius
-                is TextNode, is CalloutNode -> {
-                    val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
-                    worldPos.x >= bounds.left && worldPos.x <= bounds.right &&
-                            worldPos.y >= bounds.top && worldPos.y <= bounds.bottom
+
+                // ИСПРАВЛЕНИЕ ЗАДАЧИ 2: Выделение круга только по контуру
+                is CircleNode -> {
+                    val distSq = (worldPos - node.position).getDistanceSquared()
+                    val dist = kotlin.math.sqrt(distSq.toDouble()).toFloat()
+                    kotlin.math.abs(dist - node.radius) <= strokeTolerance
                 }
+                // ИСПРАВЛЕНИЕ ЗАДАЧИ 2: Выделение прямоугольника только по рамке
+                is RectangleNode -> {
+                    val rad = Math.toRadians(-node.rotationDegrees.toDouble())
+                    val cos = kotlin.math.cos(rad).toFloat()
+                    val sin = kotlin.math.sin(rad).toFloat()
+                    val dx = worldPos.x - node.position.x
+                    val dy = worldPos.y - node.position.y
+
+                    // Переводим клик в локальные координаты прямоугольника с учетом поворота
+                    val localX = node.position.x + (dx * cos - dy * sin)
+                    val localY = node.position.y + (dx * sin + dy * cos)
+
+                    val localDx = kotlin.math.abs(localX - node.position.x)
+                    val localDy = kotlin.math.abs(localY - node.position.y)
+                    val halfW = node.width / 2
+                    val halfH = node.height / 2
+
+                    val onVerticalBorder = kotlin.math.abs(localDx - halfW) <= strokeTolerance && localDy <= halfH + strokeTolerance
+                    val onHorizontalBorder = kotlin.math.abs(localDy - halfH) <= strokeTolerance && localDx <= halfW + strokeTolerance
+
+                    onVerticalBorder || onHorizontalBorder
+                }
+                // ИСПРАВЛЕНИЕ ЗАДАЧИ 3: Выделение полилинии только при клике на саму линию
+                is PolylineNode -> {
+                    var hit = false
+                    if (node.points.isNotEmpty()) {
+                        if (node.points.size == 1) {
+                            hit = (worldPos - node.points[0]).getDistanceSquared() <= strokeToleranceSq
+                        } else {
+                            for (i in 0 until node.points.size - 1) {
+                                if (pointToSegmentDistanceSquared(worldPos, node.points[i], node.points[i+1]) <= strokeToleranceSq) {
+                                    hit = true
+                                    break
+                                }
+                            }
+                        }
+                    }
+                    hit
+                }
+                // Остальное оборудование выделяется по всей площади
                 else -> {
                     val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
                     worldPos.x >= bounds.left && worldPos.x <= bounds.right &&
@@ -382,7 +442,9 @@ class ProjectCanvasState {
     fun snapNodeToEndPosition(nodeId: Int) {
         val node = nodes.find { it.id == nodeId }
         node?.let {
-            if (it is TextNode || it is CalloutNode) return
+            // Исключаем текст, выноски и всю геометрию из привязки к сетке
+            if (it is TextNode || it is CalloutNode || it is CircleNode || it is RectangleNode || it is PolylineNode) return
+
             val snappedPosition = snapToGrid(it.position)
             updateNodePosition(it.id, snappedPosition)
         }
@@ -900,6 +962,37 @@ class ProjectCanvasState {
                 ProjectRepository.updateNode(node.copy(rotationDegrees = node.rotationDegrees + 90f))
             }
             // Можно добавить поворот и для других узлов по необходимости
+        }
+    }
+
+    fun updateSelectedGeometryProperties(
+        lineType: Int? = null,
+        lineWeight: Int? = null,
+        lineColor: Long? = null
+    ) {
+        if (selectedNodeIds.isEmpty()) return
+        saveHistory()
+        selectedNodeIds.forEach { id ->
+            val node = nodes.find { it.id == id } ?: return@forEach
+            val updated = when (node) {
+                is CircleNode -> node.copy(
+                    lineType = lineType ?: node.lineType,
+                    lineWeight = lineWeight ?: node.lineWeight,
+                    colorArgb = lineColor ?: node.colorArgb
+                )
+                is RectangleNode -> node.copy(
+                    lineType = lineType ?: node.lineType,
+                    lineWeight = lineWeight ?: node.lineWeight,
+                    colorArgb = lineColor ?: node.colorArgb
+                )
+                is PolylineNode -> node.copy(
+                    lineType = lineType ?: node.lineType,
+                    lineWeight = lineWeight ?: node.lineWeight,
+                    colorArgb = lineColor ?: node.colorArgb
+                )
+                else -> node
+            }
+            ProjectRepository.updateNode(updated)
         }
     }
 }

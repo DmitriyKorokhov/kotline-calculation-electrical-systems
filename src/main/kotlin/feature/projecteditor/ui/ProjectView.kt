@@ -1,7 +1,9 @@
 package feature.projecteditor.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.runtime.*
@@ -123,7 +125,15 @@ fun ProjectView(
         // 2. ДИНАМИЧЕСКАЯ ПАЛИТРА ИНСТРУМЕНТОВ
         Surface(
             elevation = 8.dp,
-            modifier = Modifier.fillMaxWidth().height(PALETTE_HEIGHT_DP),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(PALETTE_HEIGHT_DP)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    state.clearSelection() // Сбрасываем выделение фигур на чертеже
+                },
             color = MaterialTheme.colors.surface
         ) {
             // Переключаем панели в зависимости от выбранной вкладки

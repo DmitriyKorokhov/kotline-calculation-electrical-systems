@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource // <-- НОВЫЙ ИМПОРТ
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -30,13 +31,37 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import feature.projecteditor.domain.CircleNode
+import feature.projecteditor.domain.PolylineNode
+import feature.projecteditor.domain.RectangleNode
 import feature.projecteditor.state.CanvasToolMode
 import feature.projecteditor.state.ProjectCanvasState
 
 @Composable
-fun ToolsPalette(state: ProjectCanvasState) { // <-- Принимаем State
+fun ToolsPalette(state: ProjectCanvasState) {
     var lineTypeExpanded by remember { mutableStateOf(false) }
     var lineWeightExpanded by remember { mutableStateOf(false) }
+
+    // 1. ОПРЕДЕЛЯЕМ ТЕКУЩИЙ ВЫДЕЛЕННЫЙ "ИНСТРУМЕНТ" (геометрию)
+    val selectedGeometry = if (state.selectedNodeIds.size == 1) {
+        state.nodes.find { it.id == state.selectedNodeIds.first() }
+    } else null
+
+    // Читаем настройки из выделенной модели ИЛИ из настроек по умолчанию
+    val displayLineType = (selectedGeometry as? CircleNode)?.lineType
+        ?: (selectedGeometry as? RectangleNode)?.lineType
+        ?: (selectedGeometry as? PolylineNode)?.lineType
+        ?: state.currentLineType
+
+    val displayLineWeight = (selectedGeometry as? CircleNode)?.lineWeight
+        ?: (selectedGeometry as? RectangleNode)?.lineWeight
+        ?: (selectedGeometry as? PolylineNode)?.lineWeight
+        ?: state.currentLineWeight
+
+    val displayLineColor = (selectedGeometry as? CircleNode)?.colorArgb
+        ?: (selectedGeometry as? RectangleNode)?.colorArgb
+        ?: (selectedGeometry as? PolylineNode)?.colorArgb
+        ?: state.currentLineColor
 
     Row(
         modifier = Modifier
@@ -91,7 +116,7 @@ fun ToolsPalette(state: ProjectCanvasState) { // <-- Принимаем State
             SmallToolButton(icon = Icons.Outlined.Refresh, tooltip = "Поворот", onClick = { state.rotateSelectedNodes() })
         }
 
-        // --- БЛОК СВОЙСТВ ЛИНИЙ (Читаем и пишем в state) ---
+        // --- БЛОК СВОЙСТВ ЛИНИЙ (Отрисовываем displayLineType и применяем изменения) ---
         Column(
             modifier = Modifier.height(92.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -105,15 +130,27 @@ fun ToolsPalette(state: ProjectCanvasState) { // <-- Принимаем State
                 onExpandChange = { lineTypeExpanded = it },
                 width = 100.dp,
                 height = 26.dp,
-                currentDraw = { drawLineType(state.currentLineType) } // <-- Читаем из стейта
+                currentDraw = { drawLineType(displayLineType) }
             ) {
-                DropdownMenuItem(onClick = { state.currentLineType = 0; lineTypeExpanded = false }) { // <-- Пишем в стейт
+                DropdownMenuItem(onClick = {
+                    state.currentLineType = 0
+                    state.updateSelectedGeometryProperties(lineType = 0)
+                    lineTypeExpanded = false
+                }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(0) }
                 }
-                DropdownMenuItem(onClick = { state.currentLineType = 1; lineTypeExpanded = false }) {
+                DropdownMenuItem(onClick = {
+                    state.currentLineType = 1
+                    state.updateSelectedGeometryProperties(lineType = 1)
+                    lineTypeExpanded = false
+                }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(1) }
                 }
-                DropdownMenuItem(onClick = { state.currentLineType = 2; lineTypeExpanded = false }) {
+                DropdownMenuItem(onClick = {
+                    state.currentLineType = 2
+                    state.updateSelectedGeometryProperties(lineType = 2)
+                    lineTypeExpanded = false
+                }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineType(2) }
                 }
             }
@@ -125,21 +162,33 @@ fun ToolsPalette(state: ProjectCanvasState) { // <-- Принимаем State
                 onExpandChange = { lineWeightExpanded = it },
                 width = 100.dp,
                 height = 26.dp,
-                currentDraw = { drawLineWeight(state.currentLineWeight) } // <-- Читаем из стейта
+                currentDraw = { drawLineWeight(displayLineWeight) }
             ) {
-                DropdownMenuItem(onClick = { state.currentLineWeight = 0; lineWeightExpanded = false }) { // <-- Пишем в стейт
+                DropdownMenuItem(onClick = {
+                    state.currentLineWeight = 0
+                    state.updateSelectedGeometryProperties(lineWeight = 0)
+                    lineWeightExpanded = false
+                }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(0) }
                 }
-                DropdownMenuItem(onClick = { state.currentLineWeight = 1; lineWeightExpanded = false }) {
+                DropdownMenuItem(onClick = {
+                    state.currentLineWeight = 1
+                    state.updateSelectedGeometryProperties(lineWeight = 1)
+                    lineWeightExpanded = false
+                }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(1) }
                 }
-                DropdownMenuItem(onClick = { state.currentLineWeight = 2; lineWeightExpanded = false }) {
+                DropdownMenuItem(onClick = {
+                    state.currentLineWeight = 2
+                    state.updateSelectedGeometryProperties(lineWeight = 2)
+                    lineWeightExpanded = false
+                }) {
                     Canvas(modifier = Modifier.fillMaxWidth().height(16.dp)) { drawLineWeight(2) }
                 }
             }
         }
 
-        // --- Цвета (Читаем и пишем в state) ---
+        // --- Цвета (Отрисовываем displayLineColor и применяем изменения) ---
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -151,13 +200,19 @@ fun ToolsPalette(state: ProjectCanvasState) { // <-- Принимаем State
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     val colors1 = listOf(0xFFFFFFFF, 0xFF000000, 0xFFD32F2F, 0xFF1976D2, 0xFF388E3C, 0xFF757575, 0xFFF57C00)
                     colors1.forEach { colorVal ->
-                        ToolsColorButton(colorVal, state.currentLineColor) { state.currentLineColor = colorVal } // <-- Пишем в стейт
+                        ToolsColorButton(colorVal, displayLineColor) {
+                            state.currentLineColor = colorVal
+                            state.updateSelectedGeometryProperties(lineColor = colorVal)
+                        }
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     val colors2 = listOf(0xFF7B1FA2, 0xFFFBC02D, 0xFF00BCD4, 0xFF8D6E63, 0xFFE91E63, 0xFFCDDC39, 0xFF607D8B)
                     colors2.forEach { colorVal ->
-                        ToolsColorButton(colorVal, state.currentLineColor) { state.currentLineColor = colorVal } // <-- Пишем в стейт
+                        ToolsColorButton(colorVal, displayLineColor) {
+                            state.currentLineColor = colorVal
+                            state.updateSelectedGeometryProperties(lineColor = colorVal)
+                        }
                     }
                 }
             }
@@ -191,7 +246,7 @@ fun ToolsPalette(state: ProjectCanvasState) { // <-- Принимаем State
 
 @Composable
 private fun ToolButton(icon: ImageVector, label: String, isActive: Boolean, onClick: () -> Unit, width: Dp = 80.dp) {
-    val bgColor = if (isActive) Color(0xFF81D4FA) else Color(0xFFE3F2FD) // Голубой для активного
+    val bgColor = if (isActive) Color(0xFF81D4FA) else Color(0xFFE3F2FD) // Цвет как в AnnotationsPalette
     Column(
         modifier = Modifier
             .size(width = width, height = 92.dp)
@@ -202,7 +257,11 @@ private fun ToolButton(icon: ImageVector, label: String, isActive: Boolean, onCl
                 color = if (isActive) MaterialTheme.colors.primary else Color.LightGray,
                 shape = RoundedCornerShape(6.dp)
             )
-            .clickable { onClick() }
+            .clickable( // Убираем hover и ripple-эффекты
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
             .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -245,7 +304,11 @@ private fun RectangularToolButtonWithCustomIcon(
                 color = if (isActive) MaterialTheme.colors.primary else Color.LightGray,
                 shape = RoundedCornerShape(6.dp)
             )
-            .clickable { onClick() }
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
             .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -271,7 +334,11 @@ private fun SmallToolButton(icon: ImageVector, tooltip: String, onClick: () -> U
             .clip(RoundedCornerShape(4.dp))
             .background(Color(0xFFE3F2FD))
             .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp))
-            .clickable { onClick() },
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -299,7 +366,10 @@ private fun LinePropertyDropdown(
                 .height(height)
                 .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp))
                 .background(Color.White, RoundedCornerShape(4.dp))
-                .clickable { onExpandChange(true) }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onExpandChange(true) }
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -353,6 +423,10 @@ private fun ToolsColorButton(colorArgb: Long, currentColor: Long, onClick: () ->
                 color = if (isActive) MaterialTheme.colors.primary else Color.LightGray,
                 shape = CircleShape
             )
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
     )
 }
