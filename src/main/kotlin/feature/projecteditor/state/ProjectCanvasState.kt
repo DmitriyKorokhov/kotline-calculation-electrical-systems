@@ -1000,18 +1000,23 @@ class ProjectCanvasState {
     }
 
     fun snapLabelToClosestSide(nodeId: Int, dropScreenPos: Offset) {
-        val node = nodes.find { it.id == nodeId } ?: return
+        val index = nodes.indexOfFirst { it.id == nodeId }
+        if (index == -1) return
+        val node = nodes[index]
+
+        // 1. Переводим экранные координаты курсора мыши в мировые координаты чертежа
         val dropWorldPos = screenToWorld(dropScreenPos.toPoint())
 
-        // ИСПРАВЛЕНИЕ 3: Вычисляем 4 независимых пина для подписей
+        // 2. Получаем границы модели
         val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
 
+        // 3. Вычисляем координаты 4-х пинов оборудования (в мировых координатах)
         val topPin = Point(bounds.left + bounds.width / 2f, bounds.top)
         val bottomPin = Point(bounds.left + bounds.width / 2f, bounds.bottom)
         val leftPin = Point(bounds.left, bounds.top + bounds.height / 2f)
         val rightPin = Point(bounds.right, bounds.top + bounds.height / 2f)
 
-        // Ищем минимальное расстояние от отпущенной МЫШКИ до пина
+        // 4. Находим дистанцию от курсора мыши до каждого пина
         val distances = mapOf(
             AnchorSide.TOP to (dropWorldPos - topPin).getDistanceSquared(),
             AnchorSide.BOTTOM to (dropWorldPos - bottomPin).getDistanceSquared(),
@@ -1019,9 +1024,9 @@ class ProjectCanvasState {
             AnchorSide.RIGHT to (dropWorldPos - rightPin).getDistanceSquared()
         )
 
+        // 5. Выбираем сторону с минимальной дистанцией
         val closestSide = distances.minByOrNull { it.value }?.key ?: AnchorSide.RIGHT
 
-        // Сохраняем новую позицию
         saveHistory()
         val updatedNode = when (node) {
             is ShieldNode -> node.copy(labelSide = closestSide)
@@ -1036,7 +1041,8 @@ class ProjectCanvasState {
             is RectifierNode -> node.copy(labelSide = closestSide)
             else -> node
         }
-        ProjectRepository.updateNode(updatedNode)
+
+        nodes[index] = updatedNode // Сохраняем в локальный UI State
     }
 }
 

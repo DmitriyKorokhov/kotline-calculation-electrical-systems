@@ -1,10 +1,12 @@
 package feature.projecteditor.ui.canvas
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -831,7 +833,8 @@ fun InteractiveCanvas(
                         val screenPt = state.worldToScreen(pt).toOffset()
                         drawCircle(
                             color = Color.Blue.copy(alpha = 0.5f),
-                            radius = maxOf(10f, 8f / state.scale),
+                            // ИСПРАВЛЕНИЕ: Просто задаем константный размер в пикселях
+                            radius = 8f,
                             center = screenPt
                         )
                     }
@@ -859,26 +862,16 @@ fun InteractiveCanvas(
                     )
                 }
             } else if (node.name.isNotBlank() || node is ShieldNode) {
-                // Для всех остальных узлов (оборудование) рисуем стандартный ярлык справа
-                val screenPos = state.worldToScreen(node.position).toOffset()
-                val scale = state.scale
-                val nodeHeight = NODE_HEIGHT * scale
+                // ИСТИННЫЕ ГАБАРИТЫ для точного огибания (решает проблему наложения текста на ИТ-стойки)
+                val bounds = feature.projecteditor.ui.selection.getBoundingBox(node)
 
-                val nodeWidthForLabel = when (node) {
-                    is TransformerNode -> node.radiusOuter * 2f
-                    is GeneratorNode -> node.radius * 2f
-                    is BatteryNode -> NODE_WIDTH * 0.5f
-                    is UpsNode -> NODE_HEIGHT
-                    is SolarPanelNode -> NODE_WIDTH * 0.8f
-                    is SystemNode -> node.radius * 2f
-                    is ItRackRowNode -> feature.projecteditor.ui.selection.getItRackRowSize(node).first
-                    else -> NODE_WIDTH
-                }
-
-                val displayName = if (node is ShieldNode) {
-                    feature.shieldeditor.state.ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
-                } else {
-                    node.name
+                // КЕШИРОВАНИЕ БАЗЫ: Убирает шлейф/лаги при перетаскивании щита
+                val displayName = remember(node.id, node.name) {
+                    if (node is ShieldNode) {
+                        feature.shieldeditor.state.ShieldStorage.loadOrCreate(node.id).shieldName.ifBlank { node.name }
+                    } else {
+                        node.name
+                    }
                 }
 
                 val labelSide = when (node) {
@@ -895,13 +888,10 @@ fun InteractiveCanvas(
                     else -> AnchorSide.RIGHT
                 }
 
-                // ВЫЗЫВАЕМ НОВЫЙ КОМПОНЕНТ
                 feature.projecteditor.ui.labels.NodeLabelText(
                     name = displayName,
-                    nodePosScreen = screenPos,
-                    nodeWidthOnScreen = nodeWidthForLabel * scale,
-                    nodeHeightOnScreen = nodeHeight,
-                    scale = scale,
+                    nodeBoundsWorld = bounds,
+                    state = state,
                     labelSide = labelSide,
                     isEditing = isEditing,
                     editingText = if (isEditing) state.inlineEditingText else "",

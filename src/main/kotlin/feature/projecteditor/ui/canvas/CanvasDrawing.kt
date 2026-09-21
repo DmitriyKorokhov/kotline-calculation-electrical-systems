@@ -626,20 +626,17 @@ fun DrawScope.drawGridHeaders(textMeasurer: TextMeasurer, state: ProjectCanvasSt
 private fun DrawScope.drawPins(state: ProjectCanvasState) {
     if (state.selectedConnections.size != 1 || state.selectedNodeIds.isNotEmpty()) return
 
-    val normalRadius = maxOf(6f, 5f / state.scale)
-    val hoveredRadius = maxOf(10f, 8f / state.scale)
+    val normalRadius = 6f / state.scale
+    val hoveredRadius = 10f / state.scale
     val conn = state.selectedConnections.first()
 
     state.nodes.forEach { node ->
-        // Показываем пины ТОЛЬКО на тех моделях, которые соединяет эта линия
         if (node.id != conn.fromId && node.id != conn.toId) return@forEach
-
-        // Скрываем пины на противоположной модели при перетаскивании конца линии
         if (state.isDraggingLineEnd && state.draggingEndpointNodeId != null && node.id != state.draggingEndpointNodeId) return@forEach
 
         state.getAvailablePins(node).forEach { pinId ->
             val pin = state.getPinPosition(pinId.node, pinId.side, pinId.subId)
-            val isHovered = state.hoveredPin == pinId // Сравниваем объекты PinId
+            val isHovered = state.hoveredPin == pinId
 
             drawCircle(
                 color = if (isHovered) Color.Red else Color.Blue.copy(alpha = 0.5f),

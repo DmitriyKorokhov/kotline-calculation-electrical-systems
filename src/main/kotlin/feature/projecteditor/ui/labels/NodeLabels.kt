@@ -15,28 +15,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import feature.projecteditor.domain.AnchorSide
+import feature.projecteditor.state.ProjectCanvasState
+import kotlin.math.roundToInt
 
 @Composable
 fun NodeLabelText(
     name: String,
-    nodePosScreen: Offset, // Координаты ЦЕНТРА модели на экране
-    nodeWidthOnScreen: Float,
-    nodeHeightOnScreen: Float,
-    scale: Float,
-    labelSide: AnchorSide, // Текущая сторона привязки
+    nodeBoundsWorld: Rect,
+    state: ProjectCanvasState,
+    labelSide: AnchorSide,
     isEditing: Boolean = false,
     editingText: String = "",
     onEditingTextChanged: (String) -> Unit = {},
@@ -45,46 +46,51 @@ fun NodeLabelText(
     onDragStart: () -> Unit = {},
     onDragEnd: (Offset) -> Unit = {}
 ) {
-    val density = LocalDensity.current
-
-    // ИСПРАВЛЕНИЕ 2: Разные отступы для боков и верха/низа
-    val horizontalGap = 15f * scale
-    val verticalGap = 4f * scale
-
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
-    val boxWidth = boxSize.width.toFloat()
-    val boxHeight = boxSize.height.toFloat()
-
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var isDragging by remember { mutableStateOf(false) }
-    var dragTouchLocalPos by remember { mutableStateOf(Offset.Zero) } // Сохраняем координату курсора
 
     val currentOnStartEdit by rememberUpdatedState(onStartEdit)
-
-    val baseX = when (labelSide) {
-        AnchorSide.LEFT -> nodePosScreen.x - nodeWidthOnScreen / 2f - horizontalGap - boxWidth
-        AnchorSide.RIGHT -> nodePosScreen.x + nodeWidthOnScreen / 2f + horizontalGap
-        AnchorSide.TOP -> nodePosScreen.x - boxWidth / 2f
-        AnchorSide.BOTTOM -> nodePosScreen.x - boxWidth / 2f
-    }
-
-    val baseY = when (labelSide) {
-        AnchorSide.LEFT -> nodePosScreen.y - boxHeight / 2f
-        AnchorSide.RIGHT -> nodePosScreen.y - boxHeight / 2f
-        AnchorSide.TOP -> nodePosScreen.y - nodeHeightOnScreen / 2f - verticalGap - boxHeight
-        AnchorSide.BOTTOM -> nodePosScreen.y + nodeHeightOnScreen / 2f + verticalGap
-    }
-
-    val offsetX = with(density) { (baseX + dragOffset.x).toDp() }
-    val offsetY = with(density) { (baseY + dragOffset.y).toDp() }
-    val fontSize = (14f * scale).sp
-    val minBoxHeight = (40f * scale).dp
+    val fontSize = (14f * state.scale).sp
 
     Box(
         modifier = Modifier
-            .offset(x = offsetX, y = offsetY)
-            .defaultMinSize(minHeight = minBoxHeight)
-            .widthIn(max = (300f * scale).dp)
+            .offset {
+                val scale = state.scale
+                val canvasOffset = state.offset
+
+                val leftScreen = nodeBoundsWorld.left * scale + canvasOffset.x
+                val rightScreen = nodeBoundsWorld.right * scale + canvasOffset.x
+                val topScreen = nodeBoundsWorld.top * scale + canvasOffset.y
+                val bottomScreen = nodeBoundsWorld.bottom * scale + canvasOffset.y
+
+                val centerScreenX = (leftScreen + rightScreen) / 2f
+                val centerScreenY = (topScreen + bottomScreen) / 2f
+
+                val hGap = 15f * scale
+                val vGap = 6f * scale
+
+                val bx = when (labelSide) {
+                    AnchorSide.LEFT -> leftScreen - hGap - boxSize.width
+                    AnchorSide.RIGHT -> rightScreen + hGap
+                    AnchorSide.TOP -> centerScreenX - boxSize.width / 2f
+                    AnchorSide.BOTTOM -> centerScreenX - boxSize.width / 2f
+                }
+
+                val by = when (labelSide) {
+                    AnchorSide.LEFT -> centerScreenY - boxSize.height / 2f
+                    AnchorSide.RIGHT -> centerScreenY - boxSize.height / 2f
+                    AnchorSide.TOP -> topScreen - vGap - boxSize.height
+                    AnchorSide.BOTTOM -> bottomScreen + vGap
+                }
+
+                IntOffset(
+                    (bx + dragOffset.x).roundToInt(),
+                    (by + dragOffset.y).roundToInt()
+                )
+            }
+            .defaultMinSize(minHeight = (40f * state.scale).dp)
+            .widthIn(max = (300f * state.scale).dp)
             .onSizeChanged { boxSize = it }
             .graphicsLayer { alpha = if (isDragging) 0.5f else 1f }
             .pointerInput(name) {
@@ -92,17 +98,49 @@ fun NodeLabelText(
             }
             .pointerInput(name) {
                 detectDragGestures(
-                    onDragStart = { offset ->
+                    onDragStart = {
                         isDragging = true
-                        dragTouchLocalPos = offset // Запоминаем, за какую часть текста схватились
                         onDragStart()
                     },
                     onDragEnd = {
                         isDragging = false
-                        // ИСПРАВЛЕНИЕ 1: Высчитываем АБСОЛЮТНУЮ координату курсора мыши на экране при отпускании!
-                        val pointerScreenX = baseX + dragOffset.x + dragTouchLocalPos.x
-                        val pointerScreenY = baseY + dragOffset.y + dragTouchLocalPos.y
-                        onDragEnd(Offset(pointerScreenX, pointerScreenY))
+
+                        val scale = state.scale
+                        val canvasOffset = state.offset
+                        val leftScreen = nodeBoundsWorld.left * scale + canvasOffset.x
+                        val rightScreen = nodeBoundsWorld.right * scale + canvasOffset.x
+                        val topScreen = nodeBoundsWorld.top * scale + canvasOffset.y
+                        val bottomScreen = nodeBoundsWorld.bottom * scale + canvasOffset.y
+
+                        val centerScreenX = (leftScreen + rightScreen) / 2f
+                        val centerScreenY = (topScreen + bottomScreen) / 2f
+
+                        val hGap = 15f * scale
+                        val vGap = 6f * scale
+
+                        // 1. Узнаем исходную позицию левого верхнего угла ярлыка
+                        val bx = when (labelSide) {
+                            AnchorSide.LEFT -> leftScreen - hGap - boxSize.width
+                            AnchorSide.RIGHT -> rightScreen + hGap
+                            AnchorSide.TOP -> centerScreenX - boxSize.width / 2f
+                            AnchorSide.BOTTOM -> centerScreenX - boxSize.width / 2f
+                        }
+
+                        val by = when (labelSide) {
+                            AnchorSide.LEFT -> centerScreenY - boxSize.height / 2f
+                            AnchorSide.RIGHT -> centerScreenY - boxSize.height / 2f
+                            AnchorSide.TOP -> topScreen - vGap - boxSize.height
+                            AnchorSide.BOTTOM -> bottomScreen + vGap
+                        }
+
+                        // 2. Вычисляем текущую позицию ЦЕНТРА перетаскиваемого ярлыка
+                        val currentBx = bx + dragOffset.x
+                        val currentBy = by + dragOffset.y
+                        val textCenterX = currentBx + boxSize.width / 2f
+                        val textCenterY = currentBy + boxSize.height / 2f
+
+                        // 3. Отдаем эти координаты в InteractiveCanvas -> ProjectCanvasState
+                        onDragEnd(Offset(textCenterX, textCenterY))
                         dragOffset = Offset.Zero
                     },
                     onDragCancel = {
@@ -112,7 +150,6 @@ fun NodeLabelText(
                     onDrag = { change, dragAmount ->
                         change.consume()
                         dragOffset += dragAmount
-                        dragTouchLocalPos = change.position // Обновляем координату курсора
                     }
                 )
             },
@@ -146,7 +183,7 @@ fun NodeLabelText(
                 text = name,
                 color = MaterialTheme.colors.onSurface,
                 fontSize = fontSize,
-                lineHeight = (16f * scale).sp,
+                lineHeight = (16f * state.scale).sp,
                 textAlign = when (labelSide) {
                     AnchorSide.LEFT -> TextAlign.End
                     AnchorSide.RIGHT -> TextAlign.Start
